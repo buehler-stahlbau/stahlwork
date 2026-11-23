@@ -31,7 +31,9 @@ export function mon() {
   for (const k of KINDS) if (!m.data[k] || typeof m.data[k] !== "object" || Array.isArray(m.data[k])) m.data[k] = {};
   if (!m.tomb || typeof m.tomb !== "object") m.tomb = {};
   if (typeof m.rev !== "number") m.rev = 0;
-  if (!["tage", "wochen"].includes(m.zoom)) m.zoom = "tage";
+  if (m.zoom === "tage") m.zoom = "personal";
+  if (m.zoom === "wochen") m.zoom = "kompakt";
+  if (!["kompakt", "personal", "buehnen"].includes(m.zoom)) m.zoom = "personal";
   return m;
 }
 
@@ -176,12 +178,75 @@ export function isMalerTrupp(t) { const f = t && t.fuehrerId && get("monteure", 
 export function conflicts(e, ids = e.monteure) {
   const out = [];
   if (!e.von || !e.bis) return out;
+  const off = e.off || {};
   for (const o of list("einsaetze")) {
     if (o.id === e.id || o.bis < e.von || o.von > e.bis) continue;
     if (e.truppId && o.truppId === e.truppId) continue; // gleicher Trupp: zwei Baustellen erlaubt
-    for (const mid of ids || []) if ((o.monteure || []).includes(mid)) out.push({ monteurId: mid, other: o });
+    const from = o.von > e.von ? o.von : e.von, to = o.bis < e.bis ? o.bis : e.bis;
+    for (const mid of ids || []) {
+      if (!(o.monteure || []).includes(mid)) continue;
+      for (let d = from; d <= to; d = addDays(d, 1)) {
+        if (!(off[mid] || []).includes(d) && !isAbsent(mid, d) && present(o, mid, d)) { out.push({ monteurId: mid, other: o, day: d }); break; }
+      }
+    }
   }
   return out;
+}
+// Ist die Person an diesem Tag auf dem Einsatz? (eingeplant, nicht ausgenommen, nicht krank/Urlaub)
+export function present(e, pid, day) {
+  return (e.monteure || []).includes(pid) && day >= e.von && day <= e.bis && !((e.off || {})[pid] || []).includes(day) && !isAbsent(pid, day);
+}
+export function isAbsent(pid, day) { return list("abwesenheiten").some((a) => a.monteurId === pid && a.von <= day && a.bis >= day); }
+export function absentRec(pid, day) { return list("abwesenheiten").find((a) => a.monteurId === pid && a.von <= day && a.bis >= day) || null; }
+// Abweichungen aufräumen: nur Tage im Zeitraum, nur eingeplante Personen
+export function cleanOff(e) {
+  const out = {};
+  for (const [pid, ds] of Object.entries(e.off || {})) {
+    if (!(e.monteure || []).includes(pid)) continue;
+    const keep = ds.filter((d) => d >= e.von && d <= e.bis);
+    if (keep.length) out[pid] = keep;
+  }
+  return out;
+}
+export function shiftOff(off, delta) {
+  const out = {};
+  for (const [pid, ds] of Object.entries(off || {})) out[pid] = ds.map((d) => addDays(d, delta));
+  return out;
+}
+// Person an einem Tag auf einem Einsatz ein-/austragen. Liefert eine Fehlermeldung oder null.
+export function toggleDay(e, pid, day) {
+  const p = get("monteure", pid);
+  if (!p) return "Person nicht gefunden.";
+  if (present(e, pid, day)) {
+    const off = { ...(e.off || {}) };
+    off[pid] = [...new Set([...(off[pid] || []), day])].sort();
+    let crew = e.monteure.slice();
+    // an keinem Tag mehr dabei -> ganz aus dem Einsatz nehmen
+    let all = true;
+    for (let d = e.von; d <= e.bis; d = addDays(d, 1)) if (!off[pid].includes(d)) { all = false; break; }
+    if (all) { crew = crew.filter((x) => x !== pid); delete off[pid]; }
+    put("einsaetze", { ...e, monteure: crew, off });
+    return null;
+  }
+  const a = absentRec(pid, day);
+  if (a) return `${p.name} ist an diesem Tag ${ABW_TYPES[a.typ] === "Krank" ? "krank" : "im Urlaub"}.`;
+  for (const o of list("einsaetze")) {
+    if (o.id === e.id || (e.truppId && o.truppId === e.truppId)) continue;
+    if (present(o, pid, day)) return `${p.name} ist an diesem Tag schon bei ${baustelleLabel(o)} (${truppName(get("trupps", o.truppId))}).`;
+  }
+  const off = { ...(e.off || {}) };
+  let crew = e.monteure.slice();
+  if (!crew.includes(pid)) {
+    crew.push(pid);
+    const ds = [];
+    for (let d = e.von; d <= e.bis; d = addDays(d, 1)) if (d !== day) ds.push(d);
+    if (ds.length) off[pid] = ds; else delete off[pid];
+  } else {
+    off[pid] = (off[pid] || []).filter((d) => d !== day);
+    if (!off[pid].length) delete off[pid];
+  }
+  put("einsaetze", { ...e, monteure: crew, off });
+  return null;
 }
 // Höchstens zwei Baustellen je Trupp und Tag. Liefert den ersten Tag, an dem es mehr wären (sonst null).
 export const MAX_SITES_PER_DAY = 2;
@@ -211,7 +276,7 @@ export function absenceConflicts(e, ids = e.monteure) {
   const out = [];
   if (!e.von || !e.bis) return out;
   for (const mid of ids || []) for (const a of absences(mid, e.von, e.bis)) out.push({ monteurId: mid, abw: a });
-  return out;
+  return out; // nur noch als Hinweis: an diesen Tagen ist die Person automatisch nicht eingeteilt
 }
 export function absenceText(list) {
   return list.slice(0, 6).map((c) => `${(get("monteure", c.monteurId) || {}).name || "?"}: ${ABW_TYPES[c.abw.typ]} ${shortDate(c.abw.von)}–${shortDate(c.abw.bis)}`).join("\n");
@@ -303,6 +368,16 @@ export function dueFile() {
 }
 
 /* ---------- Abgleich mit OneDrive ---------- */
+function offMap(v) {
+  const out = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, arr] of Object.entries(v)) {
+    if (!ID_RE.test(k) || !Array.isArray(arr)) continue;
+    const ds = [...new Set(arr.filter((d) => typeof d === "string" && DAY_RE.test(d)))].slice(0, 400).sort();
+    if (ds.length) out[k] = ds;
+  }
+  return out;
+}
 function cleanRecord(kind, r) {
   if (!r || typeof r !== "object" || !ID_RE.test(String(r.id || ""))) return null;
   const s = (v, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -314,7 +389,7 @@ function cleanRecord(kind, r) {
     case "monteure": return { ...base, name: s(r.name), aktiv: r.aktiv !== false, rm: r.rm === true && r.maler !== true, maler: r.maler === true };
     case "trupps": return { ...base, name: s(r.name), fuehrerId: ID_RE.test(String(r.fuehrerId || "")) ? r.fuehrerId : null, monteure: ids(r.monteure), sort: Number(r.sort) || 0 };
     case "einsaetze": return { ...base, truppId: ID_RE.test(String(r.truppId || "")) ? r.truppId : null, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "",
-      baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
+      baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), off: offMap(r.off), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
     case "abwesenheiten": return { ...base, monteurId: ID_RE.test(String(r.monteurId || "")) ? r.monteurId : null,
       typ: r.typ === "krank" ? "krank" : "urlaub", von: day(r.von), bis: day(r.bis), notiz: s(r.notiz, 500) };
     case "buehnen": return { ...base, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "", baustelle: s(r.baustelle), standort: s(r.standort),

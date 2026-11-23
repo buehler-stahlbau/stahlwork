@@ -12,6 +12,22 @@ const SOFT = [246, 246, 244], WE = [238, 238, 235], HOL = [250, 232, 231];
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
 // start = Montag der ersten Woche, weeks = Anzahl Wochen (höchstens 5, alle in einem Zeitplan)
+// Besetzung inkl. tagesgenauer Abweichungen: "Koval (nicht 24.–25.11. – Urlaub)"
+function crewText(e) {
+  return (e.monteure || []).map((id) => {
+    const p = M.get("monteure", id);
+    if (!p) return "";
+    const miss = [];
+    for (let d = e.von; d <= e.bis; d = M.addDays(d, 1)) if (!M.present(e, id, d)) miss.push(d);
+    if (!miss.length) return p.name;
+    const runs = [];
+    for (const d of miss) { const r = runs[runs.length - 1]; if (r && M.addDays(r.to, 1) === d) r.to = d; else runs.push({ from: d, to: d }); }
+    const txt = runs.map((r) => (r.from === r.to ? M.shortDate(r.from) : (r.from.slice(0, 7) === r.to.slice(0, 7) ? `${Number(r.from.slice(8))}.–${M.shortDate(r.to)}` : `${M.shortDate(r.from)}–${M.shortDate(r.to)}`))).join(", ");
+    const a = M.absentRec(id, miss[0]);
+    return `${p.name} (nicht ${txt}${a ? " – " + (a.typ === "krank" ? "krank" : "Urlaub") : ""})`;
+  }).filter(Boolean).join(", ");
+}
+
 export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("PDF-Bibliothek nicht geladen");
   const logoData = await ensureLogo();
@@ -170,25 +186,22 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           const i1 = days.indexOf(e.bis > days[last] ? days[last] : e.bis);
           const bh = (LANE - (L - 1)) / L;
           const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5;
-          // nur an Tagen mit Überschneidung schmal, sonst volle Höhe
+          // Wechsel am selben Tag: Tag geteilt (alter Balken bis Tagesmitte, neuer ab Tagesmitte), volle Höhe.
+          // Liegt ein Einsatz ganz in einem anderen: beide halb hoch übereinander.
           const ov = [];
           for (let i = i0; i <= i1; i++) ov.push(r.list.some((o) => o !== e && o.von <= days[i] && o.bis >= days[i]));
-          fill(hex(colorOf(e)));
-          let k = 0;
-          while (k < ov.length) {
-            let j = k; while (j + 1 < ov.length && ov[j + 1] === ov[k]) j++;
-            const sx = k === 0 ? x0 : colX(i0 + k), ex = j === ov.length - 1 ? x1 : colX(i0 + j + 1);
-            const sy = ov[k] ? y + 3 + li * (bh + 1) : y + 3, sh = ov[k] ? bh : LANE - 3 + 0;
-            if (ov.length === 1 || (k === 0 && j === ov.length - 1)) pdf.roundedRect(sx, sy, ex - sx, sh, 2, 2, "F");
-            else pdf.rect(sx, sy, ex - sx, sh, "F");
-            k = j + 1;
-          }
-          // Text im breiten Teil (bzw. bei kompletter Überschneidung im schmalen)
-          const allOv = ov.every(Boolean);
-          let a0 = 0; while (!allOv && ov[a0]) a0++;
-          let a1 = ov.length - 1; while (!allOv && ov[a1]) a1--;
-          const tx0 = a0 === 0 ? x0 : colX(i0 + a0), tx1 = a1 === ov.length - 1 ? x1 : colX(i0 + a1 + 1);
+          let pl = 0; while (pl < ov.length && ov[pl]) pl++;
+          let pr = 0; while (pr < ov.length - pl && ov[ov.length - 1 - pr]) pr++;
+          const inner = ov.slice(pl, ov.length - pr).some(Boolean);
+          const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis);
+          const allOv = L > 1 && (ov.every(Boolean) || inner || contains);
+          let bx0 = x0, bx1 = x1;
+          if (!allOv && pl) bx0 = colX(i0) + (colX(i0 + pl) - colX(i0)) / 2 + 1;
+          if (!allOv && pr) bx1 = (i1 + 1 < xs.length ? colX(i1 + 1) : x1) - ((i1 + 1 < xs.length ? colX(i1 + 1) : x1) - colX(i1 - pr + 1)) / 2 - 1;
           const by = allOv ? y + 3 + li * (bh + 1) : y + 3, th = allOv ? bh : LANE - 3;
+          fill(hex(colorOf(e)));
+          pdf.roundedRect(bx0, by, bx1 - bx0, th, 2, 2, "F");
+          const tx0 = bx0, tx1 = bx1;
           font("bold", allOv && L > 1 ? 6.2 : 7.8, [255, 255, 255]);
           const nb = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length : 0;
           pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), tx1 - tx0 - 6), tx0 + 3, by + th / 2 + (allOv && L > 1 ? 2.2 : 2.8));
@@ -218,12 +231,12 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     font("bold", 10, DARK); pdf.text("Einsätze", ML, y); y += 6;
     tableHead();
     for (const e of list) {
-      const bs = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).map((b) => `${M.buehneText(b)} (${b.vermieterId ? (M.get("vermieter", b.vermieterId) || {}).firma || "" : "eigen"}${b.bis ? ", bis " + M.shortDate(b.bis) : ""})`).join("; ");
+      const bs = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).map((b) => `${M.buehneText(b)} (${b.vermieterId ? (M.get("vermieter", b.vermieterId) || {}).firma || "" : "Bühler eigene"}${b.bis ? ", bis " + M.shortDate(b.bis) : ""})`).join("; ");
       const cells = [
         M.truppName(M.get("trupps", e.truppId)),
         M.baustelleLabel(e),
         `${M.wdName(e.von)} ${M.shortDate(e.von)} – ${M.wdName(e.bis)} ${M.shortDate(e.bis)}`,
-        e.monteure.map((id) => M.get("monteure", id)).filter(Boolean).map((m) => m.name).join(", "),
+        crewText(e),
         [e.leih, e.kran].filter(Boolean).join(" · "),
         bs,
       ];

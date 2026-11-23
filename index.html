@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.13.9-beta" />
+  <meta name="app-version" content="3.14.0-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -274,6 +274,26 @@
     .g-none { padding: 16px; }
     .gantt { grid-template-rows: auto auto; --rowh: 52px; grid-auto-rows: var(--rowh); } /* Kopfzeilen so hoch wie ihr Inhalt, Trupp-Zeilen fest */
     .gantt.tage { --rowh: 60px; } .gantt.wochen { --rowh: 40px; }
+    .gantt { --subh: 26px; }
+    /* Detailzeilen (Personal / Bühnen) */
+    .g-subl { grid-column: 1; position: sticky; left: 0; z-index: 2; background: #fbfaf8; padding: 0 10px 0 22px; font-size: .74rem; color: var(--brand-gray-700); display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--brand-gray-200); border-bottom: 1px solid var(--brand-gray-100); }
+    .g-pc { border-left: 1px solid var(--brand-gray-100); border-bottom: 1px solid var(--brand-gray-100); display: flex; flex-direction: column; gap: 1px; padding: 3px 2px; background: #fdfcfb; }
+    .g-pc.we { background: var(--brand-gray-100); } .g-pc.hol { background: rgba(203,49,48,.05); } .g-pc.today { background: var(--brand-primary-soft); }
+    .g-pd { flex: 1; border-radius: 4px; min-height: 0; font-size: .66rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .g-pd.on { background: var(--c); cursor: pointer; }
+    .g-pd.free { border: 1px dashed var(--brand-gray-300, #c9c9c9); cursor: pointer; }
+    .g-pd.free:hover { background: rgba(46,91,138,.1); }
+    .g-pd.busy, .g-pd.elsewhere { background: repeating-linear-gradient(135deg, var(--c) 0 3px, transparent 3px 6px); opacity: .55; }
+    .g-pd.busy { cursor: not-allowed; }
+    .g-pd.abs { background: #dedbd5; color: var(--brand-gray-700); }
+    .g-bue { position: relative; z-index: 1; margin: 3px 2px; min-height: 0; padding: 0 12px; border-radius: 5px; font-size: .68rem; font-weight: 600; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
+      border: 1px solid var(--c); color: var(--brand-gray-900); background: color-mix(in srgb, var(--c) 18%, #fff); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }
+    .g-bue .g-bue-t { overflow: hidden; text-overflow: ellipsis; display: block; }
+    .g-bue.due { border-color: var(--brand-red); background: #fbeeee; color: var(--brand-red-dark); }
+    .g-bue.done { opacity: .5; border-style: dashed; }
+    .g-bue .g-h::after { background: rgba(0,0,0,.25); }
+    .g-bue.dragging { opacity: .4; }
+    .det-personal .g-sub { display: none; }
     .g-bar-t { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
     .g-l1, .g-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .g-sub { font-weight: 500; font-size: .7rem; opacity: .85; }
