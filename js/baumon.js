@@ -128,8 +128,9 @@ export function truppName(t) {
 export function baustelleLabel(x) {
   return [x.bvNumber, x.baustelle].filter(Boolean).join(" ") || "Baustelle";
 }
+// Trupps alphabetisch nach Name (= Richtmeister) – überall gleich: Übersicht, Planung, PDF, Stammdaten
 export function sortedTrupps() {
-  return list("trupps").sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || truppName(a).localeCompare(truppName(b)));
+  return list("trupps").sort((a, b) => truppName(a).localeCompare(truppName(b), "de", { sensitivity: "base" }));
 }
 export function sortedMonteure(all = false) {
   return list("monteure").filter((x) => all || x.aktiv !== false).sort((a, b) => a.name.localeCompare(b.name));
