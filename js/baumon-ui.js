@@ -989,8 +989,6 @@ function addPeopleDialog() {
 
 export function renderMonPersonal(app) {
   const ro = !editable();
-  // Wer einen Trupp führt, aber noch als Monteur geführt wird -> Richtmeister
-  if (!ro) for (const tr of M.list("trupps")) { const f = tr.fuehrerId && M.get("monteure", tr.fuehrerId); if (f && M.kind(f) === "monteur") M.setKind(f, "rm"); }
   const t = M.today();
   app.appendChild(U.el(`<div class="page-head"><h1>Personal</h1>${ro ? "" : `<button class="primary" id="stAdd" type="button">+ Neu</button>`}</div>`));
   const add = U.$("#stAdd"); if (add) add.onclick = addPeopleDialog;
@@ -1005,7 +1003,7 @@ export function renderMonPersonal(app) {
   U.$$("[data-aid]", abwCard).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
 
   // Trupps (Maler haben je eine eigene Zeile und stehen unten bei "Maler")
-  const tRow = (tr) => `<button type="button" class="mon-brow" data-tid="${h(tr.id)}"><span class="mon-brow-main"><b>${h(M.truppName(tr))}</b></span>
+  const tRow = (tr) => `<button type="button" class="mon-brow" data-tid="${h(tr.id)}"><span class="mon-brow-main"><b>${h(M.truppName(tr))}</b>${(() => { const f = M.get("monteure", tr.fuehrerId); return f && M.kind(f) === "monteur" ? ' <span class="p-badge">geführt von Monteur</span>' : !tr.fuehrerId ? ' <span class="p-badge">ohne RM</span>' : ""; })()}</span>
     <span class="muted">${(() => { const ms = (tr.monteure || []).filter((id) => id !== tr.fuehrerId); return ms.length ? h(monteurNames(ms)) : "noch keine Monteure"; })()}</span></button>`;
   const ts = M.sortedTrupps().filter((tr) => !M.isMalerTrupp(tr));
   const tCard = U.el(`<div class="card list-card">${cardHead(`Trupps (${ts.length})`, "truppNew", "+ Trupp", ro)}${ts.map(tRow).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>`);
@@ -1021,10 +1019,32 @@ export function renderMonPersonal(app) {
   const pCard = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
   app.appendChild(pCard);
   if (!ro) {
-    U.$$("[data-kind]", pCard).forEach((sel) => { sel.onchange = () => { M.setKind(M.get("monteure", sel.dataset.kind), sel.value); changed(); }; });
+    U.$$("[data-kind]", pCard).forEach((sel) => { sel.onchange = () => changeKind(M.get("monteure", sel.dataset.kind), sel.value, () => { sel.value = M.kind(M.get("monteure", sel.dataset.kind)); }); });
     U.$$("[data-ren]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
     U.$$("[data-tog]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
   }
+}
+
+// Kategorie ändern. Wird ein Richtmeister/Maler zum Monteur, fragen, was mit seinem Trupp passiert.
+function changeKind(p, k, undo) {
+  const own = M.list("trupps").filter((t) => t.fuehrerId === p.id);
+  if (k !== "monteur" || !own.length) { M.setKind(p, k); toast(`${p.name} ist jetzt ${M.PERSON_KINDS[k]}.`, "info", 2500); changed(); return; }
+  const t = M.today();
+  const planned = M.list("einsaetze").filter((e) => own.some((tr) => tr.id === e.truppId) && e.bis >= t);
+  const body = U.el(`<div class="mon-form"><p>${h(p.name)} führt den Trupp <b>„${h(M.truppName(own[0]))}“</b>${planned.length ? ` mit ${planned.length} geplanten Einsätzen` : ""}.</p>
+    <p class="muted">Behalten: Der Trupp läuft unter diesem Namen weiter (z. B. Vertretung). Auflösen: Der Trupp wird gelöscht${planned.length ? ", seine Einsätze stehen dann unter „Ohne Trupp“" : ""}.</p></div>`);
+  undo(); // Auswahl erst ändern, wenn entschieden ist
+  modal(`${p.name} wird Monteur`, body, [
+    { label: "Abbrechen", fn: () => {} },
+    { label: "Trupp behalten", fn: () => { M.setKind(p, "monteur"); toast(`${p.name} ist jetzt Monteur. Trupp bleibt.`, "info", 3000); changed(); } },
+    { label: "Trupp auflösen", cls: "primary", fn: () => {
+      if (planned.length && !confirm(`Trupp wirklich auflösen? ${planned.length} geplante Einsätze stehen danach unter „Ohne Trupp“.`)) return false;
+      M.setKind(p, "monteur");
+      for (const tr of own) M.remove("trupps", tr.id);
+      toast(`${p.name} ist jetzt Monteur. Trupp aufgelöst.`, "info", 3000);
+      changed();
+    } },
+  ]);
 }
 
 // Bühnenvermieter (im Reiter "Bühnen" unten)
@@ -1079,8 +1099,6 @@ function editTrupp(t) {
     const ids = chips.value();
     if (!fuehrerId && !name && !ids.length) { toast("Bitte Richtmeister, Monteure oder einen Namen angeben.", "warn"); return false; }
     if (fuehrerId && !ids.includes(fuehrerId)) ids.unshift(fuehrerId);
-    const f = fuehrerId && M.get("monteure", fuehrerId);
-    if (f && M.kind(f) === "monteur") M.setKind(f, "rm");
     M.put("trupps", { ...cur, fuehrerId, name, monteure: ids, sort: cur.sort ?? M.list("trupps").length });
     changed();
   };
