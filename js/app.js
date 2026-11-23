@@ -763,6 +763,14 @@ async function addProject() {
   setTimeout(() => { justAdded = null; }, 2500);
 }
 
+// mailto öffnen, ohne die "Seite verlassen?"-Rückfrage auszulösen
+let mailOpening = false;
+function openMail(url) {
+  mailOpening = true;
+  setTimeout(() => { mailOpening = false; }, 1500);
+  location.href = url;
+}
+
 // BV schnell anlegen (z. B. aus BauMon): gleiche Regeln wie in BauDoc.
 // Ergebnis: { p } | { error, field } | { pick: [Orte] } (mehrere Orte passen -> auswählen lassen)
 async function quickCreateBV({ num, client, place, geo }) {
@@ -2188,7 +2196,7 @@ function versionMismatch() {
 
   // Browser schließen, während noch hochgeladen wird -> nachfragen (PC)
   window.addEventListener("beforeunload", (e) => {
-    if (updating) return; // "Jetzt aktualisieren": nicht nachfragen (Daten liegen sicher im Gerätespeicher)
+    if (updating || mailOpening) return; // "Jetzt aktualisieren" / E-Mail öffnen: nicht nachfragen (Daten liegen sicher im Gerätespeicher)
     if (od.isSignedIn() && navigator.onLine && (sync.status.kind === "syncing" || sync.status.pending > 0)) {
       saveNow();
       e.preventDefault();
@@ -2215,7 +2223,7 @@ function versionMismatch() {
   window.__bootStep = "Anzeige aufbauen";
   setupSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {

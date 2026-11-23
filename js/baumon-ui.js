@@ -661,7 +661,7 @@ export function renderMonBuehnen(app) {
       if (mb) mb.onclick = () => {
         if (!v || !v.email) { toast("Für diesen Vermieter ist keine E-Mail-Adresse hinterlegt (Einstellungen › BauMon › Bühnenvermieter).", "warn", 7000); return; }
         const acc = U.account();
-        location.href = M.abmeldeMail(v, list, acc && acc.name);
+        U.openMail(M.abmeldeMail(v, list, acc && acc.name));
         grp.querySelector(".mon-sent").hidden = false;
       };
       for (const db of grp.querySelectorAll("[data-done]")) db.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: t }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); changed(); };
@@ -1031,14 +1031,18 @@ export function openBuehne(b, preset = {}, after) {
     const ab = bar.querySelector("[data-abm]");
     if (ab) ab.onclick = () => {
       const v = cur.vermieterId && M.get("vermieter", cur.vermieterId);
+      const markDone = () => { M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after(); dlg.close(); };
       if (v && v.email) {
+        // E-Mail öffnen; die Rückfrage erscheint in der App (kein Systemdialog – der würde in Safari das Öffnen der E-Mail blockieren)
         const acc = U.account();
-        location.href = M.abmeldeMail(v, [cur], acc && acc.name);
-        if (!confirm(`E-Mail an ${v.firma} gesendet?\n\nOK = Bühne als abgemeldet markieren.`)) return;
+        U.openMail(M.abmeldeMail(v, [cur], acc && acc.name));
+        bar.innerHTML = `<span>E-Mail an ${h(v.firma)} gesendet?</span><button type="button" class="primary small" data-sent>${ICO.check} Als abgemeldet markieren</button>`;
+        bar.querySelector("[data-sent]").onclick = markDone;
+        return;
       } else if (v) {
         if (!confirm(`Für ${v.firma} ist keine E-Mail-Adresse hinterlegt.\nBühne trotzdem als abgemeldet markieren?`)) return;
       } else if (!confirm("Eigene Bühne als abgemeldet (zurück) markieren?")) return;
-      M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after(); dlg.close();
+      markDone();
     };
   }
 }
