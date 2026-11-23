@@ -20,6 +20,10 @@ const ICO = {
 };
 
 const changed = () => { U.schedule(); U.render(); };
+// Kurzformen der Feiertage für die schmale Tagesspalte
+const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Ostermo.", "Tag der Arbeit": "1. Mai", "Christi Himmelfahrt": "Himmelf.",
+  "Pfingstmontag": "Pfingstmo.", "Fronleichnam": "Fronleichn.", "Tag der Deutschen Einheit": "Dt. Einheit", "Allerheiligen": "Allerheil.",
+  "1. Weihnachtstag": "1. Weihn.", "2. Weihnachtstag": "2. Weihn.", "Karfreitag": "Karfr." };
 const editable = () => M.canEdit();
 
 /* ---------- Farben je Baustelle (ruhige Töne) ---------- */
@@ -67,7 +71,8 @@ export function renderMonStart(app) {
 
   // Heute im Einsatz
   const heute = M.activeOn(t);
-  const card = U.el(`<div class="card"><h3 class="section-title">Heute im Einsatz · ${h(M.longDate(t))}</h3><div class="mon-today"></div></div>`);
+  const hol = M.holiday(t);
+  const card = U.el(`<div class="card"><h3 class="section-title">Heute im Einsatz · ${h(M.longDate(t))}${hol ? ` <span class="badge hol-badge">${h(hol)}</span>` : ""}</h3><div class="mon-today"></div></div>`);
   const box = card.querySelector(".mon-today");
   const rows = [...trupps.map((tr) => ({ tr, list: heute.filter((e) => e.truppId === tr.id) })), { tr: null, list: heute.filter((e) => !e.truppId || !M.get("trupps", e.truppId)) }];
   let any = false;
@@ -134,7 +139,8 @@ export function renderMonPlan(app) {
   }
   days.forEach((d, i) => {
     const we = ["Sa", "So"].includes(M.wdName(d));
-    head += `<div class="g-day ${we ? "we" : ""} ${d === t ? "today" : ""}" style="grid-column:${2 + i}">${M.wdName(d)}<b>${Number(d.slice(8))}</b></div>`;
+    const hol = M.holiday(d);
+    head += `<div class="g-day ${we ? "we" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" style="grid-column:${2 + i}" ${hol ? `title="${h(hol)}"` : ""}>${M.wdName(d)}<b>${Number(d.slice(8))}</b>${hol ? `<i class="g-hol">${h(HOL_SHORT[hol] || hol)}</i>` : ""}</div>`;
   });
   g.insertAdjacentHTML("beforeend", head);
 
@@ -150,11 +156,12 @@ export function renderMonPlan(app) {
     const n = Math.max(1, lanes.length);
     const tr = r.tr;
     const fuehrer = tr && M.get("monteure", tr.fuehrerId);
-    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
+    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
     // Hintergrundzellen (Klick = neuer Einsatz an diesem Tag)
     days.forEach((d, i) => {
       const we = ["Sa", "So"].includes(M.wdName(d));
-      g.insertAdjacentHTML("beforeend", `<div class="g-cell ${we ? "we" : ""} ${d === t ? "today" : ""}" data-day="${d}" data-trupp="${tr ? h(tr.id) : ""}" style="grid-column:${2 + i};grid-row:${gridRow} / span ${n}"></div>`);
+      const hol = M.holiday(d);
+      g.insertAdjacentHTML("beforeend", `<div class="g-cell ${we ? "we" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" ${hol ? `title="${h(hol)}"` : ""} data-day="${d}" data-trupp="${tr ? h(tr.id) : ""}" style="grid-column:${2 + i};grid-row:${gridRow} / span ${n}"></div>`);
     });
     lanes.forEach((lane, li) => {
       for (const e of lane) {
@@ -164,7 +171,7 @@ export function renderMonPlan(app) {
         const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow + li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}">
-          <span class="g-bar-t">${h(M.baustelleLabel(e))}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}</button>`);
+          ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${h(M.baustelleLabel(e))}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
     gridRow += n;
@@ -172,7 +179,8 @@ export function renderMonPlan(app) {
   if (!rows.length) g.insertAdjacentHTML("beforeend", `<div class="g-none muted" style="grid-row:3;grid-column:1 / -1">Noch keine Trupps – in den Einstellungen unter „BauMon“ anlegen.</div>`);
   app.appendChild(card);
 
-  U.$$(".g-bar", card).forEach((b) => { b.onclick = () => openEinsatz(M.get("einsaetze", b.dataset.eid)); });
+  U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
+  if (editable()) enableDrag(card, g, days);
   if (editable()) {
     U.$$(".g-cell", card).forEach((c) => {
       c.onclick = () => openEinsatz(null, { von: c.dataset.day, bis: c.dataset.day, truppId: c.dataset.trupp || null });
@@ -183,7 +191,144 @@ export function renderMonPlan(app) {
     const tc = g.querySelector(".g-day.today");
     if (tc && card.scrollWidth > card.clientWidth) card.scrollLeft = Math.max(0, tc.offsetLeft - 160);
   });
-  app.appendChild(U.el(`<p class="muted center">Angezeigt: Vorwoche, aktuelle und nächste Woche. ${editable() ? "Tippen auf einen Tag legt einen Einsatz an." : ""}</p>`));
+  app.appendChild(U.el(`<p class="muted center">Angezeigt: Vorwoche, aktuelle und nächste Woche. ${editable() ? `Freier Tag: neuer Einsatz · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern${"ontouchstart" in window ? " · am Handy erst kurz halten" : ""}.` : ""}</p>`));
+}
+
+/* ---------- Ziehen ----------
+   Maus: sofort ziehen (ab 4 px Bewegung). Finger: kurz halten (0,35 s), dann ziehen –
+   so bleibt normales Wischen/Scrollen möglich. */
+let dragJustEnded = false;
+function enableDrag(card, g, days) {
+  const dayEls = U.$$(".g-day", g);
+  const rowEls = U.$$(".g-trupp", g);
+  const dayAt = (x) => {
+    let best = 0, bd = Infinity;
+    dayEls.forEach((el, i) => { const r = el.getBoundingClientRect(); const c = (r.left + r.right) / 2; const d = Math.abs(x - c); if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+  const rowAt = (y) => {
+    for (const el of rowEls) { const r = el.getBoundingClientRect(); if (y >= r.top && y <= r.bottom) return el; }
+    return y < rowEls[0].getBoundingClientRect().top ? rowEls[0] : rowEls[rowEls.length - 1];
+  };
+  let st = null;
+  const ghost = U.el(`<div class="g-ghost" hidden><span></span></div>`);
+  g.appendChild(ghost);
+
+  const start = (bar, mode, ev) => {
+    const e = M.get("einsaetze", bar.dataset.eid);
+    if (!e) return;
+    st = { bar, e, mode, x0: ev.clientX, y0: ev.clientY, i0: dayAt(ev.clientX), von: e.von, bis: e.bis, truppId: e.truppId || "", active: false, pid: ev.pointerId, touch: ev.pointerType === "touch", timer: null };
+    if (st.touch) {
+      st.timer = setTimeout(() => { if (st && !st.moved) activate(); }, 350);
+    }
+  };
+  const activate = () => {
+    st.active = true;
+    st.bar.classList.add("dragging");
+    document.body.classList.add("g-dragging");
+    if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
+    update(st.x0, st.y0);
+  };
+  const clampDay = (i) => Math.max(0, Math.min(days.length - 1, i));
+  const update = (x, y) => {
+    const di = dayAt(x) - st.i0;
+    const e = st.e;
+    let von = e.von, bis = e.bis, truppId = e.truppId || "";
+    if (st.mode === "move") {
+      von = M.addDays(e.von, di); bis = M.addDays(e.bis, di);
+      truppId = rowAt(y).dataset.row || "";
+    } else if (st.mode === "start") {
+      von = M.addDays(e.von, di); if (von > bis) von = bis;
+    } else {
+      bis = M.addDays(e.bis, di); if (bis < von) bis = von;
+    }
+    Object.assign(st, { von, bis, truppId });
+    // Vorschau
+    const gr = g.getBoundingClientRect();
+    const iv = clampDay(days.indexOf(von) >= 0 ? days.indexOf(von) : (von < days[0] ? 0 : days.length - 1));
+    const ib = clampDay(days.indexOf(bis) >= 0 ? days.indexOf(bis) : (bis < days[0] ? 0 : days.length - 1));
+    const a = dayEls[iv].getBoundingClientRect(), b = dayEls[ib].getBoundingClientRect();
+    const row = rowEls.find((r) => (r.dataset.row || "") === truppId) || rowAt(y);
+    const rr = row.getBoundingClientRect();
+    Object.assign(ghost.style, { left: `${a.left - gr.left + 2}px`, width: `${b.right - a.left - 4}px`, top: `${rr.top - gr.top + 4}px`, height: `${rr.height - 8}px` });
+    ghost.querySelector("span").textContent = `${M.wdName(von)} ${M.shortDate(von)} – ${M.wdName(bis)} ${M.shortDate(bis)}`;
+    ghost.hidden = false;
+  };
+  const finish = (commit) => {
+    if (!st) return;
+    clearTimeout(st.timer);
+    const s0 = st;
+    st = null;
+    ghost.hidden = true;
+    s0.bar.classList.remove("dragging");
+    document.body.classList.remove("g-dragging");
+    if (!s0.active) return;
+    dragJustEnded = true;
+    setTimeout(() => { dragJustEnded = false; }, 50);
+    const e = s0.e;
+    if (!commit || (s0.von === e.von && s0.bis === e.bis && s0.truppId === (e.truppId || ""))) return;
+    const next = { ...e, von: s0.von, bis: s0.bis, truppId: s0.truppId || null };
+    // Trupp gewechselt: Monteure übernehmen, wenn noch die Stammbesetzung eingetragen war
+    if (next.truppId !== (e.truppId || null)) {
+      const oldT = M.get("trupps", e.truppId), newT = M.get("trupps", next.truppId);
+      const same = oldT && [...e.monteure].sort().join() === [...oldT.monteure].sort().join();
+      if (newT && (same || !e.monteure.length)) next.monteure = newT.monteure.slice();
+    }
+    M.put("einsaetze", next);
+    followBuehnen(e, next);
+    toast(`${M.baustelleLabel(next)}: ${M.longDate(next.von)} – ${M.longDate(next.bis)}${next.truppId !== (e.truppId || null) ? " · " + M.truppName(M.get("trupps", next.truppId)) : ""}`, "info", 2500);
+    changed();
+  };
+
+  // Maus/Stift: Zeiger-Ereignisse
+  g.addEventListener("pointerdown", (ev) => {
+    if (ev.pointerType === "touch") return;
+    const bar = ev.target.closest(".g-bar");
+    if (!bar || ev.button > 0) return;
+    const hnd = ev.target.closest(".g-h");
+    start(bar, hnd ? hnd.dataset.h : "move", ev);
+    try { bar.setPointerCapture(ev.pointerId); } catch {}
+  });
+  g.addEventListener("pointermove", (ev) => {
+    if (!st || st.touch || ev.pointerId !== st.pid) return;
+    if (!st.active) {
+      if (Math.hypot(ev.clientX - st.x0, ev.clientY - st.y0) < 4) return;
+      activate();
+    }
+    update(ev.clientX, ev.clientY);
+  });
+  g.addEventListener("pointerup", (ev) => { if (st && !st.touch && ev.pointerId === st.pid) finish(true); });
+  g.addEventListener("pointercancel", () => { if (st && !st.touch) finish(false); });
+  // Finger: Touch-Ereignisse (kurz halten, dann ziehen; sonst normal wischen/scrollen)
+  g.addEventListener("touchstart", (ev) => {
+    if (ev.touches.length !== 1) { finish(false); return; }
+    const bar = ev.target.closest(".g-bar");
+    if (!bar) return;
+    const t = ev.touches[0];
+    const hnd = ev.target.closest(".g-h");
+    start(bar, hnd ? hnd.dataset.h : "move", { clientX: t.clientX, clientY: t.clientY, pointerId: "touch", pointerType: "touch" });
+  }, { passive: true });
+  g.addEventListener("touchmove", (ev) => {
+    if (!st || !st.touch) return;
+    const t = ev.touches[0];
+    if (!st.active) {
+      if (Math.hypot(t.clientX - st.x0, t.clientY - st.y0) > 8) { clearTimeout(st.timer); st = null; } // Wischen = Scrollen
+      return;
+    }
+    ev.preventDefault(); // während des Ziehens nicht scrollen
+    update(t.clientX, t.clientY);
+  }, { passive: false });
+  g.addEventListener("touchend", () => { if (st && st.touch) finish(true); });
+  g.addEventListener("touchcancel", () => { if (st && st.touch) finish(false); });
+  g.addEventListener("contextmenu", (ev) => { if (st) ev.preventDefault(); });
+}
+
+// Bühnen der Baustelle, die mit dem Einsatz enden, ziehen beim Verschieben mit
+function followBuehnen(oldE, newE) {
+  const siteEnd = M.list("einsaetze").filter((x) => M.sameSite(x, newE)).reduce((mx, x) => (x.bis > mx ? x.bis : mx), "");
+  for (const b of M.buehnenOf(newE)) {
+    if (!b.abgemeldetAm && b.bis === oldE.bis && siteEnd && b.bis !== siteEnd) M.put("buehnen", { ...b, bis: siteEnd });
+  }
 }
 
 /* =========================================================
