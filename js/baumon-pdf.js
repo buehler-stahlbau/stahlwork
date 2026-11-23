@@ -110,7 +110,8 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
         if (li < 0) { lanes.push([]); li = lanes.length - 1; }
         lanes[li].push(e);
       }
-      const rowH = Math.max(1, lanes.length) * LANE + 6;
+      const L = Math.max(1, lanes.length);
+      const rowH = LANE + 6; // feste Zeilenhöhe: mehrere Baustellen teilen sich die Höhe
       if (y + rowH > BOTTOM) { pdf.addPage(); y = header(false); gridHead(); }
       days.forEach((d, i) => {
         const hol = M.holiday(d), we = ["Sa", "So"].includes(M.wdName(d));
@@ -127,12 +128,13 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
         for (const e of lane) {
           const i0 = Math.max(0, days.indexOf(e.von < days[0] ? days[0] : e.von));
           const i1 = days.indexOf(e.bis > days[last] ? days[last] : e.bis);
-          const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5, by = y + 3 + li * LANE;
+          const bh = (LANE - (L - 1)) / L;
+          const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5, by = y + 3 + li * (bh + 1);
           fill(hex(colorOf(e)));
-          pdf.roundedRect(x0, by, x1 - x0, LANE - 3, 2.5, 2.5, "F");
-          font("bold", 7.8, [255, 255, 255]);
-          const bh = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length;
-          pdf.text(fit(M.baustelleLabel(e) + (bh ? `  [${bh} Bühne${bh > 1 ? "n" : ""}]` : ""), x1 - x0 - 6), x0 + 3, by + 11);
+          pdf.roundedRect(x0, by, x1 - x0, bh, 2, 2, "F");
+          font("bold", L > 1 ? 6.2 : 7.8, [255, 255, 255]);
+          const nb = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length;
+          pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), x1 - x0 - 6), x0 + 3, by + bh / 2 + (L > 1 ? 2.2 : 2.8));
         }
       });
       y += rowH;

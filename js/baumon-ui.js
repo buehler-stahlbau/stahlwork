@@ -184,7 +184,9 @@ export function renderMonPlan(app) {
       if (lane < 0) { lanes.push([]); lane = lanes.length - 1; }
       lanes[lane].push(e);
     }
-    const n = Math.max(1, lanes.length);
+    // Zeile bleibt gleich hoch: mehrere Baustellen am Tag teilen sich die Höhe (Balken übereinander)
+    const L = Math.max(1, lanes.length);
+    const n = 1;
     const tr = r.tr;
     const fuehrer = tr && M.get("monteure", tr.fuehrerId);
     g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr && (tr.fuehrerId || tr.name) ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
@@ -201,8 +203,8 @@ export function renderMonPlan(app) {
         const bh = M.buehnenOf(e).filter((b) => !b.abgemeldetAm);
         const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
         const dbl = M.conflicts(e);
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
-          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow + li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${L > 1 ? "stack" : ""} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
+          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
           ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });

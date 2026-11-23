@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.11.1-beta" />
+  <meta name="app-version" content="3.11.2-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -253,7 +253,11 @@
     .g-lift .ico { width: 15px; height: 15px; }
     .g-lift.due { background: var(--brand-red); }
     .g-none { padding: 16px; }
-    .gantt { grid-template-rows: auto auto; } /* Kopfzeilen so hoch wie ihr Inhalt */
+    .gantt { grid-template-rows: auto auto; --rowh: 52px; grid-auto-rows: var(--rowh); } /* Kopfzeilen so hoch wie ihr Inhalt, Trupp-Zeilen fest */
+    .g-bar.stack { align-self: start; min-height: 0; height: calc((var(--rowh) - 10px) / var(--lanes) - 2px);
+      margin-top: calc(5px + var(--lane) * (var(--rowh) - 10px) / var(--lanes)); margin-bottom: 0; font-size: .7rem; border-radius: 5px; padding-top: 0; padding-bottom: 0; }
+    .g-bar.stack .g-lift { padding: 0; } .g-bar.stack .g-lift .ico { width: 12px; height: 12px; }
+    .g-bar.stack .g-h::after { top: 20%; bottom: 20%; }
     .gantt.wochen .g-day { padding: 0; height: 6px; }
     .g-day.hol, .g-cell.hol { background: rgba(203,49,48,.07); }
     .g-day.hol b { color: var(--brand-red-dark); }
