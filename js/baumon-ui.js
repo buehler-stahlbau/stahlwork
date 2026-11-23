@@ -85,7 +85,7 @@ export function renderMonStart(app) {
     const card = U.el(`<div class="card mon-due">
       <div class="mon-due-head"><span class="mon-due-ico">${ICO.lift}</span><div><h3>${due.length} Bühne${due.length > 1 ? "n" : ""} abmelden</h3>
       <div class="muted">Mietende am nächsten Werktag oder schon erreicht – beim Vermieter abmelden.</div></div></div>
-      <ul class="mon-list">${due.slice(0, 6).map((b) => `<li><b>${h(M.buehneText(b))}</b> · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} <span class="muted">Mietende ${h(M.shortDate(b.bis))}</span></li>`).join("")}</ul>
+      <ul class="mon-list">${due.slice(0, 6).map((b) => `<li><b>${h(M.baustelleLabel(b))}</b> · ${h(M.buehneText(b))} · ${h(vermieterName(b.vermieterId))} <span class="muted">Mietende ${h(M.shortDate(b.bis))}</span></li>`).join("")}</ul>
       <button class="primary" id="toBuehnen" type="button">Zu den Bühnen</button></div>`);
     app.appendChild(card);
     U.$("#toBuehnen").onclick = () => U.go({ view: "monbuehnen" });
@@ -368,7 +368,10 @@ function openPlanPdf() {
     <p class="muted pdf-range-info"></p></div>`);
   const from = body.querySelector(".f-from"), to = body.querySelector(".f-to"), info = body.querySelector(".pdf-range-info");
   const upd = () => {
+    const maxTo = M.addDays(from.value, 28);
+    for (const o of to.options) o.disabled = o.value < from.value || o.value > maxTo;
     if (to.value < from.value) to.value = from.value;
+    if (to.value > maxTo) to.value = maxTo;
     const n = Math.round((M.parseDay(to.value) - M.parseDay(from.value)) / (7 * 86400000)) + 1;
     info.textContent = n > 5 ? `${n} Wochen – bitte höchstens 5 Wochen wählen.` : `${n} Woche${n > 1 ? "n" : ""} · A3 quer.`;
     info.classList.toggle("error-text", n > 5);
@@ -542,9 +545,11 @@ function enableDrag(card, g, days) {
 // Bühnen der Baustelle, die mit dem Einsatz enden, ziehen beim Verschieben mit
 function followBuehnen(oldE, newE) {
   const siteEnd = M.list("einsaetze").filter((x) => M.sameSite(x, newE)).reduce((mx, x) => (x.bis > mx ? x.bis : mx), "");
+  let n = 0;
   for (const b of M.buehnenOf(newE)) {
-    if (!b.abgemeldetAm && b.bis === oldE.bis && siteEnd && b.bis !== siteEnd) M.put("buehnen", { ...b, bis: siteEnd });
+    if (!b.abgemeldetAm && b.bis === oldE.bis && siteEnd && b.bis !== siteEnd) { M.put("buehnen", { ...b, bis: siteEnd }); n++; }
   }
+  if (n) setTimeout(() => toast(`Mietende von ${n} Bühne${n > 1 ? "n" : ""} mit angepasst: ${M.longDate(siteEnd)}`, "info", 4000), 2600);
 }
 
 /* =========================================================
@@ -558,7 +563,7 @@ export function renderMonBuehnen(app) {
   const all = M.list("buehnen");
   const due = M.dueBuehnen(t);
   const aktiv = all.filter((b) => !b.abgemeldetAm && !due.includes(b)).sort((a, b) => (a.bis || "9").localeCompare(b.bis || "9"));
-  const ab = all.filter((b) => b.abgemeldetAm && b.abgemeldetAm >= M.addDays(t, -30)).sort((a, b) => (a.bis || "9").localeCompare(b.bis || "9"));
+  const ab = all.filter((b) => b.abgemeldetAm && b.abgemeldetAm >= M.addDays(t, -14)).sort((a, b) => (a.bis || "9").localeCompare(b.bis || "9"));
 
   // fällig: je Vermieter eine E-Mail
   if (due.length) {
@@ -591,7 +596,7 @@ export function renderMonBuehnen(app) {
     app.appendChild(card);
   };
   sec("Im Einsatz", aktiv, "Keine Bühnen im Einsatz.");
-  if (ab.length) sec("Abgemeldet (letzte 30 Tage)", ab, "");
+  if (ab.length) sec("Abgemeldet (letzte 14 Tage)", ab, "");
   U.$$("[data-bid]", app).forEach((r) => { r.onclick = () => openBuehne(M.get("buehnen", r.dataset.bid)); });
   app.appendChild(vermieterCard());
 }
@@ -599,18 +604,33 @@ export function renderMonBuehnen(app) {
 function buehneRow(b, due = false) {
   const status = b.abgemeldetAm ? `abgemeldet ${M.shortDate(b.abgemeldetAm)}` : b.bis ? `Mietende ${M.wdName(b.bis)} ${M.shortDate(b.bis)}` : "ohne Enddatum";
   return `<button type="button" class="mon-brow ${due ? "due" : ""}" data-bid="${h(b.id)}">
-    <span class="mon-brow-main"><b>${h(M.buehneText(b))}</b> · ${h(M.baustelleLabel(b))}</span>
+    <span class="mon-brow-main"><b>${h(M.baustelleLabel(b))}</b> · ${h(M.buehneText(b))}</span>
     <span class="muted">${h(vermieterName(b.vermieterId))}${b.auftragsNr ? " · Nr. " + h(b.auftragsNr) : ""} · ${h(status)}</span></button>`;
 }
 
 /* =========================================================
    Dialoge
 ========================================================= */
+// von/bis-Datumsfelder koppeln: "bis" kann nicht vor "von" gewählt werden
+function linkRange(root) {
+  const von = root.querySelector('input[type="date"].f-von'), bis = root.querySelector('input[type="date"].f-bis');
+  if (!von || !bis) return;
+  const sync = () => {
+    bis.min = von.value || "";
+    if (von.value && bis.value && bis.value < von.value) bis.value = von.value;
+  };
+  von.addEventListener("change", sync);
+  von.addEventListener("input", sync);
+  bis.addEventListener("change", () => { if (von.value && bis.value && bis.value < von.value) bis.value = von.value; });
+  sync();
+}
+
 function modal(title, body, actions) {
   const wrap = U.el(`<div class="mon-modal" role="dialog" aria-modal="true" aria-label="${h(title)}">
     <div class="mon-modal-card"><div class="mon-modal-head"><h3>${h(title)}</h3><button type="button" class="icon-btn" data-x aria-label="Schließen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="mon-modal-body"></div><div class="mon-modal-foot"></div></div></div>`);
   wrap.querySelector(".mon-modal-body").appendChild(body);
+  linkRange(body);
   const foot = wrap.querySelector(".mon-modal-foot");
   const close = () => { wrap.remove(); document.body.classList.remove("modal-open"); };
   for (const a of actions) {
@@ -637,7 +657,7 @@ function siteField(init) {
   input.value = M.baustelleLabel(val) === "Baustelle" ? "" : M.baustelleLabel(val);
   const show = () => {
     const q = input.value.trim().toLowerCase();
-    const ps = U.projects().filter((p) => !q || (p.number + " " + p.title).toLowerCase().includes(q)).slice(0, 8);
+    const ps = U.projects().filter((p) => !q || (p.number + " " + p.title + " " + (p.client || "") + " " + (p.place || "")).toLowerCase().includes(q)).slice(0, 300);
     const qRaw = input.value.trim();
     listEl.innerHTML = (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "")
       + ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("");
@@ -839,8 +859,6 @@ export function openEinsatz(e, preset = {}) {
     if (ac.length) { alert("Krank / Urlaub – bitte aus dem Einsatz nehmen:\n\n" + M.absenceText(ac)); return false; }
     M.put("einsaetze", { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(),
       leih: body.querySelector(".f-leih").value.trim(), kran: body.querySelector(".f-kran").value.trim(), notiz: body.querySelector(".f-notiz").value.trim() });
-    // Bühnen ohne Enddatum dieser Baustelle bekommen das Einsatzende
-    for (const b of M.buehnenOf(s)) if (!b.bis && !b.abgemeldetAm) M.put("buehnen", { ...b, bis });
     changed();
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
@@ -869,10 +887,10 @@ export function openBuehne(b, preset = {}, after) {
       <button type="button" class="typ-open" aria-label="Typen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list"></div></div></div>
     <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
     <div class="grid2"><div class="grid2 tight"><div><label class="field-label">angeliefert</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
-    <div><label class="field-label">Mietende</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
+    <div><label class="field-label">Mietende</label><input type="date" class="f-bis" value="${h(cur.bis)}" /><div class="muted small-note bis-hint">${cur.bis ? "" : "leer = Mietende noch offen"}</div></div></div>
     <div><label class="field-label">Auftrags-Nr. Vermieter <span class="muted">(optional)</span></label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" /></div></div>
     <label class="field-label">Standort / Adresse (für den Vermieter)</label><input type="text" class="f-ort" value="${h(cur.standort)}" placeholder="optional" />
-    ${cur.abgemeldetAm ? `<p class="muted">Abgemeldet am ${h(M.longDate(cur.abgemeldetAm))}.</p>` : ""}</div>`));
+</div>`));
   // Typ: frei eintippen oder aus der Liste (Standard + bisher verwendete) übernehmen
   const tin = body.querySelector(".f-typ"), tlist = body.querySelector(".typ-list");
   const showTypen = (all) => {
@@ -885,18 +903,19 @@ export function openBuehne(b, preset = {}, after) {
   tin.addEventListener("input", () => showTypen(false));
   tin.addEventListener("blur", () => setTimeout(() => { tlist.innerHTML = ""; }, 150));
   body.querySelector(".typ-open").addEventListener("pointerdown", (ev) => { ev.preventDefault(); if (tlist.innerHTML) tlist.innerHTML = ""; else { tin.focus(); showTypen(true); } });
-  // Dauer: standardmäßig wie die Einsätze des BV, solange nicht von Hand geändert
+  // Mietende: Vorschlag = Ende der geplanten Einsätze des BV – nur solange das Feld leer ist und
+  // nicht von Hand bearbeitet wurde. "angeliefert" wird nie automatisch geändert.
   if (isNew) {
-    const vonIn = body.querySelector(".f-von"), bisIn = body.querySelector(".f-bis");
-    let manual = !!(preset.von || preset.bis);
-    vonIn.addEventListener("input", () => { manual = true; });
-    bisIn.addEventListener("input", () => { manual = true; });
+    const bisIn = body.querySelector(".f-bis"), hint = body.querySelector(".bis-hint");
+    let manual = !!preset.bis, auto = false;
+    bisIn.addEventListener("input", () => { manual = true; auto = false; hint.textContent = bisIn.value ? "" : "leer = Mietende noch offen"; });
     const fromSite = () => {
-      if (manual) return;
+      if (manual || (bisIn.value && !auto)) return;
       const es = M.list("einsaetze").filter((e) => M.sameSite(e, site.value()) && e.von && e.bis && e.bis >= M.today());
-      if (!es.length) return;
-      vonIn.value = es.reduce((m, e) => (e.von < m ? e.von : m), es[0].von);
+      if (!es.length) { if (auto) { bisIn.value = ""; auto = false; hint.textContent = "leer = Mietende noch offen"; } return; }
       bisIn.value = es.reduce((m, e) => (e.bis > m ? e.bis : m), es[0].bis);
+      auto = true;
+      hint.textContent = "Vorschlag aus der Planung (Ende der Einsätze) – änderbar";
     };
     site.box.addEventListener("sitechange", fromSite);
     fromSite();
@@ -915,22 +934,30 @@ export function openBuehne(b, preset = {}, after) {
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
     ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Diese Bühne löschen?")) return false; M.remove("buehnen", cur.id); changed(); if (after) after(); } }]),
-    ...(!isNew && cur.abgemeldetAm ? [{ label: "Wieder aktiv", fn: () => { M.put("buehnen", { ...cur, abgemeldetAm: "" }); changed(); if (after) after(); } }] : []),
-    // Abmelden: Mietbühne -> vorformulierte E-Mail an den Vermieter, danach als abgemeldet markieren
-    ...(!isNew && !cur.abgemeldetAm ? [{ label: "Bühne abmelden", fn: () => {
+    { label: "Abbrechen", fn: () => {} },
+    { label: isNew ? "Anlegen" : "Speichern", cls: "primary", fn: save },
+  ];
+  const dlg = modal(isNew ? "Neue Bühne" : "Bühne", body, actions);
+  if (!isNew && !ro) {
+    const bar = U.el(`<div class="mon-abm-bar">${cur.abgemeldetAm
+      ? `<span>Abgemeldet am ${h(M.longDate(cur.abgemeldetAm))}</span><button type="button" class="secondary small" data-reakt>Wieder aktiv</button>`
+      : `<span>${M.isDue(cur) ? "Abmelden fällig" : "Im Einsatz"}</span><button type="button" class="${M.isDue(cur) ? "primary" : "secondary"} small" data-abm>${ICO.mail} Bühne abmelden</button>`}</div>`);
+    body.appendChild(bar);
+    const re = bar.querySelector("[data-reakt]");
+    if (re) re.onclick = () => { M.put("buehnen", { ...cur, abgemeldetAm: "" }); changed(); if (after) after(); dlg.close(); };
+    const ab = bar.querySelector("[data-abm]");
+    if (ab) ab.onclick = () => {
       const v = cur.vermieterId && M.get("vermieter", cur.vermieterId);
       if (v && v.email) {
         const acc = U.account();
         location.href = M.abmeldeMail(v, [cur], acc && acc.name);
-        if (!confirm(`E-Mail an ${v.firma} gesendet?\n\nOK = Bühne als abgemeldet markieren.`)) return false;
+        if (!confirm(`E-Mail an ${v.firma} gesendet?\n\nOK = Bühne als abgemeldet markieren.`)) return;
       } else if (v) {
-        if (!confirm(`Für ${v.firma} ist keine E-Mail-Adresse hinterlegt.\nBühne trotzdem als abgemeldet markieren?`)) return false;
-      } else if (!confirm("Eigene Bühne als abgemeldet (zurück) markieren?")) return false;
-      M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after();
-    } }] : []),
-    { label: isNew ? "Anlegen" : "Speichern", cls: "primary", fn: save },
-  ];
-  modal(isNew ? "Neue Bühne" : "Bühne", body, actions);
+        if (!confirm(`Für ${v.firma} ist keine E-Mail-Adresse hinterlegt.\nBühne trotzdem als abgemeldet markieren?`)) return;
+      } else if (!confirm("Eigene Bühne als abgemeldet (zurück) markieren?")) return;
+      M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after(); dlg.close();
+    };
+  }
 }
 
 /* =========================================================

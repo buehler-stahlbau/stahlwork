@@ -258,6 +258,7 @@ export function buehneText(b) {
   const n = Number(b.anzahl) > 1 ? `${b.anzahl}x ` : "";
   return `${n}${b.typ || "Bühne"}`;
 }
+export function signature() { return String((S.state.prefs && S.state.prefs.mailSignature) || "").trim(); }
 export function abmeldeMail(vermieter, buehnen, absender) {
   const anrede = vermieter.ansprechpartner ? `Guten Tag ${vermieter.ansprechpartner},` : "Sehr geehrte Damen und Herren,";
   const sites = [...new Set(buehnen.map((b) => baustelleLabel(b)))];
@@ -272,7 +273,8 @@ export function abmeldeMail(vermieter, buehnen, absender) {
     anrede, "",
     `hiermit melden wir folgende Mietbühne${buehnen.length > 1 ? "n" : ""} ab und bitten um Abholung:`, "",
     ...lines, "",
-    "Vielen Dank und freundliche Grüße", absender || "", CONFIG.companyName || "Friedrich Bühler GmbH & Co. KG",
+    // eigene Signatur (Einstellungen) – sonst Name + Firma
+    ...(signature() ? ["Vielen Dank und freundliche Grüße", "", signature()] : ["Vielen Dank und freundliche Grüße", absender || "", CONFIG.companyName || "Friedrich Bühler GmbH & Co. KG"]),
   ].join("\n");
   return `mailto:${encodeURIComponent(vermieter.email || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
