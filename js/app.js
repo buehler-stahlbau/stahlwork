@@ -2097,8 +2097,8 @@ function versionMismatch() {
       e.returnValue = "";
     }
   });
-  // Startseite ist immer die erste Seite der Sparte: BauDoc "Bauvorhaben", BauMon "Übersicht"
-  S.state.view = S.state.sparte === "mon" ? "mon" : "projects";
+  // Beim Neuladen auf dem zuletzt geöffneten Reiter bleiben (Ansicht wurde beim Laden geprüft);
+  // ein geöffnetes BV/Doku wird geschlossen -> Liste des Reiters
   S.state.selectedProjectId = null;
   S.state.selectedDocId = null;
 
