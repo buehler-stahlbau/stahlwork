@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.3-beta" />
+  <meta name="app-version" content="3.14.4-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -287,6 +287,11 @@
     .g-pd.busy { cursor: not-allowed; }
     .g-pd.abs { background: #dedbd5; color: var(--brand-gray-700); }
     .g-pd.sel { outline: 2px solid var(--brand-primary); outline-offset: 0; }
+    .quick-menu { position: fixed; z-index: 3000; min-width: 220px; background: #fff; border: 1px solid var(--brand-gray-200); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; }
+    .quick-menu .qm-head { padding: 6px 10px 4px; font-size: .78rem; font-weight: 700; color: var(--brand-gray-500); }
+    .quick-menu button { min-height: 38px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 0 10px; font-weight: 600; }
+    .quick-menu button:hover { background: var(--brand-gray-100); }
+    .quick-menu .qm-danger { color: var(--brand-red-dark, #8f2424); }
     .g-pc { user-select: none; -webkit-user-select: none; }
     .g-bue { position: relative; z-index: 1; margin: 3px 2px; min-height: 0; padding: 0 12px; border-radius: 5px; font-size: .68rem; font-weight: 600; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
       border: 1px solid var(--c); color: var(--brand-gray-900); background: color-mix(in srgb, var(--c) 18%, #fff); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }

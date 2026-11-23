@@ -49,9 +49,21 @@ const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Oster
 const editable = () => M.canEdit();
 
 /* ---------- Farben je Baustelle (ruhige Töne) ---------- */
-const PALETTE = ["#2e5b8a", "#5b7f3a", "#8a5a2e", "#6a4c8c", "#2e7f7a", "#8c3f52", "#5f5e59", "#a07a14", "#3f6c9e", "#7a6a3a"];
+// gut unterscheidbare Töne; je Ansicht bekommt jedes BV eine eigene Farbe (keine Doppelungen)
+const PALETTE = ["#2e5b8a", "#5b7f3a", "#a07a14", "#6a4c8c", "#2e7f7a", "#8c3f52", "#c0622f", "#5f5e59", "#4a90b8", "#b0567d", "#7d8c2e", "#3d3d6b", "#8a5a2e", "#2f6b4f"];
+const siteKeyOf = (x) => x.bvNumber || (x.baustelle || "").trim().toLowerCase();
+let colorMap = new Map();
+// Farben für die BV einer Ansicht vergeben: nach Beginn sortiert, jede Farbe nur einmal
+export function assignColors(list) {
+  const first = new Map();
+  for (const e of list) { const k = siteKeyOf(e); if (!first.has(k) || (e.von || "") < first.get(k)) first.set(k, e.von || ""); }
+  const keys = [...first.keys()].sort((a, b) => first.get(a).localeCompare(first.get(b)) || a.localeCompare(b));
+  colorMap = new Map(keys.map((k, i) => [k, PALETTE[i % PALETTE.length]]));
+  return colorMap;
+}
 function siteColor(x) {
-  const key = x.bvNumber || (x.baustelle || "").toLowerCase();
+  const key = siteKeyOf(x);
+  if (colorMap.has(key)) return colorMap.get(key);
   let n = 0;
   for (let i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) >>> 0;
   return PALETTE[n % PALETTE.length];
@@ -100,6 +112,7 @@ export function renderMonStart(app) {
   }
   // Heute im Einsatz
   const heute = M.activeOn(t);
+  assignColors(heute);
   const hol = M.holiday(t);
   const card = U.el(`<div class="card"><h3 class="section-title">Heute im Einsatz · ${h(M.longDate(t))}${hol ? ` <span class="badge hol-badge">${h(hol)}</span>` : ""}</h3><div class="mon-today"></div></div>`);
   const box = card.querySelector(".mon-today");
@@ -152,6 +165,7 @@ export function renderMonPlan(app) {
 
   const trupps = M.sortedTrupps();
   const einsaetze = M.list("einsaetze").filter((e) => e.bis >= days[0] && e.von <= days[20]);
+  assignColors(einsaetze);
   // Bühnen-Symbol nur einmal je BV: am Balken, der im dargestellten Zeitraum am weitesten rechts endet
   // (geht das BV über den Zeitraum hinaus, also am letzten dargestellten Tag)
   const siteKey = (e) => e.bvNumber ? "#" + e.bvNumber : (e.baustelle || "").trim().toLowerCase();
@@ -324,7 +338,7 @@ export function renderMonPlan(app) {
             const other = M.list("einsaetze").find((o) => M.present(o, p.id, d));
             if (other) inner = `<span class="g-pd elsewhere" style="--c:${siteColor(other)}" title="${h(p.name)}: bei ${h(M.baustelleLabel(other))} (${h(M.truppName(M.get("trupps", other.truppId)))})"></span>`;
           }
-          g.insertAdjacentHTML("beforeend", `<div class="g-pc ${bgCls(d)} ${es.length > 1 ? "two" : ""}" style="grid-column:${2 + i};grid-row:${gridRow}">${inner}</div>`);
+          g.insertAdjacentHTML("beforeend", `<div class="g-pc ${bgCls(d)} ${es.length > 1 ? "two" : ""}" data-pid="${h(p.id)}" data-day="${d}" style="grid-column:${2 + i};grid-row:${gridRow}">${inner}</div>`);
         });
       } else {
         const b = sub.lift;
@@ -387,9 +401,33 @@ export function renderMonPlan(app) {
       if (n) { keepPlanScroll(card); changed(); }
     });
   }
+  // Schnellauswahl Krank/Urlaub: Rechtsklick (PC) bzw. lange halten (Handy) auf ein Personal-Feld
+  let quickJust = false;
+  if (editable()) {
+    g.addEventListener("contextmenu", (ev) => {
+      const c = ev.target.closest(".g-pc[data-pid]");
+      if (!c) return;
+      ev.preventDefault();
+      quickMenu(ev.clientX, ev.clientY, c.dataset.pid, c.dataset.day, card);
+    });
+    let lp = null;
+    g.addEventListener("touchstart", (ev) => {
+      const c = ev.target.closest(".g-pc[data-pid]");
+      if (!c || ev.touches.length !== 1) return;
+      const t0 = ev.touches[0];
+      lp = { x: t0.clientX, y: t0.clientY, timer: setTimeout(() => {
+        quickJust = true; setTimeout(() => { quickJust = false; }, 600);
+        if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
+        quickMenu(lp.x, lp.y, c.dataset.pid, c.dataset.day, card);
+        lp = null;
+      }, 550) };
+    }, { passive: true });
+    g.addEventListener("touchmove", (ev) => { if (lp && Math.hypot(ev.touches[0].clientX - lp.x, ev.touches[0].clientY - lp.y) > 8) { clearTimeout(lp.timer); lp = null; } }, { passive: true });
+    g.addEventListener("touchend", () => { if (lp) { clearTimeout(lp.timer); lp = null; } });
+  }
   if (editable()) U.$$(".g-pd[data-eid]", card).forEach((c) => {
     c.onclick = () => {
-      if (pselEnded) return;
+      if (pselEnded || quickJust) return;
       const e = M.get("einsaetze", c.dataset.eid);
       const err = e && M.toggleDay(e, c.dataset.pid, c.dataset.day);
       if (err) { toast(err, "warn", 4000); return; }
@@ -498,7 +536,9 @@ function openPlanPdf() {
       (async () => {
         U.busy("PDF wird erstellt …");
         try {
-          const { blob, filename } = await buildPlanPdf({ colorOf: siteColor, start: from.value, weeks: n });
+          const pEnd = M.addDays(from.value, n * 7 - 1);
+          const pmap = new Map(assignColors(M.list("einsaetze").filter((e) => e.bis >= from.value && e.von <= pEnd)));
+          const { blob, filename } = await buildPlanPdf({ colorOf: (x) => pmap.get(siteKeyOf(x)) || siteColor(x), start: from.value, weeks: n });
           U.busy(null);
           U.openPdf(blob, filename, "Montageplanung");
         } catch (e) {
@@ -874,6 +914,43 @@ function openNewBV(text, done) {
   setTimeout(() => (num.length === 5 ? (client ? pEl : cEl) : numEl).focus(), 50);
 }
 
+// Kleines Menü an der Zeigerposition: Krank/Urlaub für einen Tag schnell eintragen
+function quickMenu(x, y, pid, day, card) {
+  document.querySelector(".quick-menu")?.remove();
+  const p = M.get("monteure", pid);
+  if (!p) return;
+  const a = M.absentRec(pid, day);
+  const menu = U.el(`<div class="quick-menu" role="menu"><div class="qm-head">${h(p.name)} · ${h(M.wdName(day))} ${h(M.shortDate(day))}</div>
+    ${a ? `<button type="button" data-q="edit">${M.ABW_TYPES[a.typ]} ${h(M.shortDate(a.von))}–${h(M.shortDate(a.bis))} bearbeiten …</button>
+      <button type="button" data-q="del" class="qm-danger">${M.ABW_TYPES[a.typ]} löschen</button>`
+    : `<button type="button" data-q="krank">Krank – dieser Tag</button>
+      <button type="button" data-q="urlaub">Urlaub – dieser Tag</button>
+      <button type="button" data-q="range">Krank / Urlaub mit Zeitraum …</button>`}</div>`);
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - r.width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - r.height - 8))}px`;
+  const close = () => { menu.remove(); document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", close, true); };
+  const outside = (ev) => { if (!menu.contains(ev.target)) close(); };
+  setTimeout(() => { document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", close, true); }, 0);
+  U.$$("[data-q]", menu).forEach((b) => { b.onclick = () => {
+    const q = b.dataset.q;
+    close();
+    if (q === "edit") return openAbw(a);
+    if (q === "range") return openAbw(null, { monteurId: pid, von: day, bis: day });
+    if (q === "del") { if (!confirm(`${M.ABW_TYPES[a.typ]} von ${p.name} (${M.shortDate(a.von)}–${M.shortDate(a.bis)}) löschen?`)) return; M.remove("abwesenheiten", a.id); keepPlanScroll(card); changed(); return; }
+    // ein Tag: an einen direkt angrenzenden Eintrag gleicher Art anhängen, sonst neu
+    const prev = M.absentRec(pid, M.addDays(day, -1)), next = M.absentRec(pid, M.addDays(day, 1));
+    if (prev && prev.typ === q && next && next.typ === q && prev.id !== next.id) { M.put("abwesenheiten", { ...prev, bis: next.bis }); M.remove("abwesenheiten", next.id); }
+    else if (prev && prev.typ === q) M.put("abwesenheiten", { ...prev, bis: day });
+    else if (next && next.typ === q) M.put("abwesenheiten", { ...next, von: day });
+    else M.put("abwesenheiten", { monteurId: pid, typ: q, von: day, bis: day, notiz: "" });
+    toast(`${p.name}: ${M.ABW_TYPES[q]} am ${M.longDate(day)}`, "info", 2500);
+    keepPlanScroll(card);
+    changed();
+  }; });
+}
+
 // Krank / Urlaub eintragen
 export function openAbw(a, preset = {}) {
   const isNew = !a;
@@ -881,18 +958,43 @@ export function openAbw(a, preset = {}) {
   const ro = !editable();
   const people = M.sortedMonteure();
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Person</label><select class="f-p"><option value="">– wählen –</option>${people.map((p) => `<option value="${h(p.id)}" ${p.id === cur.monteurId ? "selected" : ""}>${h(p.name)}${p.maler ? " · Maler" : p.rm ? " · RM" : ""}</option>`).join("")}</select>
+    <label class="field-label">Person</label><div class="typ-field p-field"><input type="text" class="f-pname" value="${h((M.get("monteure", cur.monteurId) || {}).name || "")}" placeholder="Name eingeben oder wählen" autocomplete="off" />
+      <button type="button" class="typ-open" aria-label="Personen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list p-list"></div>
+      <input type="hidden" class="f-p" value="${h(cur.monteurId || "")}" /></div>
     <label class="field-label">Art</label><div class="seg abw-seg" role="group">${Object.entries(M.ABW_TYPES).map(([k, l]) => `<button type="button" data-typ="${k}" class="${cur.typ === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
     <label class="field-label">Notiz</label><input type="text" class="f-notiz" value="${h(cur.notiz)}" placeholder="optional" /></div>`);
+  // Person: eintippen oder aus der Liste – es muss ein Treffer aus der Liste sein
+  const pIn = body.querySelector(".f-pname"), pHid = body.querySelector(".f-p"), pList = body.querySelector(".p-list");
+  const label = (p) => `${p.name}${p.maler ? " · Maler" : p.rm ? " · RM" : ""}`;
+  const showP = (all) => {
+    const q = all ? "" : pIn.value.trim().toLowerCase();
+    const xs = people.filter((p) => !q || p.name.toLowerCase().includes(q));
+    pList.innerHTML = xs.length ? xs.map((p) => `<button type="button" class="place-opt" data-pid="${h(p.id)}">${h(label(p))}</button>`).join("") : `<div class="place-opt muted">Kein Treffer</div>`;
+    U.$$("[data-pid]", pList).forEach((o) => o.addEventListener("pointerdown", (ev) => { ev.preventDefault(); const p = M.get("monteure", o.dataset.pid); pIn.value = p.name; pHid.value = p.id; pIn.classList.remove("invalid"); pList.innerHTML = ""; }));
+  };
+  const matchP = () => {
+    const q = pIn.value.trim().toLowerCase();
+    const exact = people.filter((p) => p.name.toLowerCase() === q);
+    const part = people.filter((p) => p.name.toLowerCase().includes(q));
+    const hit = exact.length === 1 ? exact[0] : q && part.length === 1 ? part[0] : null;
+    pHid.value = hit ? hit.id : "";
+    if (hit) pIn.value = hit.name;
+    pIn.classList.toggle("invalid", !!q && !hit);
+  };
+  pIn.addEventListener("focus", () => showP(true));
+  pIn.addEventListener("input", () => { pHid.value = ""; showP(false); });
+  pIn.addEventListener("blur", () => setTimeout(() => { pList.innerHTML = ""; matchP(); }, 150));
+  body.querySelector(".p-field .typ-open").addEventListener("pointerdown", (ev) => { ev.preventDefault(); if (pList.innerHTML) pList.innerHTML = ""; else { pIn.focus(); showP(true); } });
   let typ = cur.typ;
   U.$$("[data-typ]", body).forEach((b) => { b.onclick = () => { typ = b.dataset.typ; U.$$("[data-typ]", body).forEach((x) => x.classList.toggle("on", x === b)); }; });
   if (ro) U.$$("input,select,button", body).forEach((x) => { x.disabled = true; });
   const save = () => {
-    const monteurId = body.querySelector(".f-p").value;
+    if (!pHid.value) matchP();
+    const monteurId = pHid.value;
     const von = body.querySelector(".f-von").value, bis = body.querySelector(".f-bis").value;
-    if (!monteurId) { toast("Bitte die Person wählen.", "warn"); return false; }
+    if (!monteurId) { toast(pIn.value.trim() ? `„${pIn.value.trim()}“ gibt es nicht – bitte eine Person aus der Liste wählen.` : "Bitte die Person wählen.", "warn", 5000); pIn.focus(); return false; }
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
     const ov = M.list("abwesenheiten").find((x) => x.id !== cur.id && x.monteurId === monteurId && x.von <= bis && x.bis >= von);
     if (ov) { toast(`Überschneidet sich mit ${M.ABW_TYPES[ov.typ]} ${M.shortDate(ov.von)}–${M.shortDate(ov.bis)}.`, "warn", 5000); return false; }
