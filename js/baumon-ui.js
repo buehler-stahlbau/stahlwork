@@ -129,17 +129,7 @@ export function renderMonPlan(app) {
     </div></div>
     <div class="gantt ${zoom}" style="--days:21"></div></div>`);
   U.$$("[data-zoom]", card).forEach((b) => { b.onclick = () => { m.zoom = b.dataset.zoom; U.render(); }; });
-  card.querySelector("#planPdf").onclick = async () => {
-    U.busy("PDF wird erstellt …");
-    try {
-      const { blob, filename } = await buildPlanPdf({ colorOf: siteColor });
-      U.busy(null);
-      U.openPdf(blob, filename, "Montageplanung");
-    } catch (e) {
-      U.busy(null);
-      toast("PDF konnte nicht erstellt werden: " + (e.message || e), "error", 8000);
-    }
-  };
+  card.querySelector("#planPdf").onclick = () => openPlanPdf();
   const g = card.querySelector(".gantt");
   // Kopf: Wochen + Tage
   let head = `<div class="g-corner">Trupp</div>`;
@@ -203,6 +193,46 @@ export function renderMonPlan(app) {
     if (tc && card.scrollWidth > card.clientWidth) card.scrollLeft = Math.max(0, tc.offsetLeft - 160);
   });
   app.appendChild(U.el(`<p class="muted center">Angezeigt: Vorwoche, aktuelle und nächste Woche. ${editable() ? `Freier Tag: neuer Einsatz · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern${"ontouchstart" in window ? " · am Handy erst kurz halten" : ""}.` : ""}</p>`));
+}
+
+/* ---------- PDF: Kalenderwochen wählen (Standard: aktuelle + nächste Woche) ---------- */
+function openPlanPdf() {
+  const cur = M.mondayOf(M.today());
+  const weeks = Array.from({ length: 31 }, (_, i) => M.addDays(cur, (i - 10) * 7)); // 10 Wochen zurück, 20 voraus
+  const yr = cur.slice(0, 4);
+  const label = (mo) => { const so = M.addDays(mo, 6); return `KW ${M.isoWeek(mo)} · ${M.shortDate(mo)}–${M.shortDate(so)}${so.slice(0, 4) !== yr ? so.slice(0, 4) : ""}${mo === cur ? " (aktuell)" : ""}`; };
+  const opts = (sel) => weeks.map((mo) => `<option value="${mo}" ${mo === sel ? "selected" : ""}>${h(label(mo))}</option>`).join("");
+  const body = U.el(`<div class="mon-form">
+    <div class="grid2"><div><label class="field-label">von KW</label><select class="f-from">${opts(cur)}</select></div>
+    <div><label class="field-label">bis KW</label><select class="f-to">${opts(M.addDays(cur, 7))}</select></div></div>
+    <p class="muted pdf-range-info"></p></div>`);
+  const from = body.querySelector(".f-from"), to = body.querySelector(".f-to"), info = body.querySelector(".pdf-range-info");
+  const upd = () => {
+    if (to.value < from.value) to.value = from.value;
+    const n = Math.round((M.parseDay(to.value) - M.parseDay(from.value)) / (7 * 86400000)) + 1;
+    info.textContent = n > 5 ? `${n} Wochen – bitte höchstens 5 Wochen wählen.` : `${n} Woche${n > 1 ? "n" : ""} · A3 quer.`;
+    info.classList.toggle("error-text", n > 5);
+    return n;
+  };
+  from.onchange = upd; to.onchange = upd; upd();
+  modal("Planung als PDF", body, [
+    { label: "Abbrechen", fn: () => {} },
+    { label: "PDF erstellen", cls: "primary", fn: () => {
+      const n = upd();
+      if (n > 5) { toast("Bitte höchstens 5 Kalenderwochen wählen.", "warn"); return false; }
+      (async () => {
+        U.busy("PDF wird erstellt …");
+        try {
+          const { blob, filename } = await buildPlanPdf({ colorOf: siteColor, start: from.value, weeks: n });
+          U.busy(null);
+          U.openPdf(blob, filename, "Montageplanung");
+        } catch (e) {
+          U.busy(null);
+          toast("PDF konnte nicht erstellt werden: " + (e.message || e), "error", 8000);
+        }
+      })();
+    } },
+  ]);
 }
 
 /* ---------- Ziehen ----------
