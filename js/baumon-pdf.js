@@ -69,6 +69,13 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
   const gx = ML + NAME_W, gw = W - ML - gx;
   const trupps = M.sortedTrupps();
   const all = M.list("einsaetze").filter((e) => e.bis >= start && e.von <= end);
+  // Bühnen nur einmal je BV nennen: am Balken, der im Zeitraum am weitesten rechts endet
+  const siteKey = (e) => e.bvNumber ? "#" + e.bvNumber : (e.baustelle || "").trim().toLowerCase();
+  const liftBar = new Map();
+  for (const e of all) {
+    const k = siteKey(e), cur = liftBar.get(k), en = e.bis > end ? end : e.bis;
+    if (!cur || en > cur.end) liftBar.set(k, { id: e.id, end: en });
+  }
   const LANE = 20;
   let y = header(true);
 
@@ -133,7 +140,7 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           fill(hex(colorOf(e)));
           pdf.roundedRect(x0, by, x1 - x0, bh, 2, 2, "F");
           font("bold", L > 1 ? 6.2 : 7.8, [255, 255, 255]);
-          const nb = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length;
+          const nb = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length : 0;
           pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), x1 - x0 - 6), x0 + 3, by + bh / 2 + (L > 1 ? 2.2 : 2.8));
         }
       });

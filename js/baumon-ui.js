@@ -138,6 +138,15 @@ export function renderMonPlan(app) {
 
   const trupps = M.sortedTrupps();
   const einsaetze = M.list("einsaetze").filter((e) => e.bis >= days[0] && e.von <= days[20]);
+  // Bühnen-Symbol nur einmal je BV: am Balken, der im dargestellten Zeitraum am weitesten rechts endet
+  // (geht das BV über den Zeitraum hinaus, also am letzten dargestellten Tag)
+  const siteKey = (e) => e.bvNumber ? "#" + e.bvNumber : (e.baustelle || "").trim().toLowerCase();
+  const liftBar = new Map();
+  for (const e of einsaetze) {
+    const k = siteKey(e), cur = liftBar.get(k);
+    const end = e.bis > days[20] ? days[20] : e.bis;
+    if (!cur || end > cur.end) liftBar.set(k, { id: e.id, end });
+  }
   const rows = trupps.map((tr) => ({ tr, list: einsaetze.filter((e) => e.truppId === tr.id) }));
   const rest = einsaetze.filter((e) => !e.truppId || !M.get("trupps", e.truppId));
   if (rest.length) rows.push({ tr: null, list: rest });
@@ -199,7 +208,7 @@ export function renderMonPlan(app) {
       for (const e of lane) {
         const s = Math.max(0, days.indexOf(e.von < days[0] ? days[0] : e.von));
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
-        const bh = M.buehnenOf(e).filter((b) => !b.abgemeldetAm);
+        const bh = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
         const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
         const dbl = M.conflicts(e);
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${L > 1 ? "stack" : ""} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
