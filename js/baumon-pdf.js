@@ -13,12 +13,13 @@ const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), pa
 
 // start = Montag der ersten Woche, weeks = Anzahl Wochen (höchstens 5, alle in einem Zeitplan)
 // Besetzung inkl. tagesgenauer Abweichungen: "Koval (nicht 24.–25.11. – Urlaub)"
-function crewText(e) {
+function crewText(e, from, to) {
   return (e.monteure || []).map((id) => {
     const p = M.get("monteure", id);
     if (!p) return "";
     const miss = [];
-    for (let d = e.von; d <= e.bis; d = M.addDays(d, 1)) if (!M.present(e, id, d)) miss.push(d);
+    // nur Tage im gewählten Zeitraum
+    for (let d = e.von > from ? e.von : from; d <= (e.bis < to ? e.bis : to); d = M.addDays(d, 1)) if (!M.present(e, id, d)) miss.push(d);
     if (!miss.length) return p.name;
     const runs = [];
     for (const d of miss) { const r = runs[runs.length - 1]; if (r && M.addDays(r.to, 1) === d) r.to = d; else runs.push({ from: d, to: d }); }
@@ -231,12 +232,12 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     font("bold", 10, DARK); pdf.text("Einsätze", ML, y); y += 6;
     tableHead();
     for (const e of list) {
-      const bs = M.buehnenOf(e).filter((b) => !b.abgemeldetAm).map((b) => `${M.buehneText(b)} (${b.vermieterId ? (M.get("vermieter", b.vermieterId) || {}).firma || "" : "Bühler eigene"}${b.bis ? ", bis " + M.shortDate(b.bis) : ""})`).join("; ");
+      const bs = M.buehnenOf(e).filter((b) => !b.abgemeldetAm && (b.bis || end) >= start && (b.von || start) <= end).map((b) => `${M.buehneText(b)} (${b.vermieterId ? (M.get("vermieter", b.vermieterId) || {}).firma || "" : "Bühler eigene"}${b.bis ? ", bis " + M.shortDate(b.bis) : ""})`).join("; ");
       const cells = [
         M.truppName(M.get("trupps", e.truppId)),
         M.baustelleLabel(e),
         `${M.wdName(e.von)} ${M.shortDate(e.von)} – ${M.wdName(e.bis)} ${M.shortDate(e.bis)}`,
-        crewText(e),
+        crewText(e, start, end),
         [e.leih, e.kran].filter(Boolean).join(" · "),
         bs,
       ];
