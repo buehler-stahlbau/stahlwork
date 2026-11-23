@@ -21,6 +21,11 @@ export const CONFIG = {
   usersFolder: "nutzer",    // Unterordner in _daten: je Nutzer eine Datei mit seinen Favoriten
   legacyUsersFolder: "_Nutzer", // bis Version 2.8 (wird automatisch umgezogen)
   scopes: ["User.Read", "Files.ReadWrite"],
+  monFolder: "BauMon",      // Ordner der Sparte BauMon: <appFolder>/BauMon/_daten/
+  // BauMon bearbeiten dürfen nur diese Konten (Anmeldename, z. B. "vorname.nachname@firma.de").
+  // Leer = alle (Testphase). Später: 1. und 2. Montageleiter eintragen.
+  monEditors: [],
+  companyName: "Friedrich Bühler GmbH & Co. KG",
 };
 
 // Sparten der App (später je Nutzer freischaltbar)
@@ -29,4 +34,4 @@ export const SPARTEN = [
   { id: "mon", name: "BauMon", desc: "Montage", icon: "sparte-baumon.svg" },
 ];
 
-export const APP_VERSION = "3.8.7-beta";
+export const APP_VERSION = "3.9.1-beta";

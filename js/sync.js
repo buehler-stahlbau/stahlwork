@@ -34,6 +34,7 @@ import { sanitizeName, projectLabel, sleep, isoDay } from "./util.js";
 import { makeThumb } from "./images.js";
 import { cleanGeo, geoValid } from "./geo.js";
 import { contentCode } from "./integrity.js";
+import { syncMon } from "./baumon.js";
 
 const ARCHIVE_FILE = "Stahlwork-Daten.json"; // im archivierten BV-Ordner: alle Daten des BV
 const CODE_INDEX = "pruefcodes.json";        // _daten: Prüfcodes archivierter/ausgelagerter BV
@@ -89,7 +90,7 @@ function hasUnuploaded(p) {
 }
 
 function countPending() {
-  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0);
+  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0) + (S.state.mon && S.state.mon.dirty ? 1 : 0);
   for (const p of allProjects()) {
     if (p.dirty || p.moveTo) n++;
     n += (p.pendingDeletes || []).length;
@@ -142,7 +143,7 @@ export async function whenIdle() {
 
 function snapshot() {
   try {
-    return JSON.stringify([S.state.projects, S.state.archivedProjects, S.state.selectedProjectId]);
+    return JSON.stringify([S.state.projects, S.state.archivedProjects, S.state.selectedProjectId, S.state.mon && S.state.mon.data]);
   } catch { return Math.random().toString(); }
 }
 
@@ -221,6 +222,8 @@ async function syncAll(full) {
   }
   if (full || S.state.mapDirty || (S.state.mapRemove || []).length) await syncMapIndex(dataDir);
   if (full || Object.keys(S.state.codeIndexPending || {}).length) await syncCodeIndex(dataDir);
+  // BauMon (eigene Datei)
+  try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; }
   outboxCount = (await db.outboxAll()).length;
   if (firstError) throw firstError;
 }

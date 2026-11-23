@@ -150,6 +150,11 @@ export async function ensureFolder(parentId, name) {
   return (await getChild(parentId, name)) || createFolder(parentId, name, "fail");
 }
 
+// Hauptordner der App (darin je Sparte ein Ordner)
+export async function getAppFolder() {
+  return (await getByPath(CONFIG.appFolder)) || createFolder(null, CONFIG.appFolder, "fail");
+}
+
 // Ordner der Sparte BauDoc: <Hauptordner>/BauDoc
 // Ältere Ablage (BauDoc direkt in OneDrive oder unter einem früheren Hauptordner)
 // wird als Ganzes verschoben – alle Verknüpfungen (IDs) bleiben dabei gültig.

@@ -20,6 +20,8 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
+import { initMonUI, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonStamm, monSettingsCard } from "./baumon-ui.js";
+import { dueBuehnen } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -267,7 +269,12 @@ function render() {
   const st = S.state;
 
   if (st.view === "settings") renderSettings(app);
-  else if (st.sparte === "mon") renderMon(app);
+  else if (st.view === "monstamm") renderMonStamm(app);
+  else if (st.sparte === "mon") {
+    if (st.view === "monplan") renderMonPlan(app);
+    else if (st.view === "monbuehnen") renderMonBuehnen(app);
+    else renderMonStart(app);
+  }
   else if (st.view === "archive") renderArchive(app);
   else if (st.view === "settings") renderSettings(app);
   else if (st.view === "map") renderMap(app);
@@ -290,8 +297,10 @@ function updateHeader() {
     tabMap: "map",
     tabArchive: "archive",
     tabMon: "mon",
+    tabMonPlan: "monplan",
+    tabMonBuehnen: "monbuehnen",
   };
-  const inSettings = st.view === "settings";
+  const inSettings = st.view === "settings" || st.view === "monstamm";
   document.body.classList.toggle("sparte-mon", st.sparte === "mon");
   document.body.classList.toggle("view-settings", inSettings); // Einstellungen gehören zu keiner Sparte
   // oben rechts: Logo der aktuellen Sparte, in den Einstellungen das Stahlwork-Logo
@@ -313,6 +322,7 @@ function updateHeader() {
   $("#cntProjects").textContent = cnt(st.projects.length);
   $("#cntFav").textContent = cnt(st.projects.filter((p) => p.fav).length);
   $("#cntArchive").textContent = cnt(st.archivedProjects.length);
+  $("#cntMonB").textContent = cnt(dueBuehnen().length); // Bühnen zum Abmelden
 
   $("#searchBtn").classList.toggle("active", !!filterText.trim());
   const search = $("#search");
@@ -380,17 +390,6 @@ function setupDrawer() {
 }
 
 // BauMon (Montage): Bereich in Vorbereitung
-function renderMon(app) {
-  app.appendChild(el(`
-    <div class="page-head"><h1>BauMon</h1></div>`));
-  app.appendChild(el(`
-    <div class="card mon-empty">
-      <img class="mon-logo" src="sparte-baumon.svg" alt="">
-      <h2>Montage</h2>
-      <p class="muted">Dieser Bereich ist in Vorbereitung.</p>
-    </div>`));
-}
-
 function setupSearch() {
   const search = $("#search");
   const bar = $("#appbar");
@@ -1869,6 +1868,7 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="page-head"><h1>Einstellungen</h1></div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
+  app.appendChild(monSettingsCard());
   app.appendChild(el(`
     <div class="card">
       <h3 class="section-title">Datensicherung</h3>
@@ -2021,6 +2021,7 @@ async function checkAccount() {
 
   setupSearch();
   setupDrawer();
+  initMonUI({ el, $, $$, go, render, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => updateSyncChip());
   sync.onData(() => requestRender());
   onChange((kind) => {

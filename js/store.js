@@ -69,9 +69,10 @@ export async function load() {
       if (!S.state[k] || typeof S.state[k] !== "object" || Array.isArray(S.state[k])) S.state[k] = {};
     }
     if (!Array.isArray(S.state.mapRemove)) S.state.mapRemove = [];
-    if (!["projects", "favorites", "map", "archive", "settings", "mon"].includes(S.state.view)) S.state.view = "projects";
-    if (S.state.sparte === "doc" && S.state.view === "mon") S.state.view = "projects";
-    if (S.state.sparte === "mon" && S.state.view !== "settings") S.state.view = "mon";
+    const MON_VIEWS = ["mon", "monplan", "monbuehnen"];
+    if (!["projects", "favorites", "map", "archive", "settings", "monstamm", ...MON_VIEWS].includes(S.state.view)) S.state.view = "projects";
+    if (S.state.sparte === "doc" && MON_VIEWS.includes(S.state.view)) S.state.view = "projects";
+    if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && S.state.view !== "settings" && S.state.view !== "monstamm") S.state.view = "mon";
     allProjects().forEach(normalizeProject);
     if (migrated) await saveNow();
   }
