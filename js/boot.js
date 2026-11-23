@@ -24,7 +24,7 @@
     var app = document.getElementById("app");
     if (!app) return;
     app.innerHTML = '<div class="card boot-fail"><h3>Stahlwork startet nicht</h3>' +
-      '<p class="muted">Vermutlich wurde ein Update nicht vollständig geladen. Deine Daten bleiben erhalten.</p>' +
+      '<p class="muted">Beim Start ist ein Problem aufgetreten. Deine Daten bleiben erhalten.</p>' +
       '<button class="primary" type="button" id="bootRepair">Neu laden</button>' +
       (reason ? '<p class="muted" style="margin-top:10px;font-size:.75rem">' + String(reason).replace(/[<>&]/g, "") + '</p>' : "") + "</div>";
     document.getElementById("bootRepair").onclick = function () { this.disabled = true; this.textContent = "Wird neu geladen …"; repair(); };
@@ -42,5 +42,5 @@
     if (!window.__appReady) show(e && e.reason && (e.reason.message || e.reason));
   });
   // Start dauert zu lange
-  setTimeout(function () { show("Zeitüberschreitung beim Start"); }, 12000);
+  setTimeout(function () { show("Zeitüberschreitung beim Start" + (window.__bootStep ? " – Schritt: " + window.__bootStep : " – App-Dateien nicht geladen")); }, 15000);
 })();

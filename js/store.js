@@ -48,10 +48,12 @@ function emit(kind) {
 export async function load() {
   let saved = null;
   try {
-    saved = await db.kvGet("state");
+    saved = await Promise.race([db.kvGet("state"), new Promise((_, rej) => setTimeout(() => rej(new Error("Gerätespeicher antwortet nicht")), 10000))]);
   } catch (e) {
     console.warn("Konnte Zustand nicht laden", e);
-    toast("Gespeicherte Daten konnten nicht geladen werden (Privater Modus?)", "error", 8000);
+    // NICHT mit leerem Zustand weitermachen – sonst würden die Daten auf dem Gerät überschrieben
+    S.loadFailed = true;
+    throw e;
   }
 
   if (saved && typeof saved === "object") {
@@ -84,6 +86,7 @@ let saveErrorShown = false;
 export async function saveNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
+  if (S.loadFailed) return false; // Gerätespeicher nicht gelesen -> nichts überschreiben
   try {
     await db.kvSet("state", S.state);
     saveErrorShown = false;

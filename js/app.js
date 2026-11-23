@@ -2076,7 +2076,13 @@ function versionMismatch() {
   // zuerst: Offline-Speicher/Updates – damit ein Update auch dann ankommt, wenn der Start hängt
   try { setupServiceWorker(); } catch (e) { console.warn("Service Worker", e); }
 
-  await load();
+  window.__bootStep = "Gerätespeicher lesen";
+  try {
+    await load();
+  } catch (e) {
+    if (window.__bootShow) window.__bootShow(`Gerätespeicher konnte nicht gelesen werden: ${e && e.message || e}. Bitte die App bzw. Safari ganz schließen und neu öffnen.`);
+    return;
+  }
   if (!S.state.drafts || typeof S.state.drafts !== "object") S.state.drafts = {};
   if (!S.state.draftImgs || typeof S.state.draftImgs !== "object") S.state.draftImgs = {};
   drafts = S.state.drafts;
@@ -2097,6 +2103,7 @@ function versionMismatch() {
   S.state.selectedDocId = null;
 
   try {
+    window.__bootStep = "Anmeldung vorbereiten";
     // Anmeldung vorbereiten – höchstens 10 s warten, damit die App nie an dieser Stelle hängen bleibt
     await Promise.race([od.init(), new Promise((_, rej) => setTimeout(() => rej(new Error("Zeitüberschreitung")), 10000))]);
   } catch (e) {
@@ -2104,8 +2111,10 @@ function versionMismatch() {
     loginError = "Anmeldung fehlgeschlagen: " + (e.message || e);
     toast(loginError, "error", 10000);
   }
+  window.__bootStep = "Konto prüfen";
   await checkAccount();
 
+  window.__bootStep = "Anzeige aufbauen";
   setupSearch();
   setupDrawer();
   initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });

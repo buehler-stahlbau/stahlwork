@@ -9,9 +9,22 @@ const DB_VERSION = 2;
 
 let dbPromise = null;
 
+// Safari: IndexedDB ist direkt nach dem Start manchmal noch nicht bereit und
+// "open" antwortet dann nie. Erst warten, bis indexedDB.databases() antwortet.
+async function idbReady() {
+  if (!indexedDB.databases) return;
+  for (let i = 0; i < 20; i++) {
+    const ok = await Promise.race([indexedDB.databases().then(() => true, () => true), new Promise((r) => setTimeout(() => r(false), 100))]);
+    if (ok) return;
+  }
+}
+
 export function openDb() {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  dbPromise = new Promise(async (resolve, reject) => {
+    try { await idbReady(); } catch {}
+    // nie endlos warten
+    const timer = setTimeout(() => { dbPromise = null; reject(new Error("Gerätespeicher antwortet nicht")); }, 8000);
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -20,11 +33,12 @@ export function openDb() {
       if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "id" });
     };
     req.onsuccess = () => {
+      clearTimeout(timer);
       const db = req.result;
       db.onversionchange = () => { db.close(); dbPromise = null; };
       resolve(db);
     };
-    req.onerror = () => { dbPromise = null; reject(req.error); };
+    req.onerror = () => { clearTimeout(timer); dbPromise = null; reject(req.error); };
     req.onblocked = () => console.warn("IndexedDB: Upgrade blockiert (andere BauDoc-Fenster schließen)");
   });
   return dbPromise;
