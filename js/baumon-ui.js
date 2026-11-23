@@ -188,8 +188,7 @@ export function renderMonPlan(app) {
     const L = Math.max(1, lanes.length);
     const n = 1;
     const tr = r.tr;
-    const fuehrer = tr && M.get("monteure", tr.fuehrerId);
-    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr && (tr.fuehrerId || tr.name) ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
+    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b></div>`);
     // Hintergrundzellen (Klick = neuer Einsatz an diesem Tag)
     days.forEach((d, i) => {
       const we = ["Sa", "So"].includes(M.wdName(d));
