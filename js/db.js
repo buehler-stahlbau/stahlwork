@@ -4,8 +4,27 @@
    - images: Bilder als Blob { id, archive?, thumb? }
    - outbox: PDFs, die noch nach OneDrive hochgeladen werden müssen
 ========================================================= */
-const DB_NAME = "baudoc_db_v1";
+// Name des Gerätespeichers. Ausweichspeicher, falls Safari den bisherigen nicht mehr öffnet
+// (der alte bleibt unangetastet erhalten).
+const DB_DEFAULT = "baudoc_db_v1";
+const DB_NAME = (() => { try { return localStorage.getItem("stahlwork-db") || DB_DEFAULT; } catch { return DB_DEFAULT; } })();
 const DB_VERSION = 2;
+export const dbName = DB_NAME;
+
+// Prüft, ob Safari überhaupt einen (neuen) Gerätespeicher öffnen kann
+export function probeDb(name, ms = 5000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const fin = (ok, why) => { if (!done) { done = true; resolve({ ok, why }); } };
+    setTimeout(() => fin(false, "keine Antwort"), ms);
+    try {
+      const req = indexedDB.open(name, 1);
+      req.onupgradeneeded = () => { try { req.result.createObjectStore("t"); } catch {} };
+      req.onsuccess = () => { try { req.result.close(); } catch {} fin(true); };
+      req.onerror = () => fin(false, String(req.error && req.error.message || req.error));
+    } catch (e) { fin(false, e.message); }
+  });
+}
 
 let dbPromise = null;
 

@@ -2052,6 +2052,35 @@ function setupServiceWorker() {
   }
 }
 
+/* ---------- Gerätespeicher öffnet nicht (Safari) ----------
+   Prüfen, ob ein neuer Speicher funktioniert, und dann anbieten, damit zu starten.
+   Daten kommen aus OneDrive; der alte Speicher bleibt unangetastet (dort liegen ggf.
+   noch nicht hochgeladene Änderungen). */
+async function storageRescue(err) {
+  window.__appReady = true; // Startwächter: wir zeigen selbst einen Hinweis
+  const app = $("#app");
+  const msg = (err && err.message) || String(err);
+  app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher öffnet nicht</h3><p class="muted">Prüfe, ob ein neuer Speicher funktioniert …</p></div>`;
+  const alt = db.dbName === "baudoc_db_v1" ? "stahlwork_db_2" : "stahlwork_db_" + Date.now();
+  const probe = await db.probeDb(alt + "_probe");
+  if (probe.ok) {
+    app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher öffnet nicht</h3>
+      <p>Safari öffnet den bisherigen Speicher dieser Seite nicht mehr (${h(msg)}). Ein neuer Speicher funktioniert.</p>
+      <p class="muted">Mit dem neuen Speicher startet Stahlwork leer und lädt deine Bauvorhaben nach dem Anmelden aus OneDrive.
+      Der alte Speicher wird <strong>nicht gelöscht</strong> – Änderungen, die dort noch nicht hochgeladen sind, bleiben erhalten.</p>
+      <div class="row wrap"><button class="primary" type="button" id="useNewDb">Mit neuem Speicher starten</button>
+      <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div></div>`;
+    $("#useNewDb").onclick = () => { try { localStorage.setItem("stahlwork-db", alt); } catch {} location.reload(); };
+  } else {
+    app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher nicht verfügbar</h3>
+      <p>Safari erlaubt dieser Seite gerade gar keinen Gerätespeicher (${h(msg)}; Test: ${h(probe.why || "")}).</p>
+      <p class="muted">Abhilfe: iPhone neu starten. Hilft das nicht: Einstellungen › Apps › Safari › Erweitert › Website-Daten › „github.io“ löschen
+      (danach lädt Stahlwork alles aus OneDrive; nur noch nicht Hochgeladenes geht verloren).</p>
+      <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div>`;
+  }
+  $("#retryDb").onclick = () => location.reload();
+}
+
 // Passen Startseite (index.html) und Programm (js) zusammen? Sonst Offline-Speicher erneuern.
 function versionMismatch() {
   const m = document.querySelector('meta[name="app-version"]');
@@ -2080,7 +2109,7 @@ function versionMismatch() {
   try {
     await load();
   } catch (e) {
-    if (window.__bootShow) window.__bootShow(`Gerätespeicher konnte nicht gelesen werden: ${e && e.message || e}. Bitte die App bzw. Safari ganz schließen und neu öffnen.`);
+    await storageRescue(e);
     return;
   }
   if (!S.state.drafts || typeof S.state.drafts !== "object") S.state.drafts = {};
