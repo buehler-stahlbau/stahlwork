@@ -122,12 +122,22 @@ export function renderMonPlan(app) {
   const rest = einsaetze.filter((e) => !e.truppId || !M.get("trupps", e.truppId));
   if (rest.length) rows.push({ tr: null, list: rest });
 
+  if (!rows.length) {
+    const empty = U.el(`<div class="card mon-empty-card"><h3>Noch keine Trupps</h3>
+      <p class="muted">Für die Planung zuerst Monteure und Trupps anlegen.</p>
+      <div class="row wrap"><button class="primary" data-stamm="trupps" type="button">Trupps anlegen</button>
+      <button class="secondary" data-stamm="monteure" type="button">Monteure</button></div></div>`);
+    app.appendChild(empty);
+    bindStammButtons(empty);
+    return;
+  }
+
   const card = U.el(`<div class="card mon-plan-card">
     <div class="g-tools"><button type="button" class="secondary small g-pdf" id="planPdf">PDF</button><div class="seg" role="group" aria-label="Ansicht">
       <button type="button" class="${zoom === "tage" ? "on" : ""}" data-zoom="tage">Tage</button>
       <button type="button" class="${zoom === "wochen" ? "on" : ""}" data-zoom="wochen">Wochen</button>
     </div></div>
-    <div class="gantt ${zoom}" style="--days:21"></div></div>`);
+    <div class="g-scroll"><div class="gantt ${zoom}" style="--days:21"></div></div></div>`);
   U.$$("[data-zoom]", card).forEach((b) => { b.onclick = () => { m.zoom = b.dataset.zoom; U.render(); }; });
   card.querySelector("#planPdf").onclick = () => openPlanPdf();
   const g = card.querySelector(".gantt");
@@ -170,14 +180,13 @@ export function renderMonPlan(app) {
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
         const bh = M.buehnenOf(e).filter((b) => !b.abgemeldetAm);
         const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${dueHere ? "has-due" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow + li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}">
-          ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${h(M.baustelleLabel(e))}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+          ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
     gridRow += n;
   }
-  if (!rows.length) g.insertAdjacentHTML("beforeend", `<div class="g-none muted" style="grid-row:3;grid-column:1 / -1">Noch keine Trupps – in den Einstellungen unter „BauMon“ anlegen.</div>`);
   app.appendChild(card);
 
   U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
@@ -189,10 +198,29 @@ export function renderMonPlan(app) {
   }
   // heutigen Tag ins Bild scrollen
   requestAnimationFrame(() => {
-    const tc = g.querySelector(".g-day.today");
-    if (tc && card.scrollWidth > card.clientWidth) card.scrollLeft = Math.max(0, tc.offsetLeft - 160);
+    const sc = card.querySelector(".g-scroll");
+    const mo = g.querySelector(`.g-day[data-day="${M.mondayOf(t)}"]`);
+    const corner = g.querySelector(".g-corner");
+    if (mo && sc.scrollWidth > sc.clientWidth) sc.scrollLeft = Math.max(0, mo.offsetLeft - corner.offsetWidth);
+    // Name eines Einsatzes, der links aus dem Bild ragt, bleibt sichtbar (rückt neben die Trupp-Spalte)
+    const bars = U.$$(".g-bar", g);
+    let raf = 0;
+    const follow = () => {
+      raf = 0;
+      const edge = corner.getBoundingClientRect().right;
+      for (const b of bars) {
+        const l = b.getBoundingClientRect().left;
+        b.style.paddingLeft = l < edge ? `${Math.max(8, Math.min(edge - l + 8, b.offsetWidth - 60))}px` : "";
+      }
+    };
+    sc.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(follow); }, { passive: true });
+    follow();
   });
-  app.appendChild(U.el(`<p class="muted center">Angezeigt: Vorwoche, aktuelle und nächste Woche. ${editable() ? `Freier Tag: neuer Einsatz · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern${"ontouchstart" in window ? " · am Handy erst kurz halten" : ""}.` : ""}</p>`));
+  const touch = "ontouchstart" in window;
+  app.appendChild(U.el(`<p class="muted center">${editable()
+    ? (touch ? "Antippen: öffnen · freier Tag: neuer Einsatz · kurz halten + ziehen: verschieben · Rand ziehen: Länge"
+      : "Freier Tag: neuer Einsatz · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern")
+    : "Vorwoche, aktuelle und nächste Woche"}</p>`));
 }
 
 /* ---------- PDF: Kalenderwochen wählen (Standard: aktuelle + nächste Woche) ---------- */

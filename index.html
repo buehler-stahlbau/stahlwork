@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.10.10-beta" />
+  <meta name="app-version" content="3.10.11-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -219,8 +219,9 @@
     .seg button { border: 0; background: none; min-height: 34px; padding: 0 14px; border-radius: 999px; font-weight: 600; color: var(--brand-gray-500); }
     .seg button.on { background: var(--brand-gray-700); color: #fff; }
     .mon-plan-head { flex-wrap: wrap; }
-    .mon-plan-card { padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .g-tools { position: sticky; left: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 10px 2px; width: 100%; box-sizing: border-box; }
+    .mon-plan-card { padding: 0; overflow: hidden; }
+    .g-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+    .g-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--brand-gray-100); }
     .g-tools .g-pdf { min-height: 36px; }
     @media (max-width: 600px){ .g-tools { justify-content: flex-start; } }
     .gantt { display: grid; grid-template-columns: 150px repeat(var(--days), minmax(40px, 1fr)); grid-auto-rows: minmax(44px, auto); min-width: calc(150px + var(--days) * 40px); position: relative; font-size: .82rem; }
@@ -247,10 +248,13 @@
     .g-bar.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
     .g-bar.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
     .g-bar-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .g-num { font-variant-numeric: tabular-nums; }
     .g-lift { flex: 0 0 auto; margin-left: auto; display: inline-flex; background: rgba(255,255,255,.22); border-radius: 6px; padding: 2px; }
     .g-lift .ico { width: 15px; height: 15px; }
     .g-lift.due { background: var(--brand-red); }
     .g-none { padding: 16px; }
+    .gantt { grid-template-rows: auto auto; } /* Kopfzeilen so hoch wie ihr Inhalt */
+    .gantt.wochen .g-day { padding: 0; height: 6px; }
     .g-day.hol, .g-cell.hol { background: rgba(203,49,48,.07); }
     .g-day.hol b { color: var(--brand-red-dark); }
     .g-hol { display: block; font-style: normal; font-size: .58rem; line-height: 1.1; color: var(--brand-red-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
@@ -271,7 +275,11 @@
       .gantt { grid-template-columns: 110px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(110px + var(--days) * 38px); }
       .gantt.wochen { grid-template-columns: 88px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(88px + var(--days) * 11px); }
       .gantt.wochen .g-week span { display: none; }
-      .gantt.wochen .g-bar { padding: 0 4px; font-size: .7rem; }
+      .gantt.wochen .g-bar { padding: 0 3px; gap: 3px; font-size: .68rem; text-overflow: clip; }
+      .gantt.wochen .g-bar-t { text-overflow: clip; }
+      /* Wochenansicht am Handy: nur BV-Nummer (Name im Einsatz beim Antippen) */
+      .gantt.wochen .g-name:not(.only), .gantt.wochen .g-lift, .gantt.wochen .g-h::after { display: none; }
+      .gantt.wochen .g-bar.has-due::after { content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-red); margin-left: auto; }
       .gantt.wochen .g-trupp .muted { display: none; }
       .g-trupp, .g-corner { padding: 6px 8px; }
     }
