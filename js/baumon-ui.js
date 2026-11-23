@@ -573,8 +573,8 @@ export function renderMonBuehnen(app) {
     for (const [vid, list] of byV) {
       const v = M.get("vermieter", vid);
       const grp = U.el(`<div class="mon-vgroup">
-        <div class="mon-vhead"><div><b>${h(v ? v.firma : "Unbekannter Vermieter")}</b>${v && v.ansprechpartner ? ` <span class="muted">· ${h(v.ansprechpartner)}</span>` : ""}</div>
-          ${editable() ? `<button class="primary small" type="button" data-mail="${h(vid)}">${ICO.mail} Abmelden per E-Mail</button>` : ""}</div>
+        <div class="mon-vhead"><div><b>${h(v ? v.firma : vid ? "Unbekannter Vermieter" : "Bühler (eigen)")}</b>${v && v.ansprechpartner ? ` <span class="muted">· ${h(v.ansprechpartner)}</span>` : ""}</div>
+          ${!editable() ? "" : v ? `<button class="primary small" type="button" data-mail="${h(vid)}">${ICO.mail} Abmelden per E-Mail</button>` : `<button class="primary small" type="button" data-done="${h(vid || "")}">${ICO.check} Als abgemeldet markieren</button>`}</div>
         ${list.map((b) => buehneRow(b, true)).join("")}
         <div class="mon-sent" hidden><span>E-Mail an ${h(v ? v.firma : "")} gesendet?</span><button class="secondary small" type="button" data-done="${h(vid)}">${ICO.check} Als abgemeldet markieren</button></div>
       </div>`);
@@ -586,8 +586,7 @@ export function renderMonBuehnen(app) {
         location.href = M.abmeldeMail(v, list, acc && acc.name);
         grp.querySelector(".mon-sent").hidden = false;
       };
-      const db = grp.querySelector("[data-done]");
-      if (db) db.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: t }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); changed(); };
+      for (const db of grp.querySelectorAll("[data-done]")) db.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: t }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); changed(); };
     }
     app.appendChild(card);
   }

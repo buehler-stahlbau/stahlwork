@@ -245,7 +245,7 @@ export function abmeldenAb(b) {
   return d;
 }
 export function isDue(b, day = today()) {
-  return !b.abgemeldetAm && !!b.vermieterId && !!b.bis && abmeldenAb(b) <= day;
+  return !b.abgemeldetAm && !!b.bis && abmeldenAb(b) <= day;
 }
 export function dueBuehnen(day = today()) {
   return list("buehnen")
@@ -291,7 +291,7 @@ export function dueFile() {
     const due = dueBuehnen(day);
     const rows = due.map((b) => {
       const v = get("vermieter", b.vermieterId);
-      return { buehne: buehneText(b), baustelle: baustelleLabel(b), bis: b.bis, vermieter: v ? v.firma : "", email: v ? v.email || "" : "" };
+      return { buehne: buehneText(b), baustelle: baustelleLabel(b), bis: b.bis, vermieter: v ? v.firma : "Bühler (eigen)", email: v ? v.email || "" : "" };
     });
     const text = rows.map((r) => `- ${r.buehne} – ${r.baustelle} – ${r.vermieter} (Mietende ${longDate(r.bis)})`).join("\n");
     const html = rows.length
