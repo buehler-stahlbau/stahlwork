@@ -589,7 +589,8 @@ function renderProjectList(app, onlyFav) {
     attachPlaceSuggest($("#newPlace"), $("#newPlaceList"), (g) => { newGeo = g; });
     $("#newClient").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#newPlace").focus(); });
     $("#newPlace").addEventListener("keydown", (e) => { if (e.key === "Enter") addProject(); });
-    setTimeout(() => numEl.focus(), 50);
+    // Cursor ins Nummernfeld – nur wenn noch kein Feld des Formulars aktiv ist
+    setTimeout(() => { if (!form.contains(document.activeElement)) numEl.focus(); }, 50);
   }
   const t = $("#toggleAdd");
   if (t) t.onclick = () => { addOpen = !addOpen; render(); };
