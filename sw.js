@@ -4,7 +4,7 @@
    bei fehlendem Netz der zwischengespeicherte Stand.
    Bei jeder neuen Version CACHE hochzählen.
 ========================================================= */
-const CACHE = "stahlwork-3.10.2-beta-1";
+const CACHE = "stahlwork-3.10.3-beta-1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -50,8 +50,21 @@ const ASSETS = [
 ];
 
 // Installation: alle App-Dateien dieser Version frisch vom Server (nicht aus dem Browser-Zwischenspeicher)
+// Prüft dabei, dass Startseite und Programm wirklich dieselbe Version haben (direkt nach einer
+// Veröffentlichung kann der Server kurz noch alte Dateien liefern) – sonst später erneut versuchen.
+const VERSION = CACHE.replace(/^stahlwork-/, "").replace(/-\d+$/, "");
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const tmp = await caches.open(CACHE);
+    await tmp.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" })));
+    const page = await (await tmp.match("./index.html")).text();
+    const conf = await (await tmp.match("./js/config.js")).text();
+    if (!page.includes(`content="${VERSION}"`) || !conf.includes(`"${VERSION}"`)) {
+      await caches.delete(CACHE);
+      throw new Error("Server liefert noch nicht die vollständige neue Version");
+    }
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {

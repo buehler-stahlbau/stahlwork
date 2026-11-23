@@ -257,6 +257,19 @@ function renderLogin(app) {
 }
 
 function render() {
+  try { renderInner(); }
+  catch (e) {
+    console.error("Anzeige", e);
+    const app = $("#app");
+    if (app) {
+      app.innerHTML = `<div class="card boot-fail"><h3>Anzeige fehlgeschlagen</h3><p class="muted">Deine Daten bleiben erhalten.</p>
+        <button class="primary" type="button" id="renderRepair">Neu laden</button><p class="muted" style="margin-top:10px;font-size:.75rem">${h(e && e.message || e)}</p></div>`;
+      $("#renderRepair").onclick = () => (window.__bootRepair ? window.__bootRepair() : location.reload());
+    }
+  }
+}
+
+function renderInner() {
   pendingRender = false;
   const prevView = currentRenderedView;
   currentRenderedView = S.state.view;
@@ -2039,7 +2052,26 @@ function setupServiceWorker() {
   }
 }
 
+// Passen Startseite (index.html) und Programm (js) zusammen? Sonst Offline-Speicher erneuern.
+function versionMismatch() {
+  const m = document.querySelector('meta[name="app-version"]');
+  const page = m ? m.content : "(alt)";
+  if (page === APP_VERSION) return false;
+  console.warn("Versionen passen nicht zusammen", page, APP_VERSION);
+  let last = 0;
+  try { last = Number(localStorage.getItem("stahlwork-repair") || 0); } catch {}
+  if (Date.now() - last > 10 * 60 * 1000 && window.__bootRepair) {
+    // einmal automatisch reparieren (höchstens alle 10 Minuten, keine Schleife)
+    try { localStorage.setItem("stahlwork-repair", String(Date.now())); } catch {}
+    window.__bootRepair();
+  } else if (window.__bootShow) {
+    window.__bootShow(`Startseite ${page}, Programm ${APP_VERSION}`);
+  }
+  return true;
+}
+
 (async function init() {
+  if (versionMismatch()) return;
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
   // zuerst: Offline-Speicher/Updates – damit ein Update auch dann ankommt, wenn der Start hängt
   try { setupServiceWorker(); } catch (e) { console.warn("Service Worker", e); }

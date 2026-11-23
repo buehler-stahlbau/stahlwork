@@ -30,6 +30,7 @@
     document.getElementById("bootRepair").onclick = function () { this.disabled = true; this.textContent = "Wird neu geladen …"; repair(); };
   }
   window.__bootShow = show;
+  window.__bootRepair = repair;
   // Fehler beim Laden der App-Module
   window.addEventListener("error", function (e) {
     if (window.__appReady) return;
