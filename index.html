@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.6-beta" />
+  <meta name="app-version" content="3.14.7-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -247,7 +247,7 @@
     .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px 4px; }
     .list-card > .card-head > .section-title { padding: 0; margin: 0; }
     .abw-tag { font-weight: 600; }
-    .mon-brow.now { background: #faf9f6; }
+
     .g-sep-add { margin-left: 10px; min-height: 22px; padding: 0 8px; font-size: .7rem; letter-spacing: 0; text-transform: none; border-radius: 6px; background: #fff; border: 1px solid var(--brand-gray-200); color: var(--brand-gray-700); }
     .g-arow b { font-weight: 600; }
     .g-abw { position: relative; z-index: 1; margin: 8px 2px; min-height: 0; padding: 0 12px; border-radius: 6px; font-size: .75rem; font-weight: 700; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
@@ -255,7 +255,7 @@
     .g-abw.krank { color: var(--brand-gray-700); border-color: #b9b6b0; background: #dedbd5; } /* Krank: flächig grau, Urlaub: schraffiert */
     .mon-abw-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .mon-abw-chip { min-height: 34px; font-weight: 500; font-size: .85rem; background: #f3f2ef; border: 1px solid var(--brand-gray-200); }
-    .mon-abw-chip.krank { background: #e6e3de; border-color: #c9c6c0; }
+
     .abw-seg { margin-bottom: 6px; }
     .g-sep { grid-column: 1 / -1; display: flex; align-items: flex-end; border-top: 2px solid var(--brand-gray-300, #c9c9c9); border-bottom: 1px solid var(--brand-gray-200); background: var(--brand-gray-100); }
     .g-sep span { position: sticky; left: 0; padding: 0 10px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand-gray-500); }
@@ -294,9 +294,11 @@
     .quick-menu .qm-danger { color: var(--brand-red-dark, #8f2424); }
     .g-pc { user-select: none; -webkit-user-select: none; }
     .g-bue { position: relative; z-index: 1; margin: 3px 2px; min-height: 0; padding: 0 12px; border-radius: 5px; font-size: .68rem; font-weight: 600; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
-      border: 1px solid var(--c); color: var(--brand-gray-900); background: color-mix(in srgb, var(--c) 18%, #fff); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }
+      border: 1px solid var(--c); border-left-width: 4px; color: var(--brand-gray-900); background: color-mix(in srgb, var(--c) 28%, #fff); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }
     .g-bue .g-bue-t { overflow: hidden; text-overflow: ellipsis; display: block; }
-    .g-bue.due { border-color: var(--brand-red); background: #fbeeee; color: var(--brand-red-dark); }
+    .g-bue { display: flex; align-items: center; gap: 5px; }
+    .g-bue .bue-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--brand-red); box-shadow: 0 0 0 2px #fff; }
+    .g-bue.due { font-weight: 700; }
     .g-bue.done { opacity: .5; border-style: dashed; }
     .g-bue .g-h::after { background: rgba(0,0,0,.25); }
     .g-bue.dragging { opacity: .4; }
@@ -349,8 +351,14 @@
     body.g-dragging, body.g-dragging * { cursor: grabbing !important; user-select: none; }
     @media (hover: hover) and (pointer: fine){ .g-bar { cursor: grab; } }
     @media (max-width: 600px){
-      .gantt { grid-template-columns: 110px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(110px + var(--days) * 38px); }
-      .gantt.wochen { grid-template-columns: 110px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(110px + var(--days) * 11px); }
+      .gantt { grid-template-columns: 74px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(74px + var(--days) * 38px); }
+      .g-trupp, .g-corner { font-size: .74rem; }
+      .g-trupp b { font-weight: 700; }
+      .g-subl { padding: 0 4px 0 8px; font-size: .66rem; }
+      .g-subl .p-badge { display: none; }
+      .g-sep span { font-size: .62rem; padding-left: 6px; }
+      .g-sep-add { margin-left: 4px; }
+      .gantt.wochen { grid-template-columns: 74px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(74px + var(--days) * 11px); }
       .gantt.wochen .g-week span { display: none; }
       .gantt.wochen .g-bar { padding: 0 var(--padr, 3px) 0 max(var(--padl, 3px), var(--follow, 3px)); gap: 3px; font-size: .68rem; text-overflow: clip; }
       .gantt.wochen .g-bar-t { text-overflow: clip; }

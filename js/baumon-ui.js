@@ -42,6 +42,14 @@ const ICO = {
 };
 
 const changed = () => { U.schedule(); U.render(); };
+// Auswahllisten (BV, Typ, Person): Berühren/Scrollen schließt die Liste nicht, Auswahl per Antippen (click)
+let listTouchAt = 0;
+const listBusy = () => Date.now() - listTouchAt < 1500;
+document.addEventListener("pointerdown", (ev) => {
+  if (ev.target.closest(".mon-modal .place-list")) { listTouchAt = Date.now(); if (ev.pointerType === "mouse") ev.preventDefault(); return; }
+  for (const l of document.querySelectorAll(".mon-modal .place-list")) if (l.innerHTML && !l.parentElement.contains(ev.target)) l.innerHTML = "";
+}, true);
+document.addEventListener("click", (ev) => { if (ev.target.closest(".mon-modal .place-list")) setTimeout(() => { listTouchAt = 0; }, 0); }, true);
 // Kurzformen der Feiertage für die schmale Tagesspalte
 const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Ostermo.", "Tag der Arbeit": "1. Mai", "Christi Himmelfahrt": "Himmelf.",
   "Pfingstmontag": "Pfingstmo.", "Fronleichnam": "Fronleichn.", "Tag der Deutschen Einheit": "Dt. Einheit", "Allerheiligen": "Allerheil.",
@@ -351,7 +359,7 @@ export function renderMonPlan(app) {
         const von = b.von || b.bis || days[0], bis = b.abgemeldetAm || b.bis || days[20];
         if (bis >= days[0] && von <= days[20]) {
           const s0 = Math.max(0, days.indexOf(von < days[0] ? days[0] : von)), e0 = days.indexOf(bis > days[20] ? days[20] : bis);
-          g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${siteColor(sub.e)}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))} · ${b.abgemeldetAm ? "abgemeldet " + h(M.shortDate(b.abgemeldetAm)) : "bis " + (b.bis ? h(M.shortDate(b.bis)) : "?")}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+          g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${siteColor(sub.e)}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${due ? '<span class="bue-dot" title="abmelden!"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))} · ${b.abgemeldetAm ? "abgemeldet " + h(M.shortDate(b.abgemeldetAm)) : "bis " + (b.bis ? h(M.shortDate(b.bis)) : "?")}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
         }
       }
       gridRow++;
@@ -825,7 +833,7 @@ function siteField(init) {
     listEl.innerHTML = (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "")
       + ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("");
     const nb = listEl.querySelector("[data-new]");
-    if (nb) nb.addEventListener("pointerdown", (e) => {
+    if (nb) nb.addEventListener("click", (e) => {
       e.preventDefault();
       listEl.innerHTML = "";
       openNewBV(qRaw, (p) => {
@@ -834,7 +842,7 @@ function siteField(init) {
         box.dispatchEvent(new Event("sitechange"));
       });
     });
-    U.$$(".place-opt:not([data-new])", listEl).forEach((b) => b.addEventListener("pointerdown", (e) => {
+    U.$$(".place-opt:not([data-new])", listEl).forEach((b) => b.addEventListener("click", (e) => {
       e.preventDefault();
       val = { bvNumber: b.dataset.n, baustelle: b.dataset.t };
       input.value = M.baustelleLabel(val);
@@ -844,7 +852,7 @@ function siteField(init) {
   };
   input.addEventListener("focus", show);
   input.addEventListener("input", () => { val = { bvNumber: "", baustelle: input.value.trim() }; show(); });
-  input.addEventListener("blur", () => setTimeout(() => { listEl.innerHTML = ""; }, 150));
+  input.addEventListener("blur", () => setTimeout(() => { if (!listBusy()) listEl.innerHTML = ""; }, 150));
   return { box, value: () => {
     const m = input.value.trim().match(/^(\d{5})\s+(.*)$/);
     if (!val.bvNumber && m) return { bvNumber: m[1], baustelle: m[2] };
@@ -975,7 +983,7 @@ export function openAbw(a, preset = {}) {
     const q = all ? "" : pIn.value.trim().toLowerCase();
     const xs = people.filter((p) => !q || p.name.toLowerCase().includes(q));
     pList.innerHTML = xs.length ? xs.map((p) => `<button type="button" class="place-opt" data-pid="${h(p.id)}">${h(label(p))}</button>`).join("") : `<div class="place-opt muted">Kein Treffer</div>`;
-    U.$$("[data-pid]", pList).forEach((o) => o.addEventListener("pointerdown", (ev) => { ev.preventDefault(); const p = M.get("monteure", o.dataset.pid); pIn.value = p.name; pHid.value = p.id; pIn.classList.remove("invalid"); pList.innerHTML = ""; }));
+    U.$$("[data-pid]", pList).forEach((o) => o.addEventListener("click", (ev) => { ev.preventDefault(); const p = M.get("monteure", o.dataset.pid); pIn.value = p.name; pHid.value = p.id; pIn.classList.remove("invalid"); pList.innerHTML = ""; }));
   };
   const matchP = () => {
     const q = pIn.value.trim().toLowerCase();
@@ -988,7 +996,7 @@ export function openAbw(a, preset = {}) {
   };
   pIn.addEventListener("focus", () => showP(true));
   pIn.addEventListener("input", () => { pHid.value = ""; showP(false); });
-  pIn.addEventListener("blur", () => setTimeout(() => { pList.innerHTML = ""; matchP(); }, 150));
+  pIn.addEventListener("blur", () => setTimeout(() => { if (listBusy()) return; pList.innerHTML = ""; matchP(); }, 150));
   body.querySelector(".p-field .typ-open").addEventListener("pointerdown", (ev) => { ev.preventDefault(); if (pList.innerHTML) pList.innerHTML = ""; else { pIn.focus(); showP(true); } });
   let typ = cur.typ;
   U.$$("[data-typ]", body).forEach((b) => { b.onclick = () => { typ = b.dataset.typ; U.$$("[data-typ]", body).forEach((x) => x.classList.toggle("on", x === b)); }; });
@@ -1137,11 +1145,11 @@ export function openBuehne(b, preset = {}, after) {
     const q = all ? "" : tin.value.trim().toLowerCase();
     const xs = typen.filter((x) => !q || x.toLowerCase().includes(q));
     tlist.innerHTML = xs.map((x) => `<button type="button" class="place-opt" data-t="${h(x)}">${h(x)}</button>`).join("");
-    U.$$(".place-opt", tlist).forEach((o) => o.addEventListener("pointerdown", (ev) => { ev.preventDefault(); tin.value = o.dataset.t; tlist.innerHTML = ""; }));
+    U.$$(".place-opt", tlist).forEach((o) => o.addEventListener("click", (ev) => { ev.preventDefault(); tin.value = o.dataset.t; tlist.innerHTML = ""; }));
   };
   tin.addEventListener("focus", () => showTypen(true));
   tin.addEventListener("input", () => showTypen(false));
-  tin.addEventListener("blur", () => setTimeout(() => { tlist.innerHTML = ""; }, 150));
+  tin.addEventListener("blur", () => setTimeout(() => { if (!listBusy()) tlist.innerHTML = ""; }, 150));
   body.querySelector(".typ-open").addEventListener("pointerdown", (ev) => { ev.preventDefault(); if (tlist.innerHTML) tlist.innerHTML = ""; else { tin.focus(); showTypen(true); } });
   // Mietende: Vorschlag = Ende der geplanten Einsätze des BV – nur solange das Feld leer ist und
   // nicht von Hand bearbeitet wurde. "angeliefert" wird nie automatisch geändert.
