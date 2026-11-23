@@ -390,6 +390,27 @@ function setupDrawer() {
 }
 
 // BauMon (Montage): Bereich in Vorbereitung
+/* ---------- Anmeldung abgelaufen ----------
+   Konto ist bekannt, aber Microsoft verlangt eine neue Anmeldung: Hinweis mit Knopf.
+   Einmal je Sitzung (online, kurz nach dem Start) wird automatisch neu angemeldet. */
+const appStart = Date.now();
+function authExpired() { return od.isConfigured() && od.isSignedIn() && sync.status.kind === "signedout"; }
+function updateAuthBar() {
+  let bar = $("#authBar");
+  if (!authExpired()) { if (bar) bar.remove(); return; }
+  let tried = false;
+  try { tried = sessionStorage.getItem("relogin") === "1"; } catch {}
+  if (!tried && navigator.onLine && Date.now() - appStart < 60000) {
+    try { sessionStorage.setItem("relogin", "1"); } catch {}
+    saveNow().finally(() => od.relogin());
+    return;
+  }
+  if (bar) return;
+  bar = el(`<div id="authBar" class="update-bar auth-bar"><span>Anmeldung abgelaufen – Änderungen bleiben auf dem Gerät und werden nach dem Anmelden hochgeladen.</span><button class="primary small" type="button">Neu anmelden</button></div>`);
+  bar.querySelector("button").onclick = async () => { await saveNow(); od.relogin(); };
+  document.body.appendChild(bar);
+}
+
 function setupSearch() {
   const search = $("#search");
   const bar = $("#appbar");
@@ -633,16 +654,18 @@ function docsMeta(p) {
 
 function projectRow(p) {
   const meta = docsMeta(p);
-  const pend = p.dirty && od.isConfigured() ? ` <span class="muted" title="Noch nicht hochgeladen">⏳</span>` : "";
+  // Noch nicht hochgeladen: Sanduhr rechts neben dem Pfeil (ändert die Zeilenhöhe nicht)
+  const pending = p.dirty && od.isConfigured();
+  const pend = pending ? `<span class="p-pend" title="Noch nicht hochgeladen" aria-label="Noch nicht hochgeladen">⏳</span>` : "";
   const row = el(`
-    <div class="project-item ${justAdded === p.id ? "flash" : ""}" data-pid="${h(p.id)}">
+    <div class="project-item ${pending ? "has-pend" : ""} ${justAdded === p.id ? "flash" : ""}" data-pid="${h(p.id)}">
       <button class="fav-btn ${p.fav ? "is-fav" : ""}" type="button" data-a="fav" aria-label="Favorit umschalten"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.9 6.2.7-4.6 4.3 1.2 6.1L12 17l-5.6 3 1.2-6.1L3 9.6l6.2-.7z"/></svg></button>
       <div class="p-info">
         <div class="p-title"><span class="bv-num">${h(p.number)}</span> ${h(p.client || p.title)}</div>
         ${p.place ? `<div class="p-place">${h(p.place)}</div>` : ""}
-        <div>${meta}${pend}</div>
+        <div class="p-meta">${meta}</div>
       </div>
-      <span class="chevron" aria-hidden="true">›</span>
+      ${pend}<span class="chevron" aria-hidden="true">›</span>
     </div>`);
   row.onclick = (e) => {
     const a = e.target.closest("[data-a]");
@@ -1854,6 +1877,8 @@ function renderSettings(app) {
     const acc = od.getAccount();
     odHtml = `
       <p>Angemeldet als <strong>${h(acc.name || acc.username)}</strong><br><span class="muted">${h(acc.username || "")}</span></p>
+      ${s.kind === "signedout" ? `<div class="auth-expired"><p><strong>Anmeldung abgelaufen.</strong> Es wird gerade nicht synchronisiert – deine Änderungen bleiben auf dem Gerät und werden nach dem Anmelden hochgeladen.</p>
+        <button class="primary" id="relogin" type="button">Neu anmelden</button></div>` : ""}
       <p class="muted">Ablage: OneDrive › ${h(CONFIG.appFolder)}<br>
         Zuletzt synchronisiert: ${s.lastSync ? formatDateTimeDE(s.lastSync) : "–"}<br>
         Ausstehend: ${s.pending}${s.kind === "error" ? `<br><span class="error-text">Fehler: ${h(s.message)}</span>` : ""}</p>
@@ -1887,6 +1912,8 @@ function renderSettings(app) {
     </div>`));
   app.appendChild(el(`<p class="muted center">Stahlwork ${h(APP_VERSION)}</p>`));
 
+  const reBtn = $("#relogin");
+  if (reBtn) reBtn.onclick = async () => { await saveNow(); od.relogin(); };
   const loginBtn = $("#login");
   if (loginBtn) loginBtn.onclick = () => od.login();
   const syncBtn = $("#syncNow");
@@ -2022,7 +2049,7 @@ async function checkAccount() {
   setupSearch();
   setupDrawer();
   initMonUI({ el, $, $$, go, render, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
-  sync.onStatus(() => updateSyncChip());
+  sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {
     if (kind === "data") { sync.refreshStatus(); sync.schedule(4000); }

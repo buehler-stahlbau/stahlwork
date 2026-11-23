@@ -50,6 +50,11 @@ export async function init() {
 export function login() {
   return pca.loginRedirect({ scopes: CONFIG.scopes, prompt: "select_account" });
 }
+// Anmeldung abgelaufen (z. B. iPhone nach einiger Zeit): mit demselben Konto neu anmelden,
+// meist ohne Passwort, weil Microsoft die Sitzung noch kennt
+export function relogin() {
+  return pca.loginRedirect({ scopes: CONFIG.scopes, loginHint: account ? account.username : undefined });
+}
 export function logout() {
   return pca.logoutRedirect({ account });
 }
