@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Stahlwork – Diagnose</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; background: #f4f4f3; color: #282826; }
+    h1 { font-size: 1.2rem; margin: 0 0 4px; }
+    .muted { color: #787772; font-size: .85rem; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; margin-top: 12px; font-size: .85rem; }
+    td { padding: 8px 10px; border-top: 1px solid #eee; vertical-align: top; }
+    td:first-child { font-weight: 600; width: 42%; }
+    .ok { color: #16803d; } .bad { color: #a52827; } .warn { color: #b46e00; }
+    a { color: #2e5b8a; }
+  </style>
+</head>
+<body>
+  <h1>Stahlwork – Diagnose</h1>
+  <p class="muted">Prüft, was der Browser auf diesem Gerät kann. Bitte einen Screenshot der Tabelle schicken.</p>
+  <table id="out"><tr><td>Läuft …</td><td></td></tr></table>
+  <p class="muted"><a href="./">Zurück zu Stahlwork</a></p>
+  <script src="js/diag.js"></script>
+</body>
+</html>

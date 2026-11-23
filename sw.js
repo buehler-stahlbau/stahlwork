@@ -4,7 +4,7 @@
    bei fehlendem Netz der zwischengespeicherte Stand.
    Bei jeder neuen Version CACHE hochzählen.
 ========================================================= */
-const CACHE = "stahlwork-3.10.7-beta-1";
+const CACHE = "stahlwork-3.10.8-beta-1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -91,7 +91,8 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const isNav = req.mode === "navigate";
+    // Startseite der App (nicht z. B. diag.html) kommt aus dem Speicher dieser Version
+    const isNav = req.mode === "navigate" && /\/(index\.html)?$/.test(url.pathname);
     const isAsset = isNav || ASSET_PATHS.has(url.pathname);
     if (isAsset) {
       const hit = await cache.match(isNav ? "./index.html" : req, { ignoreSearch: true });
