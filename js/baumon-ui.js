@@ -214,8 +214,37 @@ export function renderMonPlan(app) {
   U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
   if (editable()) enableDrag(card, g, days);
   if (editable()) {
+    // Maus: gedrückt halten und über mehrere Tage ziehen -> Zeitraum für neuen Einsatz
+    let sel = null, selJustEnded = false;
+    const cellsOf = (tr) => U.$$(".g-cell", g).filter((x) => x.dataset.trupp === tr);
+    const mark = () => {
+      const [a, b] = [sel.from, sel.to].sort();
+      for (const x of cellsOf(sel.trupp)) x.classList.toggle("sel", x.dataset.day >= a && x.dataset.day <= b);
+    };
+    g.addEventListener("pointerdown", (ev) => {
+      if (ev.pointerType !== "mouse" || ev.button !== 0) return;
+      const c = ev.target.closest(".g-cell");
+      if (!c) return;
+      sel = { trupp: c.dataset.trupp, from: c.dataset.day, to: c.dataset.day };
+      ev.preventDefault();
+    });
+    g.addEventListener("pointermove", (ev) => {
+      if (!sel) return;
+      const c = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".g-cell");
+      if (!c || c.dataset.trupp !== sel.trupp || c.dataset.day === sel.to) return;
+      sel.to = c.dataset.day; mark();
+    });
+    window.addEventListener("pointerup", () => {
+      if (!sel) return;
+      const s = sel; sel = null;
+      U.$$(".g-cell.sel", g).forEach((x) => x.classList.remove("sel"));
+      if (s.from === s.to) return; // einzelner Tag: normaler Klick
+      selJustEnded = true; setTimeout(() => { selJustEnded = false; }, 50);
+      const [von, bis] = [s.from, s.to].sort();
+      openEinsatz(null, { von, bis, truppId: s.trupp || null });
+    });
     U.$$(".g-cell", card).forEach((c) => {
-      c.onclick = () => openEinsatz(null, { von: c.dataset.day, bis: c.dataset.day, truppId: c.dataset.trupp || null });
+      c.onclick = () => { if (selJustEnded) return; openEinsatz(null, { von: c.dataset.day, bis: c.dataset.day, truppId: c.dataset.trupp || null }); };
     });
   }
   // heutigen Tag ins Bild scrollen
@@ -241,7 +270,7 @@ export function renderMonPlan(app) {
   const touch = "ontouchstart" in window;
   app.appendChild(U.el(`<p class="muted center">${editable()
     ? (touch ? "Antippen: öffnen · freier Tag: neuer Einsatz · kurz halten + ziehen: verschieben · Rand ziehen: Länge"
-      : "Freier Tag: neuer Einsatz · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern")
+      : "Freier Tag: neuer Einsatz (mit gedrückter Maus über mehrere Tage ziehen: Zeitraum) · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern")
     : "Vorwoche, aktuelle und nächste Woche"}</p>`));
 }
 
@@ -365,6 +394,8 @@ function enableDrag(card, g, days) {
       const same = oldT && [...e.monteure].sort().join() === [...oldT.monteure].sort().join();
       if (newT && (same || !e.monteure.length)) next.monteure = newT.monteure.slice();
     }
+    const ob = M.overbooked(next);
+    if (ob) { alert("Nicht möglich:\n\n" + M.overbookedText(next, ob)); return; }
     const cf = M.conflicts(next);
     if (cf.length) { alert("Nicht möglich – doppelt eingeteilt:\n\n" + M.conflictText(cf)); return; }
     M.put("einsaetze", next);
@@ -606,6 +637,8 @@ export function openEinsatz(e, preset = {}) {
     const bis = body.querySelector(".f-bis").value;
     if (!s.bvNumber && !s.baustelle) { toast("Bitte die Baustelle angeben.", "warn"); return false; }
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
+    const ob = M.overbooked({ ...cur, von, bis, truppId: truppSel.value || null });
+    if (ob) { alert(M.overbookedText({ truppId: truppSel.value }, ob)); return false; }
     const cf = M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, chips.value());
     if (cf.length) { alert("Doppelt eingeteilt – bitte ändern:\n\n" + M.conflictText(cf)); return false; }
     M.put("einsaetze", { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(),

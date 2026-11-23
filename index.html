@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.11.8-beta" />
+  <meta name="app-version" content="3.11.9-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -243,6 +243,7 @@
     .g-cell { border-bottom: 1px solid var(--brand-gray-200); border-left: 1px solid var(--brand-gray-100); cursor: pointer; }
     .g-cell.we { background: var(--brand-gray-100); }
     .g-cell.today { background: var(--brand-primary-soft); }
+    .g-cell.sel { background: rgba(46,91,138,.22) !important; }
     @media (hover: hover) and (pointer: fine){ .g-cell:hover { background: rgba(46,91,138,.06); } }
     .g-bar { position: relative; z-index: 1; margin: 5px 2px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: var(--c); color: #fff; font-weight: 600; font-size: .78rem; text-align: left; display: flex; align-items: center; gap: 6px; overflow: hidden; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
     .g-bar.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }

@@ -171,20 +171,23 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
         bs,
       ];
       font("normal", 8, DARK);
-      const lines = cells.map((c, i) => pdf.splitTextToSize(pdfSafe(c || "–"), cols[i].w - (i === 1 ? 12 : 6)));
+      const lines = cells.map((c, i) => pdf.splitTextToSize(pdfSafe(c || "–"), cols[i].w - (i === 1 ? 50 : 6)));
       const h = Math.max(...lines.map((l) => l.length)) * 10 + 6;
       if (y + h > BOTTOM) { pdf.addPage(); y = header(false); tableHead(); }
       let x = ML;
       lines.forEach((l, i) => {
         if (i === 1) {
-          // Baustelle in der Farbe des Balkens – zur Wiedererkennung
-          // dezent: heller Farbton als Hintergrund + schmaler Streifen in voller Farbe
-          const c = hex(colorOf(e));
-          fill(c.map((v) => Math.round(v * 0.14 + 255 * 0.86)));
-          pdf.rect(x - 2, y + 2, cols[i].w - 6, h - 4, "F");
-          fill(c);
-          pdf.rect(x - 2, y + 2, 2.5, h - 4, "F");
-          font("bold", 8, DARK); pdf.text(l, x + 4, y + 10);
+          // BV-Nummer in exakt der Balkenfarbe – zur Wiedererkennung
+          const nr = e.bvNumber ? pdfSafe(e.bvNumber) : "";
+          let tx = x;
+          font("bold", 8, [255, 255, 255]);
+          const cw = nr ? pdf.getTextWidth(nr) + 6 : 6;
+          fill(hex(colorOf(e)));
+          pdf.roundedRect(x - 1, y + 3, cw, 10, 2, 2, "F");
+          if (nr) pdf.text(nr, x + 2, y + 10.5);
+          tx = x + cw + 3;
+          const rest = pdf.splitTextToSize(pdfSafe(nr ? (e.baustelle || "") : M.baustelleLabel(e)) || "–", cols[i].w - cw - 9);
+          font("bold", 8, DARK); pdf.text(rest, tx, y + 10.5);
         } else { font("normal", 8, DARK); pdf.text(l, x, y + 10); }
         x += cols[i].w;
       });

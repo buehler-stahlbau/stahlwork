@@ -168,6 +168,21 @@ export function conflicts(e, ids = e.monteure) {
   }
   return out;
 }
+// Höchstens zwei Baustellen je Trupp und Tag. Liefert den ersten Tag, an dem es mehr wären (sonst null).
+export const MAX_SITES_PER_DAY = 2;
+export function overbooked(e) {
+  if (!e.truppId || !e.von || !e.bis) return null;
+  const others = list("einsaetze").filter((o) => o.id !== e.id && o.truppId === e.truppId && o.von <= e.bis && o.bis >= e.von);
+  if (others.length < MAX_SITES_PER_DAY) return null;
+  for (let d = e.von; d <= e.bis; d = addDays(d, 1)) {
+    if (others.filter((o) => o.von <= d && o.bis >= d).length >= MAX_SITES_PER_DAY) return d;
+  }
+  return null;
+}
+export function overbookedText(e, d) {
+  return `${truppName(get("trupps", e.truppId))} hat am ${longDate(d)} schon ${MAX_SITES_PER_DAY} Baustellen – mehr sind je Tag nicht möglich.`;
+}
+
 export function conflictText(list) {
   return list.slice(0, 6).map((c) => {
     const p = get("monteure", c.monteurId);
