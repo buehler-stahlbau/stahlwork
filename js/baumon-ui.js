@@ -11,6 +11,26 @@ import { buildPlanPdf } from "./baumon-pdf.js";
 let U = null; // Hilfsfunktionen aus app.js: el, $, $$, go, render, schedule, account, projects
 export function initMonUI(helpers) { U = helpers; }
 
+// Einmal-Link zum Übernehmen von Namen: …/stahlwork/#mon-import=<Base64 von {"rm":[…],"m":[…]}>
+export function checkImportLink() {
+  const m = location.hash.match(/^#mon-import=([A-Za-z0-9_-]+={0,2})$/);
+  if (!m) return;
+  try { history.replaceState(history.state, "", location.pathname + location.search); } catch {}
+  let data;
+  try {
+    const b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
+    data = JSON.parse(decodeURIComponent(escape(atob(b64))));
+  } catch { toast("Import-Link ist ungültig.", "error"); return; }
+  const rm = Array.isArray(data.rm) ? data.rm.map(String) : [], mon = Array.isArray(data.m) ? data.m.map(String) : [];
+  if (!rm.length && !mon.length) return;
+  if (!editable()) { toast("Keine Berechtigung zum Bearbeiten von BauMon.", "warn"); return; }
+  if (!confirm(`BauMon-Stammdaten übernehmen?\n\nRichtmeister (je mit Trupp): ${rm.length}\n${rm.join(", ")}\n\nMonteure: ${mon.length}\n${mon.join(", ")}\n\nBereits vorhandene Namen werden nicht doppelt angelegt.`)) return;
+  const r = M.importPeople({ rm, m: mon });
+  toast(`Übernommen: ${r.neuRm} Richtmeister, ${r.neuM} Monteure, ${r.neuT} Trupps.`, "info", 5000);
+  U.go({ sparte: "mon", view: "monstamm", monStamm: "monteure" });
+  U.schedule();
+}
+
 const ICO = {
   plus: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   mail: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
@@ -180,8 +200,9 @@ export function renderMonPlan(app) {
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
         const bh = M.buehnenOf(e).filter((b) => !b.abgemeldetAm);
         const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${dueHere ? "has-due" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
-          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow + li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}">
+        const dbl = M.conflicts(e);
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
+          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow + li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
           ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
@@ -343,6 +364,8 @@ function enableDrag(card, g, days) {
       const same = oldT && [...e.monteure].sort().join() === [...oldT.monteure].sort().join();
       if (newT && (same || !e.monteure.length)) next.monteure = newT.monteure.slice();
     }
+    const cf = M.conflicts(next);
+    if (cf.length) { alert("Nicht möglich – doppelt eingeteilt:\n\n" + M.conflictText(cf)); return; }
     M.put("einsaetze", next);
     followBuehnen(e, next);
     toast(`${M.baustelleLabel(next)}: ${M.longDate(next.von)} – ${M.longDate(next.bis)}${next.truppId !== (e.truppId || null) ? " · " + M.truppName(M.get("trupps", next.truppId)) : ""}`, "info", 2500);
@@ -510,13 +533,18 @@ function siteField(init) {
 
 function chipPicker(all, selected) {
   const sel = new Set(selected);
+  let busy = new Map(); // Monteur -> anderer Einsatz im gewählten Zeitraum
   const box = U.el(`<div class="chips"></div>`);
   const draw = () => {
-    box.innerHTML = all.map((x) => `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""}" data-id="${h(x.id)}">${h(x.name)}</button>`).join("") || `<span class="muted">Noch keine Monteure angelegt.</span>`;
+    box.innerHTML = all.map((x) => {
+      const b = busy.get(x.id);
+      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="schon bei ${h(M.baustelleLabel(b))}"` : ""}>${x.rm ? "★ " : ""}${h(x.name)}${b ? ` <small>· ${h(b.bvNumber || "belegt")}</small>` : ""}</button>`;
+    }).join("") || `<span class="muted">Noch keine Monteure angelegt.</span>`;
     U.$$(".chip", box).forEach((c) => { c.onclick = () => { sel.has(c.dataset.id) ? sel.delete(c.dataset.id) : sel.add(c.dataset.id); draw(); }; });
   };
   draw();
-  return { box, value: () => [...sel], set: (ids) => { sel.clear(); ids.forEach((i) => sel.add(i)); draw(); } };
+  return { box, value: () => [...sel], set: (ids) => { sel.clear(); ids.forEach((i) => sel.add(i)); draw(); },
+    setBusy: (m) => { busy = m; draw(); } };
 }
 
 export function openEinsatz(e, preset = {}) {
@@ -557,7 +585,16 @@ export function openEinsatz(e, preset = {}) {
   drawB();
   site.box.querySelector(".site-in").addEventListener("blur", () => setTimeout(drawB, 200));
   const truppSel = body.querySelector(".f-trupp");
-  truppSel.onchange = () => { if (isNew) chips.set((M.get("trupps", truppSel.value) || {}).monteure || []); };
+  const updBusy = () => {
+    const von = body.querySelector(".f-von").value, bis = body.querySelector(".f-bis").value;
+    const map = new Map();
+    if (von && bis && bis >= von) for (const c of M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, M.list("monteure").map((x) => x.id))) map.set(c.monteurId, c.other);
+    chips.setBusy(map);
+  };
+  body.querySelector(".f-von").addEventListener("change", updBusy);
+  body.querySelector(".f-bis").addEventListener("change", updBusy);
+  updBusy();
+  truppSel.onchange = () => { if (isNew) chips.set((M.get("trupps", truppSel.value) || {}).monteure || []); updBusy(); };
   if (ro) U.$$("input,select,textarea,.chip", body).forEach((x) => { x.disabled = true; });
 
   const save = () => {
@@ -566,6 +603,8 @@ export function openEinsatz(e, preset = {}) {
     const bis = body.querySelector(".f-bis").value;
     if (!s.bvNumber && !s.baustelle) { toast("Bitte die Baustelle angeben.", "warn"); return false; }
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
+    const cf = M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, chips.value());
+    if (cf.length) { alert("Doppelt eingeteilt – bitte ändern:\n\n" + M.conflictText(cf)); return false; }
     M.put("einsaetze", { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(),
       leih: body.querySelector(".f-leih").value.trim(), kran: body.querySelector(".f-kran").value.trim(), notiz: body.querySelector(".f-notiz").value.trim() });
     // Bühnen ohne Enddatum dieser Baustelle bekommen das Einsatzende
@@ -653,20 +692,25 @@ export function renderMonStamm(app) {
     U.$$("[data-vid]", card).forEach((b) => { b.onclick = () => editVermieter(M.get("vermieter", b.dataset.vid)); });
   } else if (kind === "monteure") {
     const all = M.sortedMonteure(true);
-    const card = U.el(`<div class="card list-card">${all.map((m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-      ${ro ? "" : `<span class="row"><button type="button" class="secondary small" data-ren="${h(m.id)}">Umbenennen</button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`).join("") || `<p class="muted">Noch keine Monteure.</p>`}</div>`);
+    const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
+      ${ro ? "" : `<span class="row"><button type="button" class="secondary small" data-rm="${h(m.id)}" title="Als Richtmeister kennzeichnen">${m.rm ? "★ Richtmeister" : "☆ Richtmeister"}</button><button type="button" class="secondary small" data-ren="${h(m.id)}">Umbenennen</button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
+    const rms = all.filter((m) => m.rm), mons = all.filter((m) => !m.rm);
+    const card = U.el(`<div><div class="card list-card"><h3 class="section-title">Richtmeister (${rms.length})</h3>${rms.map(row).join("") || `<p class="muted">Noch keine Richtmeister.</p>`}</div>
+      <div class="card list-card"><h3 class="section-title">Monteure (${mons.length})</h3>${mons.map(row).join("") || `<p class="muted">Noch keine Monteure.</p>`}</div></div>`);
     app.appendChild(card);
     if (!ro) {
-      const add = U.el(`<div class="card"><label class="field-label">Monteure hinzufügen (ein Name pro Zeile)</label><textarea id="mAdd" rows="4" placeholder="Name&#10;Name"></textarea><button class="primary" id="mAddBtn" type="button">Hinzufügen</button></div>`);
+      const add = U.el(`<div class="card"><div class="grid2">
+        <div><label class="field-label">Richtmeister hinzufügen (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="4"></textarea></div>
+        <div><label class="field-label">Monteure hinzufügen (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea></div></div>
+        <button class="primary" id="mAddBtn" type="button">Hinzufügen</button></div>`);
       app.appendChild(add);
       U.$("#mAddBtn").onclick = () => {
-        const names = U.$("#mAdd").value.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
-        const have = new Set(M.list("monteure").map((m) => m.name.toLowerCase()));
-        let n = 0;
-        for (const name of names) if (!have.has(name.toLowerCase())) { M.put("monteure", { name, aktiv: true }); have.add(name.toLowerCase()); n++; }
-        toast(`${n} Monteur(e) hinzugefügt.`, "info", 2500);
+        const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+        const r = M.importPeople({ rm: split(U.$("#rmAdd").value), m: split(U.$("#mAdd").value) });
+        toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuT} Trupp(s) angelegt.`, "info", 3500);
         changed();
       };
+      U.$$("[data-rm]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.rm); M.put("monteure", { ...m, rm: !m.rm }); if (!m.rm) M.importPeople({ rm: [m.name] }); changed(); }; });
       U.$$("[data-ren]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
       U.$$("[data-tog]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
     }
@@ -707,7 +751,7 @@ function editVermieter(v) {
 function editTrupp(t) {
   const cur = t ? { ...t } : { name: "", fuehrerId: null, monteure: [] };
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${M.sortedMonteure().map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}</option>`).join("")}</select>
+    <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${[...M.sortedMonteure().filter((m) => m.rm), ...M.sortedMonteure().filter((m) => !m.rm)].map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}${m.rm ? " (Richtmeister)" : ""}</option>`).join("")}</select>
     <label class="field-label">Name (optional)</label><input type="text" class="f-name" value="${h(cur.name)}" placeholder="leer = Name des Richtmeisters" />
     <label class="field-label">Monteure im Trupp (werden bei neuen Einsätzen vorgeschlagen)</label></div>`);
   const chips = chipPicker(M.sortedMonteure(), cur.monteure);

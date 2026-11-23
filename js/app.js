@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonStamm, monSettingsCard } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonStamm, monSettingsCard } from "./baumon-ui.js";
 import { dueBuehnen } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -2180,6 +2180,7 @@ function versionMismatch() {
   try { history.replaceState(navState(), ""); } catch {}
   render();
   window.__appReady = true; // Startwächter (boot.js) Bescheid geben
+  try { checkImportLink(); } catch (e) { console.warn("Import", e); }
   await sync.updateOutboxCount();
   cleanupOrphanImages();
   sync.run({ full: true });

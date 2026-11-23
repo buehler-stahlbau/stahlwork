@@ -134,6 +134,48 @@ export function sortedTrupps() {
 export function sortedMonteure(all = false) {
   return list("monteure").filter((x) => all || x.aktiv !== false).sort((a, b) => a.name.localeCompare(b.name));
 }
+// Namen übernehmen: Richtmeister (je mit eigenem Trupp) und Monteure; Vorhandene werden nicht doppelt angelegt
+export function importPeople({ rm = [], m = [] }) {
+  const clean = (a) => [...new Set((a || []).map((x) => String(x).trim().slice(0, 80)).filter(Boolean))];
+  const byName = new Map(list("monteure").map((x) => [x.name.toLowerCase(), x]));
+  let neuM = 0, neuRm = 0, neuT = 0;
+  for (const name of clean(rm)) {
+    let p = byName.get(name.toLowerCase());
+    if (!p) { p = put("monteure", { name, aktiv: true, rm: true }); byName.set(name.toLowerCase(), p); neuRm++; }
+    else if (!p.rm) put("monteure", { ...p, rm: true, aktiv: true });
+    if (!list("trupps").some((t) => t.fuehrerId === p.id)) {
+      put("trupps", { name: "", fuehrerId: p.id, monteure: [p.id], sort: list("trupps").length });
+      neuT++;
+    }
+  }
+  for (const name of clean(m)) {
+    if (!byName.has(name.toLowerCase())) { const p = put("monteure", { name, aktiv: true, rm: false }); byName.set(name.toLowerCase(), p); neuM++; }
+  }
+  return { neuRm, neuM, neuT };
+}
+
+// Doppelt eingeteilt? Monteure (auch Richtmeister) dürfen je Tag nur in EINEM Trupp stehen.
+// Derselbe Trupp darf zwei Baustellen am Tag haben (Wechsel, Kurzeinsatz).
+// Liefert je betroffener Person den anderen Einsatz.
+export function conflicts(e, ids = e.monteure) {
+  const out = [];
+  if (!e.von || !e.bis) return out;
+  for (const o of list("einsaetze")) {
+    if (o.id === e.id || o.bis < e.von || o.von > e.bis) continue;
+    if (e.truppId && o.truppId === e.truppId) continue; // gleicher Trupp: zwei Baustellen erlaubt
+    for (const mid of ids || []) if ((o.monteure || []).includes(mid)) out.push({ monteurId: mid, other: o });
+  }
+  return out;
+}
+export function conflictText(list) {
+  return list.slice(0, 6).map((c) => {
+    const p = get("monteure", c.monteurId);
+    const o = c.other;
+    const von = o.von > "" ? `${shortDate(o.von)}–${shortDate(o.bis)}` : "";
+    return `${p ? p.name : "?"}: schon bei ${baustelleLabel(o)} (${truppName(get("trupps", o.truppId))}, ${von})`;
+  }).join("\n") + (list.length > 6 ? `\n… und ${list.length - 6} weitere` : "");
+}
+
 export function activeOn(day) {
   return list("einsaetze").filter((e) => e.von <= day && e.bis >= day);
 }
@@ -207,7 +249,7 @@ function cleanRecord(kind, r) {
   const base = { id: r.id, updatedAt: Number(r.updatedAt) || 0 };
   switch (kind) {
     case "vermieter": return { ...base, firma: s(r.firma), ansprechpartner: s(r.ansprechpartner), email: s(r.email), telefon: s(r.telefon), kundenNr: s(r.kundenNr) };
-    case "monteure": return { ...base, name: s(r.name), aktiv: r.aktiv !== false };
+    case "monteure": return { ...base, name: s(r.name), aktiv: r.aktiv !== false, rm: r.rm === true };
     case "trupps": return { ...base, name: s(r.name), fuehrerId: ID_RE.test(String(r.fuehrerId || "")) ? r.fuehrerId : null, monteure: ids(r.monteure), sort: Number(r.sort) || 0 };
     case "einsaetze": return { ...base, truppId: ID_RE.test(String(r.truppId || "")) ? r.truppId : null, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "",
       baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
