@@ -197,11 +197,16 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis);
           const allOv = L > 1 && (ov.every(Boolean) || inner || contains);
           let bx0 = x0, bx1 = x1;
-          if (!allOv && pl) bx0 = colX(i0) + (colX(i0 + pl) - colX(i0)) / 2 + 1;
-          if (!allOv && pr) bx1 = (i1 + 1 < xs.length ? colX(i1 + 1) : x1) - ((i1 + 1 < xs.length ? colX(i1 + 1) : x1) - colX(i1 - pr + 1)) / 2 - 1;
+          if (!allOv && pl) bx0 = colX(i0) + (colX(i0 + pl) - colX(i0)) / 2;
+          if (!allOv && pr) bx1 = (i1 + 1 < xs.length ? colX(i1 + 1) : x1) - ((i1 + 1 < xs.length ? colX(i1 + 1) : x1) - colX(i1 - pr + 1)) / 2;
           const by = allOv ? y + 3 + li * (bh + 1) : y + 3, th = allOv ? bh : LANE - 3;
           fill(hex(colorOf(e)));
-          pdf.roundedRect(bx0, by, bx1 - bx0, th, 2, 2, "F");
+          if (!allOv && (pl || pr)) {
+            // schräge Kante am Wechseltag: Balken greifen ineinander
+            const k = 4, L0 = pl ? bx0 - k : bx0, R0 = pr ? bx1 + k : bx1;
+            const pts = [[pl ? L0 + 2 * k : L0, by], [R0, by], [pr ? R0 - 2 * k : R0, by + th], [L0, by + th]];
+            pdf.lines(pts.slice(1).map((q, i) => [q[0] - pts[i][0], q[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], "F", true);
+          } else pdf.roundedRect(bx0, by, bx1 - bx0, th, 2, 2, "F");
           const tx0 = bx0, tx1 = bx1;
           font("bold", allOv && L > 1 ? 6.2 : 7.8, [255, 255, 255]);
           const nb = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length : 0;

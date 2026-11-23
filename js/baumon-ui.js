@@ -310,7 +310,11 @@ export function renderMonPlan(app) {
           const inner = ov.slice(pl, N - pr).some(Boolean);
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis); // anderer Einsatz liegt ganz in diesem
           if (ov.every(Boolean) || inner || contains) mode = "stack";
-          else if (pl || pr) pad = `margin-left:calc(${(pl / N / 2) * 100}% + 2px);margin-right:calc(${(pr / N / 2) * 100}% + 2px);`;
+          else if (pl || pr) {
+            // Übergang: schräge Kante in der Tagesmitte, beide Balken greifen nahtlos ineinander
+            mode = `join ${pl ? "join-l" : ""} ${pr ? "join-r" : ""}`;
+            pad = `${pl ? `margin-left:calc(${(pl / N / 2) * 100}% - 5px);` : ""}${pr ? `margin-right:calc(${(pr / N / 2) * 100}% - 5px);` : ""}`;
+          }
         }
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – krank/Urlaub (an diesen Tagen nicht eingeteilt): " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">

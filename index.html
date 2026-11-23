@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.4-beta" />
+  <meta name="app-version" content="3.14.5-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -315,6 +315,12 @@
     .g-bar.stack .g-h::after { top: 20%; bottom: 20%; }
     /* Überschneidung nur an einzelnen Tagen: dort schmal, sonst volle Höhe */
     .g-bar.part { background: transparent; box-shadow: none; overflow: visible; }
+    /* Wechsel am selben Tag: schräge Kanten greifen ineinander (10px Überlappung, keine Lücke) */
+    .g-bar.join { box-shadow: none; }
+    .g-bar.join-r { border-top-right-radius: 0; border-bottom-right-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+    .g-bar.join-l { border-top-left-radius: 0; border-bottom-left-radius: 0; clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%); --padl: 16px; }
+    .g-bar.join-l.join-r { clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+    .g-bar.join-r .g-h.r { right: 6px; } .g-bar.join-l .g-h.l { left: 6px; }
     .g-bar { padding-left: max(var(--padl, 8px), var(--follow, 8px)); padding-right: var(--padr, 8px); }
     .g-bar.part.cut-l .g-bg.first, .g-bar.part.cut-r .g-bg.last { border-radius: 0; }
     .g-bg { position: absolute; top: 0; bottom: 0; background: var(--c); z-index: -1; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
