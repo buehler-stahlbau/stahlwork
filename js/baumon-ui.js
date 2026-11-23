@@ -633,7 +633,9 @@ function chipPicker(all, selected) {
 export function openEinsatz(e, preset = {}) {
   const isNew = !e;
   const cur = e ? { ...e } : { id: null, truppId: preset.truppId || null, bvNumber: "", baustelle: "", von: preset.von, bis: preset.bis, monteure: [], leih: "", kran: "", notiz: "" };
-  if (isNew && cur.truppId) cur.monteure = (M.get("trupps", cur.truppId) || {}).monteure || [];
+  // Stammbesetzung eines Trupps: Richtmeister + hinterlegte Monteure
+  const crewOf = (tid) => { const t = M.get("trupps", tid); return t ? [...new Set([t.fuehrerId, ...(t.monteure || [])].filter((id) => id && M.get("monteure", id)))] : []; };
+  if (isNew && cur.truppId) cur.monteure = crewOf(cur.truppId);
   const ro = !editable();
   const body = U.el(`<div class="mon-form"></div>`);
   const site = siteField(cur);
@@ -678,7 +680,7 @@ export function openEinsatz(e, preset = {}) {
   body.querySelector(".f-von").addEventListener("change", updBusy);
   body.querySelector(".f-bis").addEventListener("change", updBusy);
   updBusy();
-  truppSel.onchange = () => { if (isNew) chips.set((M.get("trupps", truppSel.value) || {}).monteure || []); updBusy(); };
+  truppSel.onchange = () => { if (isNew) chips.set(crewOf(truppSel.value)); updBusy(); };
   if (ro) U.$$("input,select,textarea,.chip", body).forEach((x) => { x.disabled = true; });
 
   const save = () => {
