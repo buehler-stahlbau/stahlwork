@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.13.1-beta" />
+  <meta name="app-version" content="3.13.2-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -246,16 +246,16 @@
     .g-cell.sel { background: rgba(46,91,138,.22) !important; }
     .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px 4px; }
     .list-card > .card-head > .section-title { padding: 0; margin: 0; }
-    .abw-tag { font-weight: 600; } .abw-tag.krank { color: #8f2424; }
+    .abw-tag { font-weight: 600; }
     .mon-brow.now { background: #faf9f6; }
     .g-sep-add { margin-left: 10px; min-height: 22px; padding: 0 8px; font-size: .7rem; letter-spacing: 0; text-transform: none; border-radius: 6px; background: #fff; border: 1px solid var(--brand-gray-200); color: var(--brand-gray-700); }
     .g-arow b { font-weight: 600; }
     .g-abw { position: relative; z-index: 1; margin: 8px 2px; min-height: 0; padding: 0 5px; border-radius: 6px; font-size: .75rem; font-weight: 700; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
       color: var(--brand-gray-700); border: 1px solid var(--brand-gray-300, #c9c9c9); background: repeating-linear-gradient(135deg, #eceae6 0 6px, #f7f6f3 6px 12px); }
-    .g-abw.krank { color: #8f2424; border-color: #e2a4a4; background: repeating-linear-gradient(135deg, #f6dcdc 0 6px, #fbefef 6px 12px); }
+    .g-abw.krank { color: var(--brand-gray-700); border-color: #b9b6b0; background: #dedbd5; } /* Krank: flächig grau, Urlaub: schraffiert */
     .mon-abw-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .mon-abw-chip { min-height: 34px; font-weight: 500; font-size: .85rem; background: #f3f2ef; border: 1px solid var(--brand-gray-200); }
-    .mon-abw-chip.krank { background: #fbefef; border-color: #e2a4a4; }
+    .mon-abw-chip.krank { background: #e6e3de; border-color: #c9c6c0; }
     .abw-seg { margin-bottom: 6px; }
     .g-sep { grid-column: 1 / -1; display: flex; align-items: flex-end; border-top: 2px solid var(--brand-gray-300, #c9c9c9); border-bottom: 1px solid var(--brand-gray-200); background: var(--brand-gray-100); }
     .g-sep span { position: sticky; left: 0; padding: 0 10px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand-gray-500); }

@@ -128,10 +128,10 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
         for (const a of r.list) {
           const i0 = Math.max(0, days.indexOf(a.von < days[0] ? days[0] : a.von)), i1 = days.indexOf(a.bis > days[last] ? days[last] : a.bis);
           const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5;
-          fill(a.typ === "krank" ? [246, 220, 220] : [236, 234, 230]);
-          pdf.setDrawColor(...(a.typ === "krank" ? [226, 164, 164] : [201, 201, 201])); pdf.setLineWidth(0.6);
+          fill(a.typ === "krank" ? [222, 219, 213] : [240, 238, 234]);
+          pdf.setDrawColor(...(a.typ === "krank" ? [185, 182, 176] : [201, 201, 201])); pdf.setLineWidth(0.6);
           pdf.roundedRect(x0, y + 5, x1 - x0, LANE - 7, 2, 2, "FD");
-          font("bold", 7.5, a.typ === "krank" ? [143, 36, 36] : MUTED);
+          font("bold", 7.5, a.typ === "krank" ? DARK : MUTED);
           pdf.text(fit(M.ABW_TYPES[a.typ] + (a.notiz ? " · " + a.notiz : ""), x1 - x0 - 6), x0 + 3, y + 5 + (LANE - 7) / 2 + 2.6);
         }
         y += rh; hair(ML, y, W - ML);
