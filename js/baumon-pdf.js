@@ -171,11 +171,23 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
         bs,
       ];
       font("normal", 8, DARK);
-      const lines = cells.map((c, i) => pdf.splitTextToSize(pdfSafe(c || "–"), cols[i].w - 6));
+      const lines = cells.map((c, i) => pdf.splitTextToSize(pdfSafe(c || "–"), cols[i].w - (i === 1 ? 12 : 6)));
       const h = Math.max(...lines.map((l) => l.length)) * 10 + 6;
       if (y + h > BOTTOM) { pdf.addPage(); y = header(false); tableHead(); }
       let x = ML;
-      lines.forEach((l, i) => { font(i === 1 ? "bold" : "normal", 8, DARK); pdf.text(l, x, y + 10); x += cols[i].w; });
+      lines.forEach((l, i) => {
+        if (i === 1) {
+          // Baustelle in der Farbe des Balkens – zur Wiedererkennung
+          // dezent: heller Farbton als Hintergrund + schmaler Streifen in voller Farbe
+          const c = hex(colorOf(e));
+          fill(c.map((v) => Math.round(v * 0.14 + 255 * 0.86)));
+          pdf.rect(x - 2, y + 2, cols[i].w - 6, h - 4, "F");
+          fill(c);
+          pdf.rect(x - 2, y + 2, 2.5, h - 4, "F");
+          font("bold", 8, DARK); pdf.text(l, x + 4, y + 10);
+        } else { font("normal", 8, DARK); pdf.text(l, x, y + 10); }
+        x += cols[i].w;
+      });
       y += h;
       hair(ML, y, W - ML);
     }
