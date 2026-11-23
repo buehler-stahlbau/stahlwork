@@ -180,8 +180,8 @@ export function renderMonPlan(app) {
     if (zoom === "personal") {
       const ids = [];
       const addId = (id) => { if (id && !ids.includes(id) && M.get("monteure", id)) ids.push(id); };
-      if (r.tr) { addId(r.tr.fuehrerId); (r.tr.monteure || []).forEach(addId); }
-      r.list.forEach((e) => (e.monteure || []).forEach(addId));
+      if (r.tr) { addId(r.tr.fuehrerId); if (!M.isMalerTrupp(r.tr)) (r.tr.monteure || []).forEach(addId); }
+      if (!r.tr || !M.isMalerTrupp(r.tr)) r.list.forEach((e) => (e.monteure || []).forEach(addId));
       r.subs = ids.map((id) => ({ person: M.get("monteure", id) }));
     } else {
       const seen = new Set();
@@ -318,7 +318,7 @@ export function renderMonPlan(app) {
             inner = es.map((e) => {
               const on = M.present(e, p.id, d);
               const other = !on && M.list("einsaetze").find((o) => o.id !== e.id && o.truppId !== e.truppId && M.present(o, p.id, d));
-              return `<span class="g-pd ${on ? "on" : other ? "busy" : "free"}" data-eid="${h(e.id)}" data-pid="${h(p.id)}" data-day="${d}" style="--c:${siteColor(e)}" title="${h(p.name)} · ${h(M.wdName(d))} ${h(M.shortDate(d))} · ${on ? "eingeteilt: " + h(M.baustelleLabel(e)) : other ? "schon bei " + h(M.baustelleLabel(other)) : "nicht eingeteilt – antippen zum Einteilen"}"></span>`;
+              return `<span class="g-pd ${on ? "on" : other ? "busy" : "free"}" data-eid="${h(e.id)}" data-pid="${h(p.id)}" data-day="${d}" data-r="${gridRow}" style="--c:${siteColor(e)}" title="${h(p.name)} · ${h(M.wdName(d))} ${h(M.shortDate(d))} · ${on ? "eingeteilt: " + h(M.baustelleLabel(e)) : other ? "schon bei " + h(M.baustelleLabel(other)) : "nicht eingeteilt – antippen zum Einteilen"}"></span>`;
             }).join("");
           } else {
             const other = M.list("einsaetze").find((o) => M.present(o, p.id, d));
@@ -345,8 +345,51 @@ export function renderMonPlan(app) {
   U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
   U.$$(".g-abw", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openAbw(M.get("abwesenheiten", b.dataset.aid)); }; });
   U.$$(".g-bue", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openBuehne(M.get("buehnen", b.dataset.bid)); }; });
+  // Personal: mit gedrückter Maus über mehrere Tage ziehen -> alle auf einmal ein- bzw. austragen
+  let psel = null, pselEnded = false;
+  if (editable()) {
+    g.addEventListener("pointerdown", (ev) => {
+      if (ev.pointerType !== "mouse" || ev.button !== 0) return;
+      const c = ev.target.closest(".g-pd[data-eid]");
+      if (!c) return;
+      psel = { r: c.dataset.r, add: !c.classList.contains("on"), cells: new Set([c]) };
+      c.classList.add("sel");
+      ev.preventDefault();
+    });
+    g.addEventListener("pointermove", (ev) => {
+      if (!psel) return;
+      const c = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".g-pd[data-eid]");
+      if (!c || c.dataset.r !== psel.r || psel.cells.has(c)) return;
+      // alle Felder der Zeile zwischen Start und aktuellem Feld markieren
+      const first = [...psel.cells][0];
+      const [a, b] = [first.dataset.day, c.dataset.day].sort();
+      U.$$(`.g-pd[data-r="${psel.r}"]`, g).forEach((x) => { const inn = x.dataset.day >= a && x.dataset.day <= b && x.dataset.eid; x.classList.toggle("sel", !!inn); if (inn) psel.cells.add(x); else psel.cells.delete(x); });
+      psel.cells.add(first); first.classList.add("sel");
+    });
+    window.addEventListener("pointerup", () => {
+      if (!psel) return;
+      const s0 = psel; psel = null;
+      const cells = [...s0.cells];
+      cells.forEach((x) => x.classList.remove("sel"));
+      if (cells.length < 2) return; // einzelnes Feld: normaler Klick
+      pselEnded = true; setTimeout(() => { pselEnded = false; }, 50);
+      let n = 0, err = null;
+      for (const c of cells) {
+        const e = M.get("einsaetze", c.dataset.eid);
+        if (!e) continue;
+        const on = M.present(e, c.dataset.pid, c.dataset.day);
+        if (on === s0.add) continue; // schon im gewünschten Zustand
+        const r = M.toggleDay(e, c.dataset.pid, c.dataset.day);
+        if (r) err = err || r; else n++;
+      }
+      if (err) toast(err + (n ? ` (${n} Tag(e) geändert)` : ""), "warn", 5000);
+      else if (n) toast(`${n} Tag(e) ${s0.add ? "eingeteilt" : "ausgetragen"}.`, "info", 2000);
+      if (n) { keepPlanScroll(card); changed(); }
+    });
+  }
   if (editable()) U.$$(".g-pd[data-eid]", card).forEach((c) => {
     c.onclick = () => {
+      if (pselEnded) return;
       const e = M.get("einsaetze", c.dataset.eid);
       const err = e && M.toggleDay(e, c.dataset.pid, c.dataset.day);
       if (err) { toast(err, "warn", 4000); return; }
@@ -885,9 +928,19 @@ export function openEinsatz(e, preset = {}) {
     <div><label class="field-label">Trupp</label><select class="f-trupp"><option value="" ${!cur.truppId ? "selected" : ""}>– kein Trupp –</option>${M.sortedTrupps().map((t) => `<option value="${h(t.id)}" ${t.id === cur.truppId ? "selected" : ""}>${h(M.truppName(t))}</option>`).join("")}</select></div>
     <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von || "")}" /></div>
     <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis || "")}" /></div></div></div>`));
-  body.appendChild(U.el(`<label class="field-label">Monteure</label>`));
+  const crewLabel = U.el(`<label class="field-label">Monteure</label>`);
+  body.appendChild(crewLabel);
   const chips = chipPicker(M.sortedMonteure(), cur.monteure);
   body.appendChild(chips.box);
+  const malerInfo = U.el(`<p class="muted maler-info" hidden></p>`);
+  body.appendChild(malerInfo);
+  // Maler-Trupp: besteht nur aus dem Maler – keine Monteur-Auswahl
+  const malerOf = (tid) => { const tr = M.get("trupps", tid); return tr && M.isMalerTrupp(tr) ? M.get("monteure", tr.fuehrerId) : null; };
+  const updMaler = () => {
+    const mp = malerOf(body.querySelector(".f-trupp").value);
+    chips.box.hidden = !!mp; crewLabel.hidden = !!mp; malerInfo.hidden = !mp;
+    if (mp) { malerInfo.textContent = `Maler: ${mp.name} (Maler-Trupps bestehen nur aus dem Maler)`; chips.set([mp.id]); }
+  };
   body.appendChild(U.el(`<div><div class="grid2">
     <div><label class="field-label">Leiharbeiter</label><input type="text" class="f-leih" value="${h(cur.leih)}" placeholder="z. B. 2x Profutura" /></div>
     <div><label class="field-label">Kran</label><input type="text" class="f-kran" value="${h(cur.kran)}" placeholder="z. B. Baukran, MRT" /></div></div>
@@ -925,7 +978,8 @@ export function openEinsatz(e, preset = {}) {
   body.querySelector(".f-von").addEventListener("change", updBusy);
   body.querySelector(".f-bis").addEventListener("change", updBusy);
   updBusy();
-  truppSel.onchange = () => { if (isNew) chips.set(crewOf(truppSel.value)); updBusy(); };
+  truppSel.onchange = () => { if (isNew || malerOf(truppSel.value)) chips.set(crewOf(truppSel.value)); updMaler(); updBusy(); };
+  updMaler();
   if (ro) U.$$("input,select,textarea,.chip", body).forEach((x) => { x.disabled = true; });
 
   const save = () => {
@@ -1176,17 +1230,23 @@ function editTrupp(t) {
   const body = U.el(`<div class="mon-form">
     <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${[...M.sortedMonteure().filter((m) => m.rm), ...M.sortedMonteure().filter((m) => !m.rm)].map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}${m.rm ? " · RM" : m.maler ? " · Maler" : ""}</option>`).join("")}</select>
     <label class="field-label">Name (optional)</label><input type="text" class="f-name" value="${h(cur.name)}" placeholder="leer = Name des Richtmeisters" />
-    <label class="field-label">Monteure im Trupp (werden bei neuen Einsätzen vorgeschlagen)</label></div>`);
+    <label class="field-label crew-l">Monteure im Trupp (werden bei neuen Einsätzen vorgeschlagen)</label></div>`);
   const chips = chipPicker(M.sortedMonteure(), cur.monteure);
   body.appendChild(chips.box);
+  const malerInfo = U.el(`<p class="muted" hidden>Maler-Trupps bestehen nur aus dem Maler.</p>`);
+  body.appendChild(malerInfo);
   const fsel = body.querySelector(".f-f");
-  fsel.onchange = () => { if (fsel.value) chips.set([...new Set([fsel.value, ...chips.value()])]); };
+  const isMalerSel = () => { const p = M.get("monteure", fsel.value); return !!(p && p.maler); };
+  const updM = () => { const m = isMalerSel(); chips.box.hidden = m; body.querySelector(".crew-l").hidden = m; malerInfo.hidden = !m; if (m) chips.set([fsel.value]); };
+  fsel.onchange = () => { if (fsel.value) chips.set([...new Set([fsel.value, ...chips.value()])]); updM(); };
+  updM();
   const save = () => {
     const fuehrerId = fsel.value || null;
     const name = body.querySelector(".f-name").value.trim();
     const ids = chips.value();
     if (!fuehrerId && !name && !ids.length) { toast("Bitte Richtmeister, Monteure oder einen Namen angeben.", "warn"); return false; }
     if (fuehrerId && !ids.includes(fuehrerId)) ids.unshift(fuehrerId);
+    if (isMalerSel()) ids.splice(0, ids.length, fuehrerId);
     M.put("trupps", { ...cur, fuehrerId, name, monteure: ids, sort: cur.sort ?? M.list("trupps").length });
     changed();
   };

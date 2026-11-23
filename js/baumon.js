@@ -228,6 +228,8 @@ export function toggleDay(e, pid, day) {
     put("einsaetze", { ...e, monteure: crew, off });
     return null;
   }
+  const tr = get("trupps", e.truppId);
+  if (tr && isMalerTrupp(tr) && pid !== tr.fuehrerId) return "Maler-Trupps bestehen nur aus dem Maler.";
   const a = absentRec(pid, day);
   if (a) return `${p.name} ist an diesem Tag ${ABW_TYPES[a.typ] === "Krank" ? "krank" : "im Urlaub"}.`;
   for (const o of list("einsaetze")) {
