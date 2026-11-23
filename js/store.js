@@ -123,6 +123,21 @@ export function touchDoc(p, d) {
 }
 
 // Favoriten gehören zum Nutzer und werden über OneDrive auf alle seine Geräte verteilt
+// Änderungen je Eintrag / Kopfdaten / Teilnehmer merken (für das Zusammenführen beim Abgleich)
+export function touchEntry(p, d, e) { e.updatedAt = Date.now(); touchDoc(p, d); }
+export function touchMeta(p, d) { d.metaAt = Date.now(); touchDoc(p, d); }
+export function touchAttendee(p, d, a) { a.updatedAt = Date.now(); touchDoc(p, d); }
+export function deleteEntry(p, d, id) {
+  d.entries = d.entries.filter((x) => x.id !== id);
+  d.deletedEntries = [...(d.deletedEntries || []).filter((t) => t.id !== id), { id, at: Date.now() }];
+  touchDoc(p, d);
+}
+export function deleteAttendee(p, d, id) {
+  d.protocol.attendees = d.protocol.attendees.filter((x) => x.id !== id);
+  d.deletedAtt = [...(d.deletedAtt || []).filter((t) => t.id !== id), { id, at: Date.now() }];
+  touchDoc(p, d);
+}
+
 export function favoritesChanged() {
   const pr = S.state.prefs;
   pr.favUpdatedAt = Date.now();
@@ -295,6 +310,9 @@ export function normalizeProject(p) {
   for (const d of p.docs || []) {
     if (!d.remote || typeof d.remote !== "object") d.remote = {};
     if (!Array.isArray(d.entries)) d.entries = [];
+    for (const k of ["deletedEntries", "deletedAtt"]) {
+      d[k] = Array.isArray(d[k]) ? d[k].filter((t) => t && typeof t.id === "string" && Number.isFinite(t.at)) : [];
+    }
     normalizeProtocol(d, p);
     for (const e of d.entries) {
       if (!e.id) e.id = newId();

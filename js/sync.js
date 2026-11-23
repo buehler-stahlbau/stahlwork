@@ -624,8 +624,11 @@ function serialize(p) {
       title: d.title,
       date: d.date,
       updatedAt: d.updatedAt || 0,
+      metaAt: d.metaAt || 0,
       protocol: d.protocol || null,
       pdfCodes: d.pdfCodes || [],
+      deletedEntries: d.deletedEntries || [],
+      deletedAtt: d.deletedAtt || [],
       remote: {
         folderId: d.remote?.folderId || null,
         baseName: d.remote?.baseName || null,
@@ -634,6 +637,7 @@ function serialize(p) {
       entries: (d.entries || []).map((e) => ({
         id: e.id,
         description: e.description || "",
+        updatedAt: e.updatedAt || 0,
         images: (e.images || []).map((i) => ({ id: i.id, rid: i.rid || null })),
       })),
     })),
@@ -667,6 +671,82 @@ function adoptRemote(p, r) {
 }
 
 // Zusammenführen auf Ebene der Dokumentationen: neuere Version gewinnt
+/* ---------- Zusammenführen einer Doku (beide Seiten haben sie geändert) ----------
+   - Kopfdaten (Titel, Datum, Protokoll ein/aus): neuere Fassung
+   - Einträge: je Eintrag die neuere Fassung; neue Einträge beider Seiten bleiben erhalten;
+     gelöschte Einträge bleiben gelöscht (Grabstein)
+   - Teilnehmer/Unterschriften: je Person die neuere Fassung, gelöschte bleiben gelöscht
+   - PDF-Prüfcodes: alle beider Seiten */
+const MERGE_ENTRIES = true;
+function mergeTombs(a, b) {
+  const m = new Map();
+  for (const t of [...(a || []), ...(b || [])]) if (t && t.id && (!m.has(t.id) || m.get(t.id) < t.at)) m.set(t.id, t.at);
+  const now = Date.now();
+  return [...m].map(([id, at]) => ({ id, at })).filter((t) => now - t.at < TOMBSTONE_MAX_AGE);
+}
+function mergeList(lList, rList, tombs, fallbackL, fallbackR, keepRid) {
+  const dead = new Map(tombs.map((t) => [t.id, t.at]));
+  const rById = new Map((rList || []).map((x) => [x.id, x]));
+  const lById = new Map((lList || []).map((x) => [x.id, x]));
+  const pick = (id) => {
+    const l = lById.get(id), r = rById.get(id);
+    let x;
+    if (l && r) x = (r.updatedAt || fallbackR) > (l.updatedAt || fallbackL) ? r : l;
+    else x = l || r;
+    const t = x === l ? (x.updatedAt || fallbackL) : (x.updatedAt || fallbackR);
+    if (dead.has(id) && dead.get(id) >= t) return null;
+    if (keepRid && l && r) keepRid(x, x === l ? r : l);
+    return x;
+  };
+  // Reihenfolge: OneDrive-Stand, lokale neue Einträge an ihrer Stelle einfügen
+  const order = (rList || []).map((x) => x.id);
+  let prev = -1;
+  for (const x of lList || []) {
+    const i = order.indexOf(x.id);
+    if (i >= 0) { prev = i; continue; }
+    order.splice(prev + 1, 0, x.id);
+    prev++;
+  }
+  const out = order.map(pick).filter(Boolean);
+  // Einträge der App haben Zeit-IDs (JJJJMMTT-hhmmss-…): dann nach Entstehung sortieren
+  if (out.every((x) => /^\d{8}-\d{6}-/.test(x.id))) out.sort((a, b) => a.id.localeCompare(b.id));
+  return out;
+}
+function mergeDoc(ld, rd) {
+  const lAt = ld.updatedAt || 0, rAt = rd.updatedAt || 0;
+  // Kopfdaten
+  if ((rd.metaAt || rAt) > (ld.metaAt || lAt)) {
+    ld.title = rd.title; ld.date = rd.date; ld.metaAt = rd.metaAt || rAt;
+    if (rd.protocol) { ld.protocol = ld.protocol || {}; ld.protocol.enabled = rd.protocol.enabled; }
+  }
+  // Einträge (Fotos: OneDrive-IDs der anderen Seite übernehmen, wenn sie fehlen)
+  ld.deletedEntries = mergeTombs(ld.deletedEntries, rd.deletedEntries);
+  ld.entries = mergeList(ld.entries, rd.entries, ld.deletedEntries, lAt, rAt, (win, other) => {
+    const rids = new Map((other.images || []).map((i) => [i.id, i.rid]));
+    for (const i of win.images || []) if (!i.rid && rids.get(i.id)) i.rid = rids.get(i.id);
+  });
+  // Protokoll
+  if (ld.protocol || rd.protocol) {
+    const lp = ld.protocol || {}, rp = rd.protocol || {};
+    ld.deletedAtt = mergeTombs(ld.deletedAtt, rd.deletedAtt);
+    const attendees = mergeList(lp.attendees || [], rp.attendees || [], ld.deletedAtt, lAt, rAt);
+    const out = { ...(rAt > lAt ? rp : lp), ...lp, enabled: (ld.protocol || rp).enabled, attendees };
+    for (const k of ["contractor", "client"]) {
+      const a = lp[k], b = rp[k];
+      out[k] = a && b ? ((b.updatedAt || rAt) > (a.updatedAt || lAt) ? b : a) : a || b || { name: "" };
+    }
+    ld.protocol = out;
+  }
+  // PDF-Prüfcodes
+  const codes = new Map();
+  for (const c of [...(ld.pdfCodes || []), ...(rd.pdfCodes || [])]) if (c && c.code && !codes.has(c.code + c.at)) codes.set(c.code + c.at, c);
+  ld.pdfCodes = [...codes.values()].sort((a, b) => a.at - b.at).slice(-30);
+  // OneDrive-Ordner der Doku
+  ld.remote = ld.remote || {};
+  for (const k of ["folderId", "baseName", "bilderId"]) if (!ld.remote[k] && rd.remote && rd.remote[k]) ld.remote[k] = rd.remote[k];
+  ld.updatedAt = Math.max(lAt, rAt);
+}
+
 async function mergeRemote(p, r) {
   if ((r.updatedAt || 0) > (p.updatedAt || 0)) {
     adoptTitle(p, r);
@@ -692,7 +772,12 @@ async function mergeRemote(p, r) {
       continue;
     }
     if (!rd) continue;
-    if ((rd.updatedAt || 0) > (ld.updatedAt || 0)) {
+    if (MERGE_ENTRIES) {
+      const before = new Set(imagesOfDoc(ld).map((x) => x.id));
+      mergeDoc(ld, cleanDoc(rd));
+      for (const img of imagesOfDoc(ld)) before.delete(img.id);
+      for (const id of before) { try { await db.imgDelete(id); } catch {} } // Fotos, die nicht mehr vorkommen
+    } else if ((rd.updatedAt || 0) > (ld.updatedAt || 0)) {
       // Remote ist neuer -> lokal ersetzen (Objekt bleibt dasselbe)
       const oldRids = new Map(imagesOfDoc(ld).map((x) => [x.id, x.rid]));
       const oldIds = new Set(oldRids.keys());

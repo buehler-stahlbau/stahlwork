@@ -22,8 +22,8 @@ const LEVELS = [
 ];
 
 let logoDataURL = null;
-let logoRatio = 1005 / 248; // Breite : Höhe, wird beim Laden aus der Datei gelesen
-async function ensureLogo() {
+export let logoRatio = 1005 / 248; // Breite : Höhe, wird beim Laden aus der Datei gelesen
+export async function ensureLogo() {
   if (logoDataURL) return logoDataURL;
   try {
     const resp = await fetch("logo.png", { cache: "no-store" });

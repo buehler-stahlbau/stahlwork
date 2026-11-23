@@ -6,6 +6,7 @@
 import * as M from "./baumon.js";
 import { S } from "./store.js";
 import { escapeHtml as h, toast } from "./util.js";
+import { buildPlanPdf } from "./baumon-pdf.js";
 
 let U = null; // Hilfsfunktionen aus app.js: el, $, $$, go, render, schedule, account, projects
 export function initMonUI(helpers) { U = helpers; }
@@ -110,15 +111,8 @@ export function renderMonPlan(app) {
   const days = Array.from({ length: 21 }, (_, i) => M.addDays(start, i));
   const t = M.today();
   const zoom = m.zoom;
-  app.appendChild(U.el(`<div class="page-head mon-plan-head"><h1>Planung</h1>
-    <div class="row">
-      <div class="seg" role="group" aria-label="Ansicht">
-        <button type="button" class="${zoom === "tage" ? "on" : ""}" data-zoom="tage">Tage</button>
-        <button type="button" class="${zoom === "wochen" ? "on" : ""}" data-zoom="wochen">Wochen</button>
-      </div>
-      ${editable() ? `<button class="primary" id="monNew" type="button">+ Einsatz</button>` : ""}
-    </div></div>`));
-  U.$$("[data-zoom]").forEach((b) => { b.onclick = () => { m.zoom = b.dataset.zoom; U.render(); }; });
+  // Kopf wie auf den anderen Reitern (gleiche Höhe) – Ansichts-Schalter sitzt oben in der Karte
+  app.appendChild(U.el(`<div class="page-head"><h1>Planung</h1>${editable() ? `<button class="primary" id="monNew" type="button">+ Einsatz</button>` : ""}</div>`));
   const nb = U.$("#monNew");
   if (nb) nb.onclick = () => openEinsatz(null, { von: t, bis: t });
 
@@ -128,7 +122,24 @@ export function renderMonPlan(app) {
   const rest = einsaetze.filter((e) => !e.truppId || !M.get("trupps", e.truppId));
   if (rest.length) rows.push({ tr: null, list: rest });
 
-  const card = U.el(`<div class="card mon-plan-card"><div class="gantt ${zoom}" style="--days:21"></div></div>`);
+  const card = U.el(`<div class="card mon-plan-card">
+    <div class="g-tools"><button type="button" class="secondary small g-pdf" id="planPdf">PDF</button><div class="seg" role="group" aria-label="Ansicht">
+      <button type="button" class="${zoom === "tage" ? "on" : ""}" data-zoom="tage">Tage</button>
+      <button type="button" class="${zoom === "wochen" ? "on" : ""}" data-zoom="wochen">Wochen</button>
+    </div></div>
+    <div class="gantt ${zoom}" style="--days:21"></div></div>`);
+  U.$$("[data-zoom]", card).forEach((b) => { b.onclick = () => { m.zoom = b.dataset.zoom; U.render(); }; });
+  card.querySelector("#planPdf").onclick = async () => {
+    U.busy("PDF wird erstellt …");
+    try {
+      const { blob, filename } = await buildPlanPdf({ colorOf: siteColor });
+      U.busy(null);
+      U.openPdf(blob, filename, "Montageplanung");
+    } catch (e) {
+      U.busy(null);
+      toast("PDF konnte nicht erstellt werden: " + (e.message || e), "error", 8000);
+    }
+  };
   const g = card.querySelector(".gantt");
   // Kopf: Wochen + Tage
   let head = `<div class="g-corner">Trupp</div>`;
@@ -156,7 +167,7 @@ export function renderMonPlan(app) {
     const n = Math.max(1, lanes.length);
     const tr = r.tr;
     const fuehrer = tr && M.get("monteure", tr.fuehrerId);
-    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
+    g.insertAdjacentHTML("beforeend", `<div class="g-trupp" data-row="${tr ? h(tr.id) : ""}" style="grid-row:${gridRow} / span ${n}"><b>${h(M.truppName(tr))}</b>${tr && (tr.fuehrerId || tr.name) ? `<span class="muted">${h(monteurNames(tr.monteure.filter((id) => id !== tr.fuehrerId), 3))}${fuehrer ? "" : ""}</span>` : ""}</div>`);
     // Hintergrundzellen (Klick = neuer Einsatz an diesem Tag)
     days.forEach((d, i) => {
       const we = ["Sa", "So"].includes(M.wdName(d));
@@ -562,7 +573,7 @@ export function monSettingsCard() {
     <div class="mon-stamm-links">
       <button type="button" class="drawer-item" data-stamm="vermieter"><span class="d-ico">${ICO.lift}</span><span class="d-text"><b>Bühnenvermieter</b><small>${n("vermieter")} angelegt · Ansprechpartner, E-Mail</small></span></button>
       <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Monteure</b><small>${M.sortedMonteure().length} aktiv</small></span></button>
-      <button type="button" class="drawer-item" data-stamm="trupps"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Trupps</b><small>${n("trupps")} angelegt · Truppführer + Monteure</small></span></button>
+      <button type="button" class="drawer-item" data-stamm="trupps"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Trupps</b><small>${n("trupps")} angelegt · Richtmeister + Monteure</small></span></button>
     </div></div>`);
   bindStammButtons(card);
   return card;
@@ -573,7 +584,8 @@ export function renderMonStamm(app) {
   const ro = !editable();
   const titles = { vermieter: "Bühnenvermieter", monteure: "Monteure", trupps: "Trupps" };
   app.appendChild(U.el(`<div class="page-head"><h1>${titles[kind] || ""}</h1><button class="secondary" id="stBack" type="button">Zurück</button></div>`));
-  U.$("#stBack").onclick = () => U.go({ view: "settings" });
+  // zurück dorthin, woher man kam (Einstellungen oder BauMon-Startseite)
+  U.$("#stBack").onclick = () => { if (history.state && history.length > 1) history.back(); else U.go({ view: "settings" }); };
   if (kind === "vermieter") {
     const card = U.el(`<div class="card list-card">${M.list("vermieter").sort((a, b) => a.firma.localeCompare(b.firma)).map((v) => `
       <button type="button" class="mon-brow" data-vid="${h(v.id)}"><span class="mon-brow-main"><b>${h(v.firma)}</b>${v.ansprechpartner ? " · " + h(v.ansprechpartner) : ""}</span>
@@ -637,8 +649,8 @@ function editVermieter(v) {
 function editTrupp(t) {
   const cur = t ? { ...t } : { name: "", fuehrerId: null, monteure: [] };
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Truppführer</label><select class="f-f"><option value="">– wählen –</option>${M.sortedMonteure().map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}</option>`).join("")}</select>
-    <label class="field-label">Name (optional)</label><input type="text" class="f-name" value="${h(cur.name)}" placeholder="leer = „Trupp &lt;Truppführer&gt;“" />
+    <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${M.sortedMonteure().map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}</option>`).join("")}</select>
+    <label class="field-label">Name (optional)</label><input type="text" class="f-name" value="${h(cur.name)}" placeholder="leer = Name des Richtmeisters" />
     <label class="field-label">Monteure im Trupp (werden bei neuen Einsätzen vorgeschlagen)</label></div>`);
   const chips = chipPicker(M.sortedMonteure(), cur.monteure);
   body.appendChild(chips.box);
@@ -647,8 +659,8 @@ function editTrupp(t) {
   const save = () => {
     const fuehrerId = fsel.value || null;
     const name = body.querySelector(".f-name").value.trim();
-    if (!fuehrerId && !name) { toast("Bitte Truppführer oder Namen angeben.", "warn"); return false; }
     const ids = chips.value();
+    if (!fuehrerId && !name && !ids.length) { toast("Bitte Richtmeister, Monteure oder einen Namen angeben.", "warn"); return false; }
     if (fuehrerId && !ids.includes(fuehrerId)) ids.unshift(fuehrerId);
     M.put("trupps", { ...cur, fuehrerId, name, monteure: ids, sort: cur.sort ?? M.list("trupps").length });
     changed();

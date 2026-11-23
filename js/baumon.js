@@ -116,11 +116,14 @@ export function range() {
 }
 
 /* ---------- Auswertungen ---------- */
+// Trupp heißt wie sein Richtmeister (z. B. "Steeb"); ohne Richtmeister: eigener Name oder die Monteure
 export function truppName(t) {
   if (!t) return "Ohne Trupp";
   if (t.name) return t.name;
   const f = get("monteure", t.fuehrerId);
-  return f ? `Trupp ${f.name}` : "Trupp";
+  if (f) return f.name;
+  const names = (t.monteure || []).map((id) => get("monteure", id)).filter(Boolean).map((m) => m.name);
+  return names.length ? names.slice(0, 2).join(", ") + (names.length > 2 ? " …" : "") : "Trupp";
 }
 export function baustelleLabel(x) {
   return [x.bvNumber, x.baustelle].filter(Boolean).join(" ") || "Baustelle";

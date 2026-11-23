@@ -4,7 +4,7 @@
    bei fehlendem Netz der zwischengespeicherte Stand.
    Bei jeder neuen Version CACHE hochzählen.
 ========================================================= */
-const CACHE = "stahlwork-3.9.4-beta-1";
+const CACHE = "stahlwork-3.10.0-beta-1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -31,8 +31,10 @@ const ASSETS = [
   "./vendor/pdf.worker.min.js",
   "./js/app.js",
   "./js/backup.js",
+  "./js/boot.js",
   "./js/baumon.js",
   "./js/baumon-ui.js",
+  "./js/baumon-pdf.js",
   "./js/camera.js",
   "./js/config.js",
   "./js/db.js",
@@ -47,8 +49,9 @@ const ASSETS = [
   "./js/util.js",
 ];
 
+// Installation: alle App-Dateien dieser Version frisch vom Server (nicht aus dem Browser-Zwischenspeicher)
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
@@ -63,6 +66,10 @@ function timeout(ms) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
 }
 
+// Abruf: App-Dateien immer aus dem Speicher DIESER Version (passen garantiert zusammen).
+// Neue Versionen kommen über einen neuen Service Worker (Hinweis "Jetzt aktualisieren").
+// Alles andere: erst Netz, ohne Netz aus dem Speicher.
+const ASSET_PATHS = new Set(ASSETS.map((u) => new URL(u, self.location).pathname));
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -71,18 +78,19 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const cached = await cache.match(req, { ignoreSearch: true });
+    const isNav = req.mode === "navigate";
+    const isAsset = isNav || ASSET_PATHS.has(url.pathname);
+    if (isAsset) {
+      const hit = await cache.match(isNav ? "./index.html" : req, { ignoreSearch: true });
+      if (hit) return hit;
+    }
     try {
-      // "no-cache": beim Server nachfragen, ob es eine neuere Fassung gibt (sonst bis zu 10 Min. alter Stand)
-      const res = await Promise.race([fetch(req, { cache: "no-cache" }), timeout(cached ? 4000 : 30000)]);
-      if (res && res.ok) cache.put(req, res.clone());
+      const res = await Promise.race([fetch(req, { cache: "no-cache" }), timeout(30000)]);
+      if (res && res.ok && !isAsset) cache.put(req, res.clone());
       return res;
     } catch (e) {
+      const cached = await cache.match(req, { ignoreSearch: true });
       if (cached) return cached;
-      if (req.mode === "navigate") {
-        const index = await cache.match("./index.html");
-        if (index) return index;
-      }
       throw e;
     }
   })());

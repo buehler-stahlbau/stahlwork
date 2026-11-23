@@ -26,6 +26,7 @@
   <link rel="preload" href="logo.png" as="image">
 
   <!-- Bibliotheken liegen im Repo (funktioniert auch offline) -->
+  <script src="js/boot.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="vendor/msal-browser.min.js"></script>
 
@@ -218,6 +219,9 @@
     .seg button.on { background: var(--brand-gray-700); color: #fff; }
     .mon-plan-head { flex-wrap: wrap; }
     .mon-plan-card { padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .g-tools { position: sticky; left: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 10px 2px; width: 100%; box-sizing: border-box; }
+    .g-tools .g-pdf { min-height: 36px; }
+    @media (max-width: 600px){ .g-tools { justify-content: flex-start; } }
     .gantt { display: grid; grid-template-columns: 150px repeat(var(--days), minmax(40px, 1fr)); grid-auto-rows: minmax(44px, auto); min-width: calc(150px + var(--days) * 40px); position: relative; font-size: .82rem; }
     .gantt.wochen { grid-template-columns: 130px repeat(var(--days), minmax(14px, 1fr)); min-width: calc(130px + var(--days) * 14px); }
     .gantt.wochen .g-day b, .gantt.wochen .g-day { font-size: 0; }
@@ -497,6 +501,12 @@
     .login-hint { margin-top: 14px; }
 
     /* Hinweis neue Version */
+    .boot-fail { max-width: 460px; margin: 40px auto; }
+    /* BauMon/Einstellungen (ohne Suchfeld): Sync-Symbol trotzdem ganz rechts neben dem Logo */
+    @media (min-width: 761px){
+      body.sparte-mon #syncChip, body.view-settings #syncChip { margin-left: auto; }
+      body.sparte-mon .sparte-logo, body.view-settings .sparte-logo { margin-left: 0; }
+    }
     .update-bar.auth-bar { white-space: normal; width: min(560px, calc(100vw - 24px)); border-radius: 14px; background: #7a4a00; }
     .auth-expired { background: rgba(180,110,0,.10); border: 1px solid rgba(180,110,0,.35); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
     .auth-expired p { margin: 0 0 8px; }

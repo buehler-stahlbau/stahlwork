@@ -10,6 +10,7 @@ import {
   S, load, saveNow, saveSoon, touchProject, touchDoc, onChange,
   findProject, findByNumber, newProject, moveLocal, removeProjectLocal,
   allProjects, imagesOfDoc, imagesOfProject, favoritesChanged, resetLocal, setTitleParts,
+  touchEntry, touchMeta, touchAttendee, deleteEntry, deleteAttendee,
   newProtocol, CONTRACTOR_COMPANY, renumberProject,
 } from "./store.js";
 import { captureSignature } from "./signature.js";
@@ -1329,7 +1330,7 @@ function renderDocEditor(container, p, d) {
     const { p: cp, d: cd } = ctx();
     if (!cd || cd.id !== d.id || cd.title === v) return;
     cd.title = v;
-    touchDoc(cp, cd);
+    touchMeta(cp, cd);
     updateProtoStatus();
     const rowTitle = $(`[data-doc-id="${CSS.escape(d.id)}"] .doc-title`);
     if (rowTitle) rowTitle.textContent = v;
@@ -1344,7 +1345,7 @@ function renderDocEditor(container, p, d) {
     const { p: cp, d: cd } = ctx();
     if (!cd) return;
     cd.date = new Date(v + "T12:00:00").toISOString();
-    touchDoc(cp, cd);
+    touchMeta(cp, cd);
     renderNow();
   });
 
@@ -1394,7 +1395,7 @@ function renderDocEditor(container, p, d) {
     } else if (cd.protocol) {
       cd.protocol.enabled = false; // Angaben bleiben erhalten, falls wieder eingeschaltet wird
     }
-    touchDoc(cp, cd);
+    touchMeta(cp, cd);
     renderNow();
   });
   if (d.protocol && d.protocol.enabled) renderProtocol($("#protoBox"), p, d);
@@ -1443,7 +1444,9 @@ function guardContentEdit() {
     `Trotzdem ändern?`
   );
   if (!ok) return false;
-  for (const a of d.protocol.attendees) { a.sig = null; a.sigAt = null; a.sigCode = null; }
+  const now = Date.now();
+  for (const a of d.protocol.attendees) { a.sig = null; a.sigAt = null; a.sigCode = null; a.updatedAt = now; }
+  for (const k of ["contractor", "client"]) if (d.protocol[k]) { d.protocol[k].sig = null; d.protocol[k].sigAt = null; d.protocol[k].sigCode = null; d.protocol[k].updatedAt = now; }
   touchDoc(p, d);
   const box = $("#protoBox");
   if (box) { box.innerHTML = ""; renderProtocol(box, p, d); }
@@ -1489,7 +1492,7 @@ function renderProtocol(box, p, d) {
       const a = c.pr.attendees.find((x) => x.id === id); if (!a) return;
       a.name = $(".att-name", row).value;
       a.company = $(".att-company", row).value;
-      touchDoc(c.cp, c.cd);
+      touchAttendee(c.cp, c.cd, a);
     };
     $(".att-name", row).addEventListener("input", upd);
     $(".att-company", row).addEventListener("input", upd);
@@ -1499,15 +1502,14 @@ function renderProtocol(box, p, d) {
       const c = cur(); if (!c) return;
       const a = c.pr.attendees.find((x) => x.id === b.dataset.delAtt);
       if (a && a.sig && !confirm(`${a.name || "Person"} hat bereits unterschrieben. Trotzdem entfernen?`)) return;
-      c.pr.attendees = c.pr.attendees.filter((x) => x.id !== b.dataset.delAtt);
-      touchDoc(c.cp, c.cd);
+      deleteAttendee(c.cp, c.cd, b.dataset.delAtt);
       renderNow();
     };
   });
   $("#attAdd").onclick = () => {
     const c = cur(); if (!c) return;
     const id = newId();
-    c.pr.attendees.push({ id, name: "", company: "", sig: null, sigAt: null });
+    c.pr.attendees.push({ id, name: "", company: "", sig: null, sigAt: null, updatedAt: Date.now() });
     touchDoc(c.cp, c.cd);
     renderNow();
     const inp = $(`[data-att="${CSS.escape(id)}"] .att-name`);
@@ -1540,7 +1542,7 @@ function renderProtocol(box, p, d) {
       target.sig = res;
       target.sigAt = res ? Date.now() : null;
       target.sigCode = res ? contentCode(c.cp, c.cd) : null; // Unterschrift gilt für genau diesen Stand
-      touchDoc(c.cp, c.cd);
+      touchAttendee(c.cp, c.cd, target);
       renderNow();
     };
   });
@@ -1577,7 +1579,7 @@ async function addEntry() {
     return;
   }
   if (guardContentEdit() === false) return;
-  d.entries.push({ id: newId(), description: text, images: imgs.map((id) => ({ id })) });
+  d.entries.push({ id: newId(), description: text, images: imgs.map((id) => ({ id })), updatedAt: Date.now() });
   drafts[d.id] = "";
   draftImgs[d.id] = [];
   touchDoc(p, d);
@@ -1619,7 +1621,7 @@ function renderEntries(container, p, d) {
       const f = findEntry();
       if (!f) return;
       f.ce.description = ta.value;
-      touchDoc(f.cp, f.cd);
+      touchEntry(f.cp, f.cd, f.ce);
       updateProtoStatus();
     });
 
@@ -1633,8 +1635,7 @@ function renderEntries(container, p, d) {
         if (img.rid) f.cp.pendingDeletes.push({ id: img.rid, parent: (f.cd.remote || {}).bilderId || null });
         try { await db.imgDelete(img.id); } catch {}
       }
-      f.cd.entries = f.cd.entries.filter((x) => x.id !== en.id);
-      touchDoc(f.cp, f.cd);
+      deleteEntry(f.cp, f.cd, en.id);
       renderNow();
     };
 
@@ -1651,7 +1652,7 @@ function renderEntries(container, p, d) {
         f.ce.images = f.ce.images.filter((x) => x !== img);
         if (img.rid) f.cp.pendingDeletes.push({ id: img.rid, parent: (f.cd.remote || {}).bilderId || null });
         try { await db.imgDelete(img.id); } catch {}
-        touchDoc(f.cp, f.cd);
+        touchEntry(f.cp, f.cd, f.ce);
         renderNow();
       };
     });
@@ -1664,7 +1665,7 @@ function renderEntries(container, p, d) {
       const f = findEntry();
       if (!f) return;
       f.ce.images.push(...ids.map((id) => ({ id })));
-      touchDoc(f.cp, f.cd);
+      touchEntry(f.cp, f.cd, f.ce);
       renderNow();
     }));
 
@@ -1676,7 +1677,7 @@ function renderEntries(container, p, d) {
         const f = findEntry();
         if (!f) return;
         f.ce.images.push(...ids.map((id) => ({ id })));
-        touchDoc(f.cp, f.cd);
+        touchEntry(f.cp, f.cd, f.ce);
         renderNow();
       };
     });
@@ -2014,8 +2015,41 @@ async function checkAccount() {
   await saveNow();
 }
 
+function setupServiceWorker() {
+  // Offline-Speicher: auf der echten Seite (https); lokal nur zum Testen mit ?sw
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || (location.hostname === "localhost" && location.search.includes("sw")))) {
+    // Erste Installation übernimmt still; jede weitere Übernahme = neue Version -> Hinweis
+    let swReady = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        // beim Zurückkehren in die App nach neuer Version schauen
+        document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+      })
+      .catch((e) => console.warn("Service Worker", e));
+    // neue Version übernommen -> Hinweis mit Knopf (kein automatisches Neuladen beim Tippen)
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!swReady) { swReady = true; return; }
+      if ($("#updateBar")) return;
+      const bar = el(`<div id="updateBar" class="update-bar"><span>Neue Version von Stahlwork verfügbar</span><button class="primary small" type="button">Jetzt aktualisieren</button></div>`);
+      const btn = bar.querySelector("button");
+      btn.onclick = async () => {
+        updating = true;
+        btn.disabled = true;
+        btn.textContent = "Wird aktualisiert …";
+        // Zustand sichern (höchstens 2 s warten), dann neu laden
+        await Promise.race([saveNow().catch(() => {}), new Promise((r) => setTimeout(r, 2000))]);
+        location.reload();
+        setTimeout(() => { location.href = location.pathname; }, 2500); // falls der Browser das Neuladen verweigert
+      };
+      document.body.appendChild(bar);
+    });
+  }
+}
+
 (async function init() {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
+  // zuerst: Offline-Speicher/Updates – damit ein Update auch dann ankommt, wenn der Start hängt
+  try { setupServiceWorker(); } catch (e) { console.warn("Service Worker", e); }
 
   await load();
   if (!S.state.drafts || typeof S.state.drafts !== "object") S.state.drafts = {};
@@ -2048,7 +2082,7 @@ async function checkAccount() {
 
   setupSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {
@@ -2057,6 +2091,7 @@ async function checkAccount() {
 
   try { history.replaceState(navState(), ""); } catch {}
   render();
+  window.__appReady = true; // Startwächter (boot.js) Bescheid geben
   await sync.updateOutboxCount();
   cleanupOrphanImages();
   sync.run({ full: true });
@@ -2070,32 +2105,4 @@ async function checkAccount() {
   window.addEventListener("pagehide", () => { saveNow(); });
   setInterval(() => { if (document.visibilityState === "visible") sync.schedule(0, { full: true }); }, 5 * 60 * 1000);
 
-  // Offline-Speicher: auf der echten Seite (https); lokal nur zum Testen mit ?sw
-  if ("serviceWorker" in navigator && (location.protocol === "https:" || (location.hostname === "localhost" && location.search.includes("sw")))) {
-    // Erste Installation übernimmt still; jede weitere Übernahme = neue Version -> Hinweis
-    let swReady = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
-      .then((reg) => {
-        // beim Zurückkehren in die App nach neuer Version schauen
-        document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
-      })
-      .catch((e) => console.warn("Service Worker", e));
-    // neue Version übernommen -> Hinweis mit Knopf (kein automatisches Neuladen beim Tippen)
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!swReady) { swReady = true; return; }
-      if ($("#updateBar")) return;
-      const bar = el(`<div id="updateBar" class="update-bar"><span>Neue Version von Stahlwork verfügbar</span><button class="primary small" type="button">Jetzt aktualisieren</button></div>`);
-      const btn = bar.querySelector("button");
-      btn.onclick = async () => {
-        updating = true;
-        btn.disabled = true;
-        btn.textContent = "Wird aktualisiert …";
-        // Zustand sichern (höchstens 2 s warten), dann neu laden
-        await Promise.race([saveNow().catch(() => {}), new Promise((r) => setTimeout(r, 2000))]);
-        location.reload();
-        setTimeout(() => { location.href = location.pathname; }, 2500); // falls der Browser das Neuladen verweigert
-      };
-      document.body.appendChild(bar);
-    });
-  }
 })();
