@@ -129,9 +129,10 @@ function bindStammButtons(root) {
 /* =========================================================
    Planung: Trupps untereinander, Zeit nach rechts
 ========================================================= */
+let weekOffset = 0; // Planung: um ganze Wochen nach vorne/hinten verschoben (0 = Vorwoche, aktuelle, nächste)
 export function renderMonPlan(app) {
   const m = M.mon();
-  const { start } = M.range();
+  const start = M.addDays(M.range().start, weekOffset * 7);
   const days = Array.from({ length: 21 }, (_, i) => M.addDays(start, i));
   const t = M.today();
   const zoom = m.zoom;
@@ -169,13 +170,20 @@ export function renderMonPlan(app) {
   }
 
   const card = U.el(`<div class="card mon-plan-card">
-    <div class="g-tools"><button type="button" class="secondary small g-pdf" id="planPdf">PDF</button><div class="seg" role="group" aria-label="Ansicht">
+    <div class="g-tools"><div class="g-nav"><button type="button" class="icon-btn" id="wkPrev" aria-label="Eine Woche früher" title="Eine Woche früher"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span class="g-range">KW ${M.isoWeek(days[0])}–${M.isoWeek(days[20])}</span>
+      <button type="button" class="icon-btn" id="wkNext" aria-label="Eine Woche später" title="Eine Woche später"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+      ${weekOffset ? `<button type="button" class="secondary small" id="wkNow">Heute</button>` : ""}</div>
+      <span class="grow"></span><button type="button" class="secondary small g-pdf" id="planPdf">PDF</button><div class="seg" role="group" aria-label="Ansicht">
       <button type="button" class="${zoom === "tage" ? "on" : ""}" data-zoom="tage">Tage</button>
       <button type="button" class="${zoom === "wochen" ? "on" : ""}" data-zoom="wochen">Wochen</button>
     </div></div>
     <div class="g-scroll"><div class="gantt ${zoom}" style="--days:21"></div></div></div>`);
   U.$$("[data-zoom]", card).forEach((b) => { b.onclick = () => { m.zoom = b.dataset.zoom; U.render(); }; });
   card.querySelector("#planPdf").onclick = () => openPlanPdf();
+  card.querySelector("#wkPrev").onclick = () => { weekOffset--; U.render(); };
+  card.querySelector("#wkNext").onclick = () => { weekOffset++; U.render(); };
+  const now = card.querySelector("#wkNow"); if (now) now.onclick = () => { weekOffset = 0; U.render(); };
   const g = card.querySelector(".gantt");
   // Kopf: Wochen + Tage
   let head = `<div class="g-corner">Trupp</div>`;
@@ -225,6 +233,8 @@ export function renderMonPlan(app) {
         const bh = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
         const dueHere = bh.some((b) => M.isDue(b, t));
         const dbl = M.conflicts(e);
+        // Tagesansicht: zweite Zeile mit Besetzung (ohne Richtmeister) und Leiharbeiter/Kran
+        const sub = [(e.monteure || []).filter((id) => !tr || id !== tr.fuehrerId).map((id) => (M.get("monteure", id) || {}).name).filter(Boolean).join(", "), e.leih, e.kran].filter(Boolean).join(" · ");
         // Nur an den Tagen, an denen sich zwei Baustellen überschneiden, wird der Balken schmal
         let mode = "", bg = "", pad = "";
         if (L > 1) {
@@ -243,7 +253,7 @@ export function renderMonPlan(app) {
         }
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
-          ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+          ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
     gridRow += n;
@@ -761,7 +771,7 @@ export function openBuehne(b, preset = {}, after) {
     ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Diese Bühne löschen?")) return false; M.remove("buehnen", cur.id); changed(); if (after) after(); } }]),
     ...(!isNew && cur.abgemeldetAm ? [{ label: "Wieder aktiv", fn: () => { M.put("buehnen", { ...cur, abgemeldetAm: "" }); changed(); if (after) after(); } }] : []),
     // Abmelden: Mietbühne -> vorformulierte E-Mail an den Vermieter, danach als abgemeldet markieren
-    ...(!isNew && !cur.abgemeldetAm ? [{ label: "Abmelden", fn: () => {
+    ...(!isNew && !cur.abgemeldetAm ? [{ label: "Bühne abmelden", fn: () => {
       const v = cur.vermieterId && M.get("vermieter", cur.vermieterId);
       if (v && v.email) {
         const acc = U.account();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.12.1-beta" />
+  <meta name="app-version" content="3.12.2-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -223,9 +223,9 @@
     .g-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
     .g-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--brand-gray-100); }
     .g-tools .g-pdf { min-height: 36px; }
-    @media (max-width: 600px){ .g-tools { justify-content: flex-start; } }
+    @media (max-width: 600px){ .g-tools { justify-content: flex-start; flex-wrap: wrap; } .g-range { min-width: 0; } }
     .gantt { display: grid; grid-template-columns: 150px repeat(var(--days), minmax(40px, 1fr)); grid-auto-rows: minmax(44px, auto); min-width: calc(150px + var(--days) * 40px); position: relative; font-size: .82rem; }
-    .gantt.wochen { grid-template-columns: 130px repeat(var(--days), minmax(14px, 1fr)); min-width: calc(130px + var(--days) * 14px); }
+    .gantt.wochen { grid-template-columns: 150px repeat(var(--days), minmax(14px, 1fr)); min-width: calc(150px + var(--days) * 14px); }
     .gantt.wochen .g-day b, .gantt.wochen .g-day { font-size: 0; }
     .gantt.wochen .g-day::after { content: ""; }
     .g-corner { grid-row: 1 / span 2; grid-column: 1; position: sticky; left: 0; z-index: 3; background: #fff; display: flex; align-items: flex-end; padding: 6px 10px; font-weight: 700; color: var(--brand-gray-500); border-bottom: 1px solid var(--brand-gray-200); border-right: 1px solid var(--brand-gray-200); }
@@ -260,6 +260,15 @@
     .g-lift.due { background: var(--brand-red); }
     .g-none { padding: 16px; }
     .gantt { grid-template-rows: auto auto; --rowh: 52px; grid-auto-rows: var(--rowh); } /* Kopfzeilen so hoch wie ihr Inhalt, Trupp-Zeilen fest */
+    .gantt.tage { --rowh: 60px; } .gantt.wochen { --rowh: 40px; }
+    .g-bar-t { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+    .g-l1, .g-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .g-sub { font-weight: 500; font-size: .7rem; opacity: .85; }
+    .gantt.wochen .g-sub, .g-bar.stack .g-sub { display: none; }
+    .g-tools .g-nav { display: flex; align-items: center; gap: 6px; }
+    .g-tools .g-nav .icon-btn { width: 36px; height: 36px; }
+    .g-range { font-weight: 700; font-size: .85rem; min-width: 84px; text-align: center; white-space: nowrap; }
+    .g-tools .grow { flex: 1; }
     .g-bar.stack { align-self: start; min-height: 0; height: calc((var(--rowh) - 10px) / var(--lanes) - 2px);
       margin-top: calc(5px + var(--lane) * (var(--rowh) - 10px) / var(--lanes)); margin-bottom: 0; font-size: .7rem; border-radius: 5px; padding-top: 0; padding-bottom: 0; }
     .g-bar.stack .g-lift { padding: 0; } .g-bar.stack .g-lift .ico { width: 12px; height: 12px; }
@@ -292,7 +301,7 @@
     @media (hover: hover) and (pointer: fine){ .g-bar { cursor: grab; } }
     @media (max-width: 600px){
       .gantt { grid-template-columns: 110px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(110px + var(--days) * 38px); }
-      .gantt.wochen { grid-template-columns: 88px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(88px + var(--days) * 11px); }
+      .gantt.wochen { grid-template-columns: 110px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(110px + var(--days) * 11px); }
       .gantt.wochen .g-week span { display: none; }
       .gantt.wochen .g-bar { padding: 0 var(--padr, 3px) 0 max(var(--padl, 3px), var(--follow, 3px)); gap: 3px; font-size: .68rem; text-overflow: clip; }
       .gantt.wochen .g-bar-t { text-overflow: clip; }
