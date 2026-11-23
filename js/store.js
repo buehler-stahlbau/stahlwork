@@ -65,6 +65,10 @@ export async function load() {
     S.state.remote = Object.assign(defaultState().remote, saved.remote || {});
     S.state.prefs = Object.assign(defaultState().prefs, saved.prefs || {});
     if (!["doc", "mon"].includes(S.state.sparte)) S.state.sparte = "doc";
+    for (const k of ["codeIndex", "codeIndexPending"]) {
+      if (!S.state[k] || typeof S.state[k] !== "object" || Array.isArray(S.state[k])) S.state[k] = {};
+    }
+    if (!Array.isArray(S.state.mapRemove)) S.state.mapRemove = [];
     if (!["projects", "favorites", "map", "archive", "settings", "mon"].includes(S.state.view)) S.state.view = "projects";
     if (S.state.sparte === "doc" && S.state.view === "mon") S.state.view = "projects";
     if (S.state.sparte === "mon" && S.state.view !== "settings") S.state.view = "mon";

@@ -439,27 +439,40 @@ function searchCode() {
 }
 
 function checkCode(code) {
+  const st = S.state;
   const current = [], older = [];
   let notLoaded = 0;
+  const seen = new Set();
+  const consider = (x) => {
+    if (x.cur === code) current.push(x);
+    else if ((x.pdf || []).some((v) => v.code === code)) older.push(x);
+  };
   for (const p of allProjects()) {
-    if (!p.docs) { notLoaded++; continue; }
+    const fid = p.remote && p.remote.folderId;
+    if (!p.docs) { if (!(fid && st.codeIndex[fid])) notLoaded++; continue; }
+    if (fid) seen.add(fid);
+    const arch = st.archivedProjects.includes(p);
     for (const d of p.docs) {
-      if (contentCode(p, d) === code) current.push({ p, d });
-      else {
-        const hit = (d.pdfCodes || []).filter((x) => x.code === code).pop();
-        if (hit) older.push({ p, d, at: hit.at });
-      }
+      consider({ number: p.number, name: p.client || p.title, title: d.title, date: d.date, cur: contentCode(p, d), pdf: d.pdfCodes || [],
+        tag: arch ? "Archiv" : "", pid: arch ? null : p.id, did: d.id });
+    }
+  }
+  // archivierte BV, die hier nicht geladen sind oder schon ausgelagert wurden
+  for (const [fid, e] of Object.entries(st.codeIndex || {})) {
+    if (seen.has(fid) || !e || !Array.isArray(e.docs)) continue;
+    for (const d of e.docs) {
+      consider({ number: e.number, name: e.client || e.title, title: d.title, date: d.date, cur: d.cur, pdf: d.pdf || [],
+        tag: e.gone ? `ausgelagert am ${formatDateDE(e.gone)}` : "Archiv", pid: null, did: null });
     }
   }
   const link = (x) => {
-    const arch = S.state.archivedProjects.includes(x.p);
-    const txt = `BV ${h(x.p.number)} ${h(x.p.client || x.p.title)} – „${h(x.d.title)}“ vom ${formatDateDE(x.d.date)}${arch ? " (Archiv)" : ""}`;
-    return arch ? txt : `<button type="button" class="link-btn" data-open-pid="${h(x.p.id)}" data-open-did="${h(x.d.id)}">${txt}</button>`;
+    const txt = `BV ${h(x.number)} ${h(x.name)} – „${h(x.title)}“ vom ${formatDateDE(x.date)}${x.tag ? ` (${h(x.tag)})` : ""}`;
+    return x.pid ? `<button type="button" class="link-btn" data-open-pid="${h(x.pid)}" data-open-did="${h(x.did)}">${txt}</button>` : txt;
   };
   // alle PDF-Stände der Doku: Version, Datum, Code; gesuchter und aktueller Stand markiert
   const versions = (x) => {
-    const cur = contentCode(x.p, x.d);
-    const list = (x.d.pdfCodes || []).map((v, i) => ({ ...v, n: i + 1 }));
+    const cur = x.cur;
+    const list = (x.pdf || []).map((v, i) => ({ ...v, n: i + 1 }));
     if (!list.length) return "";
     return `<ol class="pdf-versions">${list.slice().reverse().map((v) =>
       `<li class="${v.code === code ? "hit" : ""}"><span>Stand ${v.n}</span><span>${formatDateTimeDE(v.at)}</span><code>${v.code}</code>${v.code === cur ? '<em class="cur">aktuell</em>' : ""}${v.code === code ? '<em class="you">gesucht</em>' : ""}</li>`).join("")}</ol>` +
@@ -1016,7 +1029,11 @@ function renderProjectDetail(app, p, d) {
   $("#back").onclick = () => go({ selectedProjectId: null, selectedDocId: null });
   $("#favD").onclick = () => toggleFav(p);
   $("#archP").onclick = () => {
-    if (!confirm(`Bauvorhaben „${p.number} ${p.title}“ ins Archiv verschieben?`)) return;
+    const noPdf = (p.docs || []).filter((d) => { const last = (d.pdfCodes || []).slice(-1)[0]; return !last || last.code !== contentCode(p, d); });
+    const warnPdf = noPdf.length
+      ? `\n\nAchtung: ${noPdf.length} Dokumentation(en) ohne aktuelles PDF:\n${noPdf.slice(0, 8).map((d) => "– " + (d.title || "Dokumentation")).join("\n")}${noPdf.length > 8 ? "\n– …" : ""}\nBitte vorher das PDF erstellen, wenn der Ordner auf den Server soll.`
+      : "";
+    if (!confirm(`Bauvorhaben „${p.number} ${p.title}“ ins Archiv verschieben?\n\nDer Ordner liegt danach vollständig in OneDrive › ${CONFIG.appFolder} › ${CONFIG.rootFolder} › ${CONFIG.archiveFolder} und kann von dort auf den Server verschoben werden.${warnPdf}`)) return;
     moveLocal(p, "archive");
     if (p.remote.folderId) p.moveTo = "archive";
     touchProject(p);

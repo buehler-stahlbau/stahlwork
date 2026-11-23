@@ -6,13 +6,15 @@
        _daten/                       <- nur für die App
          bv-<Ordner-ID>.json         <- Texte, Struktur je BV (klein)
          nutzer/<anmeldename>.json   <- Favoriten je Nutzer
+         pruefcodes.json             <- Prüfcodes archivierter BV (auch nach dem Auslagern)
        12345 Neubau Lagerhalle/
          18.11.2026 Rohbau/
            12345 18.11.2026 Rohbau.pdf
            Bilder/
              20261118-143512-a3f91c.jpg   (≤ 1 MB)
        _Archiv/
-         ...archivierte Bauvorhaben
+         12345 .../                  <- archiviertes BV: vollständig (PDFs, Bilder,
+           Stahlwork-Daten.json         Stahlwork-Daten.json) -> kann auf den Server
 
    Regeln:
    - Lokale Änderungen werden immer hochgeladen.
@@ -31,6 +33,28 @@ import {
 import { sanitizeName, projectLabel, sleep, isoDay } from "./util.js";
 import { makeThumb } from "./images.js";
 import { cleanGeo, geoValid } from "./geo.js";
+import { contentCode } from "./integrity.js";
+
+const ARCHIVE_FILE = "Stahlwork-Daten.json"; // im archivierten BV-Ordner: alle Daten des BV
+const CODE_INDEX = "pruefcodes.json";        // _daten: Prüfcodes archivierter/ausgelagerter BV
+
+// kurzer Fingerabdruck eines Textes (erkennt Änderungen)
+function fingerprint(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + ":" + str.length;
+}
+
+// Eintrag für die Prüfcode-Übersicht
+function codeEntry(p) {
+  return {
+    number: p.number, title: p.title, client: p.client || "", place: p.place || "",
+    docs: (p.docs || []).map((d) => ({
+      id: d.id, title: d.title, date: d.date, cur: contentCode(p, d),
+      pdf: (d.pdfCodes || []).map((x) => ({ code: x.code, at: x.at })),
+    })),
+  };
+}
 
 const MAP_INDEX = "karte.json"; // _daten/karte.json: Übersicht je BV (Kartenposition, Anzahl Dokus, letzte Doku)
 
@@ -173,7 +197,7 @@ async function syncAll(full) {
     st.remote.pendingFolderDeletes = st.remote.pendingFolderDeletes.filter((x) => x !== id);
   }
 
-  if (full) await refreshListing(root);
+  if (full) await refreshListing(root, dataDir);
   if (full || S.state.prefs.dirty) await syncPrefs(root, dataDir);
   const outbox = await db.outboxAll();
   const sel = st.selectedProjectId;
@@ -181,7 +205,8 @@ async function syncAll(full) {
     p.dirty || p.moveTo || p.pendingDeletes.length || hasUnuploaded(p) ||
     outbox.some((o) => o.projectId === p.id) ||
     p.id === sel || // geöffnetes Bauvorhaben immer aktuell halten (1 kleine Abfrage)
-    (full && p.fav && isActive(p))
+    (full && p.fav && isActive(p)) ||
+    (full && !isActive(p) && p.remote.folderId && !p.remote.archiveSnap) // ältere Archiv-BV vervollständigen
   );
 
   let firstError = null;
@@ -194,7 +219,8 @@ async function syncAll(full) {
       if (!firstError) firstError = e;
     }
   }
-  if (full || S.state.mapDirty) await syncMapIndex(dataDir);
+  if (full || S.state.mapDirty || (S.state.mapRemove || []).length) await syncMapIndex(dataDir);
+  if (full || Object.keys(S.state.codeIndexPending || {}).length) await syncCodeIndex(dataDir);
   outboxCount = (await db.outboxAll()).length;
   if (firstError) throw firstError;
 }
@@ -205,6 +231,9 @@ async function syncMapIndex(dataDir) {
   const remote = await od.getJson(dataDir.id, MAP_INDEX);
   const idx = (remote && remote.data && typeof remote.data === "object" && remote.data.bv) ? { ...remote.data.bv } : {};
   let changed = !remote;
+  // ausgelagerte BV aus der Karte entfernen
+  for (const fid of S.state.mapRemove || []) if (idx[fid]) { delete idx[fid]; changed = true; }
+  S.state.mapRemove = [];
   for (const p of allProjects()) {
     const fid = p.remote && p.remote.folderId;
     if (!fid) continue;
@@ -225,6 +254,23 @@ async function syncMapIndex(dataDir) {
   }
   if (changed) await od.putJson(dataDir.id, MAP_INDEX, { format: "baudoc-map", version: 1, bv: idx }, null);
   S.state.mapDirty = false;
+}
+
+/* Prüfcodes archivierter BV: _daten/pruefcodes.json
+   Bleibt erhalten, wenn der BV-Ordner aus OneDrive (z. B. auf den Server) verschoben wird. */
+async function syncCodeIndex(dataDir) {
+  const st = S.state;
+  const remote = await od.getJson(dataDir.id, CODE_INDEX);
+  const idx = (remote && remote.data && typeof remote.data.bv === "object" && remote.data.bv) ? { ...remote.data.bv } : {};
+  const pending = st.codeIndexPending || {};
+  let changed = false;
+  for (const [fid, e] of Object.entries(pending)) {
+    if (e === null) { if (idx[fid]) { delete idx[fid]; changed = true; } }
+    else if (JSON.stringify(idx[fid]) !== JSON.stringify(e)) { idx[fid] = e; changed = true; }
+  }
+  if (changed) await od.putJson(dataDir.id, CODE_INDEX, { format: "stahlwork-codes", version: 1, bv: idx }, null);
+  st.codeIndex = idx;
+  st.codeIndexPending = {};
 }
 
 /* Favoriten je Nutzer: BauDoc/_daten/nutzer/<anmeldename>.json */
@@ -284,7 +330,7 @@ function folderNameFor(p) {
 }
 
 /* Liste aller Bauvorhaben aus OneDrive (nur Ordnernamen) */
-async function refreshListing(root) {
+async function refreshListing(root, dataDir) {
   const st = S.state;
   const kids = await od.listChildren(root.id);
   const arch = kids.find((k) => k.folder && k.name === CONFIG.archiveFolder);
@@ -339,9 +385,27 @@ async function refreshListing(root) {
       }
       p.dirty = true;
     } else {
+      if (!isActive(p)) await forgetMovedArchive(p, dataDir);
       await removeProjectLocal(p);
     }
   }
+}
+
+// Archiviertes BV wurde aus OneDrive verschoben (z. B. auf den Server):
+// Prüfcodes behalten, Datendatei und Karteneintrag aufräumen
+async function forgetMovedArchive(p, dataDir) {
+  const st = S.state;
+  const fid = p.remote.folderId;
+  const known = (st.codeIndexPending || {})[fid] || (st.codeIndex || {})[fid];
+  const entry = Array.isArray(p.docs) ? codeEntry(p) : known;
+  if (entry) {
+    st.codeIndexPending = { ...(st.codeIndexPending || {}), [fid]: { ...entry, gone: new Date().toISOString() } };
+  }
+  try {
+    const df = await od.getChild(dataDir.id, dataFileName(p));
+    if (df) await od.deleteItemIn(df.id, dataDir.id);
+  } catch (e) { console.warn("Datendatei aufräumen", e); }
+  st.mapRemove = [...(st.mapRemove || []), fid];
 }
 
 async function syncProject(p, root, dataDir, outbox) {
@@ -361,6 +425,12 @@ async function syncProject(p, root, dataDir, outbox) {
   if (p.moveTo) {
     const parent = p.moveTo === "archive" ? await ensureArchive(root) : root;
     await od.moveItem(p.remote.folderId, parent.id);
+    if (p.moveTo === "active") {
+      const af = await od.getChild(p.remote.folderId, ARCHIVE_FILE);
+      if (af) await od.deleteItemIn(af.id, p.remote.folderId);
+      p.remote.archiveSnap = null;
+      S.state.codeIndexPending = { ...(S.state.codeIndexPending || {}), [p.remote.folderId]: null };
+    }
     p.moveTo = null;
   }
 
@@ -418,6 +488,22 @@ async function syncProject(p, root, dataDir, outbox) {
       if (legacy) await od.deleteItem(legacy.id); // alte baudoc.json aus dem BV-Ordner entfernen
     } else {
       p.remote.etag = remote.eTag;
+    }
+    // Archiv: alle Daten zusätzlich in den BV-Ordner + Prüfcodes merken
+    if (!isActive(p)) {
+      const fp = fingerprint(JSON.stringify(json));
+      if (p.remote.archiveSnap !== fp) {
+        await od.putJson(p.remote.folderId, ARCHIVE_FILE, {
+          format: "stahlwork-bv-archiv", version: 1, savedAt: new Date().toISOString(),
+          hinweis: "Alle Daten dieses Bauvorhabens aus Stahlwork (Texte, Unterschriften, Prüfcodes). PDFs und Bilder liegen in den Unterordnern.",
+          project: json,
+        }, null);
+        p.remote.archiveSnap = fp;
+      }
+      const e = codeEntry(p);
+      if (JSON.stringify((S.state.codeIndex || {})[p.remote.folderId]) !== JSON.stringify(e)) {
+        S.state.codeIndexPending = { ...(S.state.codeIndexPending || {}), [p.remote.folderId]: e };
+      }
     }
     if (p.rev === rev) p.dirty = false;
     const sum = projectSummary(p);
