@@ -758,10 +758,11 @@ let mapInstance = null;
 let mapView = null; // zuletzt gezeigter Ausschnitt
 
 // Farben der Pins: gold = Favoriten, grau = weitere, weiß = Archiv (gleicher Umriss)
+// Pins und angehängte Kreise einheitlich: ganz grau, ganz gold bzw. ganz weiß (Zahl direkt darauf)
 const PIN_STYLE = {
-  fav: { fill: "#d6a21c", stroke: "#fff", inner: "#fff", text: "#2b2b28" },
-  other: { fill: "#8d8c87", stroke: "#fff", inner: "#fff", text: "#2b2b28" },
-  archive: { fill: "#fff", stroke: "#8d8c87", inner: "#ecebe8", text: "#5f5e59" },
+  fav: { fill: "#d6a21c", stroke: "#fff", text: "#fff" },
+  other: { fill: "#8d8c87", stroke: "#fff", text: "#fff" },
+  archive: { fill: "#fff", stroke: "#8d8c87", text: "#5f5e59" },
 };
 
 // Pin mit Anzahl im Kopf; optional goldenes Abzeichen oben rechts (Anzahl Favoriten)
@@ -776,14 +777,13 @@ function pinIcon(L, counts, cluster = false) {
   // Sammel-Pin (mehrere Orte): zweiter, leicht versetzter Umriss dahinter ("Stapel")
   const stack = cluster ? `<path transform="translate(2.6 -1.6)" d="M12 33s9.5-10.2 9.5-20.3A9.5 9.5 0 0 0 2.5 12.7C2.5 22.8 12 33 12 33z" fill="${st.fill}" stroke="${st.stroke}" stroke-width="1.6" opacity=".55"/>` : "";
   const n = num(count);
-  const size = n.length >= 3 ? 6.6 : n.length === 2 ? 8.6 : 9.8;
+  const size = n.length >= 3 ? 7.2 : n.length === 2 ? 9.4 : 10.8;
   const body = `${stack}
       <path d="M12 33s9.5-10.2 9.5-20.3A9.5 9.5 0 0 0 2.5 12.7C2.5 22.8 12 33 12 33z" fill="${st.fill}" stroke="${st.stroke}" stroke-width="1.6"/>
-      <circle cx="12" cy="12.4" r="6.9" fill="${st.inner}"/>
       <text x="12" y="12.6" text-anchor="middle" dominant-baseline="central" font-family="system-ui, sans-serif" font-weight="700" font-size="${size}" fill="${st.text}">${n}</text>`;
   const badges = [];
-  if (kind !== "fav" && counts.fav) badges.push({ v: counts.fav, fill: "#d6a21c", stroke: "#fff", text: "#fff", k: "fav" });
-  if (kind !== "archive" && counts.archive) badges.push({ v: counts.archive, fill: "#fff", stroke: "#8d8c87", text: "#5f5e59", k: "arch" });
+  if (kind !== "fav" && counts.fav) badges.push({ v: counts.fav, ...PIN_STYLE.fav, k: "fav" });
+  if (kind !== "archive" && counts.archive) badges.push({ v: counts.archive, ...PIN_STYLE.archive, k: "arch" });
   const data = `data-kind="${kind}" data-count="${n}" data-fav="${badges.find((b) => b.k === "fav")?.v || ""}" data-arch="${badges.find((b) => b.k === "arch")?.v || ""}" data-cluster="${cluster ? 1 : ""}"`;
   if (!badges.length) {
     if (cluster) {
@@ -973,7 +973,12 @@ function renderArchive(app) {
     $('[data-a="delete"]', row).onclick = async () => {
       const extra = p.remote.folderId ? "\n\nDer Ordner wird auch in OneDrive gelöscht (landet im OneDrive-Papierkorb)." : "";
       if (!confirm(`Bauvorhaben „${p.number} ${p.title}“ endgültig löschen?${extra}`)) return;
-      if (p.remote.folderId) S.state.remote.pendingFolderDeletes.push(p.remote.folderId);
+      if (p.remote.folderId) {
+        S.state.remote.pendingFolderDeletes.push(p.remote.folderId);
+        // gelöschtes BV auch aus der Prüfcode-Übersicht und der Karte nehmen
+        S.state.codeIndexPending = { ...(S.state.codeIndexPending || {}), [p.remote.folderId]: null };
+        S.state.mapRemove = [...(S.state.mapRemove || []), p.remote.folderId];
+      }
       await removeProjectLocal(p);
       await saveNow();
       render();
