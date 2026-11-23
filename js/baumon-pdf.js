@@ -107,10 +107,20 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     }
     gridHead();
     const inBlock = all.filter((e) => e.bis >= days[0] && e.von <= days[last]);
-    const rows = trupps.map((tr) => ({ tr, list: inBlock.filter((e) => e.truppId === tr.id) }));
+    const rowOf = (tr) => ({ tr, list: inBlock.filter((e) => e.truppId === tr.id) });
+    const rows = trupps.filter((tr) => !M.isMalerTrupp(tr)).map(rowOf);
     const rest = inBlock.filter((e) => !e.truppId || !M.get("trupps", e.truppId));
     if (rest.length) rows.push({ tr: null, list: rest });
+    const malerRows = trupps.filter((tr) => M.isMalerTrupp(tr)).map(rowOf);
+    if (malerRows.length) rows.push({ sep: "MALER" }, ...malerRows);
     for (const r of rows) {
+      if (r.sep) { // Maler getrennt unter den Trupps
+        if (y + 16 + LANE + 6 > BOTTOM) { pdf.addPage(); y = header(false); gridHead(); }
+        hair(ML, y, W - ML, GRAY, 1.2);
+        font("bold", 7, MUTED); pdf.text(r.sep, ML, y + 11);
+        y += 15; hair(ML, y, W - ML);
+        continue;
+      }
       const lanes = [];
       for (const e of r.list.slice().sort((a, b) => a.von.localeCompare(b.von))) {
         let li = lanes.findIndex((l) => l.every((x) => x.bis < e.von || x.von > e.bis));
@@ -136,12 +146,29 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           const i0 = Math.max(0, days.indexOf(e.von < days[0] ? days[0] : e.von));
           const i1 = days.indexOf(e.bis > days[last] ? days[last] : e.bis);
           const bh = (LANE - (L - 1)) / L;
-          const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5, by = y + 3 + li * (bh + 1);
+          const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5;
+          // nur an Tagen mit Überschneidung schmal, sonst volle Höhe
+          const ov = [];
+          for (let i = i0; i <= i1; i++) ov.push(r.list.some((o) => o !== e && o.von <= days[i] && o.bis >= days[i]));
           fill(hex(colorOf(e)));
-          pdf.roundedRect(x0, by, x1 - x0, bh, 2, 2, "F");
-          font("bold", L > 1 ? 6.2 : 7.8, [255, 255, 255]);
+          let k = 0;
+          while (k < ov.length) {
+            let j = k; while (j + 1 < ov.length && ov[j + 1] === ov[k]) j++;
+            const sx = k === 0 ? x0 : colX(i0 + k), ex = j === ov.length - 1 ? x1 : colX(i0 + j + 1);
+            const sy = ov[k] ? y + 3 + li * (bh + 1) : y + 3, sh = ov[k] ? bh : LANE - 3 + 0;
+            if (ov.length === 1 || (k === 0 && j === ov.length - 1)) pdf.roundedRect(sx, sy, ex - sx, sh, 2, 2, "F");
+            else pdf.rect(sx, sy, ex - sx, sh, "F");
+            k = j + 1;
+          }
+          // Text im breiten Teil (bzw. bei kompletter Überschneidung im schmalen)
+          const allOv = ov.every(Boolean);
+          let a0 = 0; while (!allOv && ov[a0]) a0++;
+          let a1 = ov.length - 1; while (!allOv && ov[a1]) a1--;
+          const tx0 = a0 === 0 ? x0 : colX(i0 + a0), tx1 = a1 === ov.length - 1 ? x1 : colX(i0 + a1 + 1);
+          const by = allOv ? y + 3 + li * (bh + 1) : y + 3, th = allOv ? bh : LANE - 3;
+          font("bold", allOv && L > 1 ? 6.2 : 7.8, [255, 255, 255]);
           const nb = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length : 0;
-          pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), x1 - x0 - 6), x0 + 3, by + bh / 2 + (L > 1 ? 2.2 : 2.8));
+          pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), tx1 - tx0 - 6), tx0 + 3, by + th / 2 + (allOv && L > 1 ? 2.2 : 2.8));
         }
       });
       y += rowH;

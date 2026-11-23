@@ -22,11 +22,12 @@ export function checkImportLink() {
     data = JSON.parse(decodeURIComponent(escape(atob(b64))));
   } catch { toast("Import-Link ist ungültig.", "error"); return; }
   const rm = Array.isArray(data.rm) ? data.rm.map(String) : [], mon = Array.isArray(data.m) ? data.m.map(String) : [];
-  if (!rm.length && !mon.length) return;
+  const maler = Array.isArray(data.maler) ? data.maler.map(String) : [];
+  if (!rm.length && !mon.length && !maler.length) return;
   if (!editable()) { toast("Keine Berechtigung zum Bearbeiten von BauMon.", "warn"); return; }
-  if (!confirm(`BauMon-Stammdaten übernehmen?\n\nRichtmeister (je mit Trupp): ${rm.length}\n${rm.join(", ")}\n\nMonteure: ${mon.length}\n${mon.join(", ")}\n\nBereits vorhandene Namen werden nicht doppelt angelegt.`)) return;
-  const r = M.importPeople({ rm, m: mon });
-  toast(`Übernommen: ${r.neuRm} Richtmeister, ${r.neuM} Monteure, ${r.neuT} Trupps.`, "info", 5000);
+  if (!confirm(`BauMon-Stammdaten übernehmen?\n\nRichtmeister (je mit Trupp): ${rm.length}\n${rm.join(", ")}\n\nMonteure: ${mon.length}\n${mon.join(", ")}${maler.length ? `\n\nMaler: ${maler.length}\n${maler.join(", ")}` : ""}\n\nBereits vorhandene Namen werden nicht doppelt angelegt.`)) return;
+  const r = M.importPeople({ rm, m: mon, maler });
+  toast(`Übernommen: ${r.neuRm} Richtmeister, ${r.neuM} Monteure, ${r.neuMa} Maler.`, "info", 5000);
   U.go({ sparte: "mon", view: "monstamm", monStamm: "monteure" });
   U.schedule();
 }
@@ -147,9 +148,12 @@ export function renderMonPlan(app) {
     const end = e.bis > days[20] ? days[20] : e.bis;
     if (!cur || end > cur.end) liftBar.set(k, { id: e.id, end });
   }
-  const rows = trupps.map((tr) => ({ tr, list: einsaetze.filter((e) => e.truppId === tr.id) }));
+  const rowOf = (tr) => ({ tr, list: einsaetze.filter((e) => e.truppId === tr.id) });
+  const rows = trupps.filter((tr) => !M.isMalerTrupp(tr)).map(rowOf);
   const rest = einsaetze.filter((e) => !e.truppId || !M.get("trupps", e.truppId));
   if (rest.length) rows.push({ tr: null, list: rest });
+  const malerRows = trupps.filter((tr) => M.isMalerTrupp(tr)).map(rowOf);
+  if (malerRows.length) rows.push({ sep: "Maler" }, ...malerRows);
 
   if (!rows.length) {
     const empty = U.el(`<div class="card mon-empty-card"><h3>Noch keine Trupps</h3>
@@ -184,8 +188,15 @@ export function renderMonPlan(app) {
   });
   g.insertAdjacentHTML("beforeend", head);
 
+  // Zeilenhöhen: Trupp-Zeilen fest, Trennzeile (Maler) schmal
+  g.style.gridTemplateRows = "auto auto " + rows.map((r) => (r.sep ? "30px" : "var(--rowh)")).join(" ");
   let gridRow = 3;
   for (const r of rows) {
+    if (r.sep) {
+      g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}</span></div>`);
+      gridRow++;
+      continue;
+    }
     // Bahnen: überlappende Einsätze eines Trupps untereinander
     const lanes = [];
     for (const e of r.list.slice().sort((a, b) => a.von.localeCompare(b.von))) {
@@ -209,11 +220,27 @@ export function renderMonPlan(app) {
         const s = Math.max(0, days.indexOf(e.von < days[0] ? days[0] : e.von));
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
         const bh = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
-        const dueHere = bh.some((b) => b.vermieterId && b.bis && b.bis <= t);
+        const dueHere = bh.some((b) => M.isDue(b, t));
         const dbl = M.conflicts(e);
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${L > 1 ? "stack" : ""} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
-          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
-          ${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+        // Nur an den Tagen, an denen sich zwei Baustellen überschneiden, wird der Balken schmal
+        let mode = "", bg = "", pad = "";
+        if (L > 1) {
+          const N = en - s + 1;
+          const ov = Array.from({ length: N }, (_, k) => r.list.some((o) => o !== e && o.von <= days[s + k] && o.bis >= days[s + k]));
+          if (ov.every(Boolean)) mode = "stack";
+          else if (ov.some(Boolean)) {
+            mode = "part";
+            const runs = [];
+            ov.forEach((v, k) => { const last = runs[runs.length - 1]; if (last && last.v === v) last.to = k; else runs.push({ v, from: k, to: k }); });
+            bg = runs.map((ru, k) => `<span class="g-bg ${ru.v ? "ov" : ""} ${k === 0 ? "first" : ""} ${k === runs.length - 1 ? "last" : ""}" style="left:${(ru.from / N) * 100}%;width:${((ru.to - ru.from + 1) / N) * 100}%"></span>`).join("");
+            // Text und Symbol nur im breiten Teil
+            const pl = ov[0] ? runs[0].to + 1 : 0, pr = ov[N - 1] ? N - runs[runs.length - 1].from : 0;
+            pad = `--padl:calc(${(pl / N) * 100}% + 8px);--padr:calc(${(pr / N) * 100}% + 8px);`;
+          }
+        }
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
+          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
+          ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
     gridRow += n;
@@ -270,7 +297,8 @@ export function renderMonPlan(app) {
       const edge = corner.getBoundingClientRect().right;
       for (const b of bars) {
         const l = b.getBoundingClientRect().left;
-        b.style.paddingLeft = l < edge ? `${Math.max(8, Math.min(edge - l + 8, b.offsetWidth - 60))}px` : "";
+        if (l < edge) b.style.setProperty("--follow", `${Math.max(8, Math.min(edge - l + 8, b.offsetWidth - 60))}px`);
+        else b.style.removeProperty("--follow");
       }
     };
     sc.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(follow); }, { passive: true });
@@ -513,7 +541,7 @@ export function renderMonBuehnen(app) {
 }
 
 function buehneRow(b, due = false) {
-  const status = b.abgemeldetAm ? `abgemeldet ${M.shortDate(b.abgemeldetAm)}` : b.bis ? `benötigt bis ${M.wdName(b.bis)} ${M.shortDate(b.bis)}` : "ohne Enddatum";
+  const status = b.abgemeldetAm ? `abgemeldet ${M.shortDate(b.abgemeldetAm)}` : b.bis ? `Mietende ${M.wdName(b.bis)} ${M.shortDate(b.bis)}` : "ohne Enddatum";
   return `<button type="button" class="mon-brow ${due ? "due" : ""}" data-bid="${h(b.id)}">
     <span class="mon-brow-main"><b>${h(M.buehneText(b))}</b> · ${h(M.baustelleLabel(b))}</span>
     <span class="muted">${h(vermieterName(b.vermieterId))}${b.auftragsNr ? " · Nr. " + h(b.auftragsNr) : ""} · ${h(status)}</span></button>`;
@@ -613,7 +641,7 @@ export function openEinsatz(e, preset = {}) {
   const drawB = () => {
     const s = site.value();
     const bs = s.bvNumber || s.baustelle ? M.buehnenOf(s) : [];
-    bbox.innerHTML = `<label class="field-label">Bühnen auf dieser Baustelle</label>${bs.map((b) => buehneRow(b, !b.abgemeldetAm && b.vermieterId && b.bis && b.bis <= M.today())).join("") || `<p class="muted">Keine.</p>`}
+    bbox.innerHTML = `<label class="field-label">Bühnen auf dieser Baustelle</label>${bs.map((b) => buehneRow(b, M.isDue(b))).join("") || `<p class="muted">Keine.</p>`}
       ${ro ? "" : `<button type="button" class="secondary small" data-addb>${ICO.plus} Bühne hinzufügen</button>`}`;
     U.$$("[data-bid]", bbox).forEach((r) => { r.onclick = () => openBuehne(M.get("buehnen", r.dataset.bid), {}, drawB); });
     const ab = bbox.querySelector("[data-addb]");
@@ -678,19 +706,26 @@ export function openBuehne(b, preset = {}, after) {
   const typen = [...new Set([...TYPEN, ...M.list("buehnen").map((b) => b.typ).filter(Boolean)])];
   body.appendChild(U.el(`<div><div class="grid2">
     <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === cur.vermieterId ? "selected" : ""}>${h(v.firma)}</option>`).join("")}<option value="" ${!cur.vermieterId ? "selected" : ""}>Bühler (eigen)</option></select></div>
-    <div class="grid2 tight"><div><label class="field-label">Typ</label><select class="f-tsel"><option value="">– wählen –</option>${typen.map((x) => `<option value="${h(x)}" ${x === cur.typ ? "selected" : ""}>${h(x)}</option>`).join("")}<option value="__frei">Anderer …</option></select>
-      <input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="Typ eingeben" hidden /></div>
+    <div class="grid2 tight"><div><label class="field-label">Typ</label><div class="typ-field"><input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="eingeben" autocomplete="off" />
+      <button type="button" class="typ-open" aria-label="Typen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list"></div></div></div>
     <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
     <div class="grid2"><div class="grid2 tight"><div><label class="field-label">angeliefert</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
-    <div><label class="field-label">benötigt bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
+    <div><label class="field-label">Mietende</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
     <div><label class="field-label">Auftrags-Nr. Vermieter <span class="muted">(optional)</span></label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" /></div></div>
     <label class="field-label">Standort / Adresse (für den Vermieter)</label><input type="text" class="f-ort" value="${h(cur.standort)}" placeholder="optional" />
     ${cur.abgemeldetAm ? `<p class="muted">Abgemeldet am ${h(M.longDate(cur.abgemeldetAm))}.</p>` : ""}</div>`));
-  // Typ: Auswahl aus Liste (Standard + bisher verwendete) oder frei eingeben
-  const tsel = body.querySelector(".f-tsel"), tin = body.querySelector(".f-typ");
-  const syncTyp = () => { const frei = tsel.value === "__frei"; tin.hidden = !frei; if (!frei) tin.value = tsel.value; else if (typen.includes(tin.value)) tin.value = ""; };
-  if (cur.typ && !typen.includes(cur.typ)) { tsel.value = "__frei"; tin.hidden = false; }
-  tsel.onchange = () => { syncTyp(); if (!tin.hidden) tin.focus(); };
+  // Typ: frei eintippen oder aus der Liste (Standard + bisher verwendete) übernehmen
+  const tin = body.querySelector(".f-typ"), tlist = body.querySelector(".typ-list");
+  const showTypen = (all) => {
+    const q = all ? "" : tin.value.trim().toLowerCase();
+    const xs = typen.filter((x) => !q || x.toLowerCase().includes(q));
+    tlist.innerHTML = xs.map((x) => `<button type="button" class="place-opt" data-t="${h(x)}">${h(x)}</button>`).join("");
+    U.$$(".place-opt", tlist).forEach((o) => o.addEventListener("pointerdown", (ev) => { ev.preventDefault(); tin.value = o.dataset.t; tlist.innerHTML = ""; }));
+  };
+  tin.addEventListener("focus", () => showTypen(true));
+  tin.addEventListener("input", () => showTypen(false));
+  tin.addEventListener("blur", () => setTimeout(() => { tlist.innerHTML = ""; }, 150));
+  body.querySelector(".typ-open").addEventListener("pointerdown", (ev) => { ev.preventDefault(); if (tlist.innerHTML) tlist.innerHTML = ""; else { tin.focus(); showTypen(true); } });
   // Dauer: standardmäßig wie die Einsätze des BV, solange nicht von Hand geändert
   if (isNew) {
     const vonIn = body.querySelector(".f-von"), bisIn = body.querySelector(".f-bis");
@@ -713,7 +748,7 @@ export function openBuehne(b, preset = {}, after) {
     if (!s.bvNumber && !s.baustelle) { toast("Bitte die Baustelle angeben.", "warn"); return false; }
     const bis = body.querySelector(".f-bis").value;
     const von = body.querySelector(".f-von").value;
-    if (bis && von && bis < von) { toast("„benötigt bis“ liegt vor der Anlieferung.", "warn"); return false; }
+    if (bis && von && bis < von) { toast("Das Mietende liegt vor der Anlieferung.", "warn"); return false; }
     M.put("buehnen", { ...cur, ...s, vermieterId: body.querySelector(".f-v").value || null, typ: body.querySelector(".f-typ").value.trim(),
       anzahl: Math.max(1, Number(body.querySelector(".f-n").value) || 1), von, bis, auftragsNr: body.querySelector(".f-nr").value.trim(), standort: body.querySelector(".f-ort").value.trim() });
     changed();
@@ -722,7 +757,18 @@ export function openBuehne(b, preset = {}, after) {
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
     ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Diese Bühne löschen?")) return false; M.remove("buehnen", cur.id); changed(); if (after) after(); } }]),
     ...(!isNew && cur.abgemeldetAm ? [{ label: "Wieder aktiv", fn: () => { M.put("buehnen", { ...cur, abgemeldetAm: "" }); changed(); if (after) after(); } }] : []),
-    ...(!isNew && !cur.abgemeldetAm ? [{ label: "Abgemeldet", fn: () => { M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after(); } }] : []),
+    // Abmelden: Mietbühne -> vorformulierte E-Mail an den Vermieter, danach als abgemeldet markieren
+    ...(!isNew && !cur.abgemeldetAm ? [{ label: "Abmelden", fn: () => {
+      const v = cur.vermieterId && M.get("vermieter", cur.vermieterId);
+      if (v && v.email) {
+        const acc = U.account();
+        location.href = M.abmeldeMail(v, [cur], acc && acc.name);
+        if (!confirm(`E-Mail an ${v.firma} gesendet?\n\nOK = Bühne als abgemeldet markieren.`)) return false;
+      } else if (v) {
+        if (!confirm(`Für ${v.firma} ist keine E-Mail-Adresse hinterlegt.\nBühne trotzdem als abgemeldet markieren?`)) return false;
+      } else if (!confirm("Eigene Bühne als abgemeldet (zurück) markieren?")) return false;
+      M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after();
+    } }] : []),
     { label: isNew ? "Anlegen" : "Speichern", cls: "primary", fn: save },
   ];
   modal(isNew ? "Neue Bühne" : "Bühne", body, actions);
@@ -736,7 +782,7 @@ export function monSettingsCard() {
   const card = U.el(`<div class="card"><h3 class="section-title">BauMon – Stammdaten</h3>
     <div class="mon-stamm-links">
       <button type="button" class="drawer-item" data-stamm="vermieter"><span class="d-ico">${ICO.lift}</span><span class="d-text"><b>Bühnenvermieter</b><small>${n("vermieter")} angelegt · Ansprechpartner, E-Mail</small></span></button>
-      <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Richtmeister und Monteure</b><small>${M.sortedMonteure().filter((m) => m.rm).length} Richtmeister · ${M.sortedMonteure().filter((m) => !m.rm).length} Monteure</small></span></button>
+      <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Personal</b><small>${M.sortedMonteure().filter((m) => M.kind(m) === "rm").length} Richtmeister · ${M.sortedMonteure().filter((m) => M.kind(m) === "monteur").length} Monteure · ${M.sortedMonteure().filter((m) => M.kind(m) === "maler").length} Maler</small></span></button>
       <button type="button" class="drawer-item" data-stamm="trupps"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Trupps</b><small>${n("trupps")} angelegt · Richtmeister + Monteure</small></span></button>
     </div></div>`);
   bindStammButtons(card);
@@ -746,7 +792,7 @@ export function monSettingsCard() {
 export function renderMonStamm(app) {
   const kind = S.state.monStamm || "vermieter";
   const ro = !editable();
-  const titles = { vermieter: "Bühnenvermieter", monteure: "Richtmeister und Monteure", trupps: "Trupps" };
+  const titles = { vermieter: "Bühnenvermieter", monteure: "Personal", trupps: "Trupps" };
   const addLabel = "+ Neu";
   app.appendChild(U.el(`<div class="page-head"><div class="row head-title"><button id="stBack" class="icon-btn" type="button" aria-label="Zurück" title="Zurück"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${titles[kind] || ""}</h1></div>${ro ? "" : `<button class="primary" id="stAdd" type="button">${h(addLabel)}</button>`}</div>`));
   const setAdd = (fn) => { const b = U.$("#stAdd"); if (b) b.onclick = fn; };
@@ -762,36 +808,39 @@ export function renderMonStamm(app) {
   } else if (kind === "monteure") {
     const all = M.sortedMonteure(true);
     const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-      ${ro ? "" : `<span class="row"><button type="button" class="secondary small" data-rm="${h(m.id)}" title="Als Richtmeister kennzeichnen" aria-label="Richtmeister">${m.rm ? '<span class="rm-on">★</span>' : "☆"}<span class="lbl"> Richtmeister</span></button><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
-    const rms = all.filter((m) => m.rm), mons = all.filter((m) => !m.rm);
-    const card = U.el(`<div><div class="card list-card"><h3 class="section-title">Richtmeister (${rms.length})</h3>${rms.map(row).join("") || `<p class="muted">Noch keine Richtmeister.</p>`}</div>
-      <div class="card list-card"><h3 class="section-title">Monteure (${mons.length})</h3>${mons.map(row).join("") || `<p class="muted">Noch keine Monteure.</p>`}</div></div>`);
+      ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
+    const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
+    const card = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
     app.appendChild(card);
     if (!ro) {
       setAdd(() => {
         const body = U.el(`<div class="mon-form">
           <label class="field-label">Richtmeister (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="3"></textarea>
-          <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea></div>`);
-        modal("Richtmeister und Monteure hinzufügen", body, [
+          <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea>
+          <label class="field-label">Maler (ein Name pro Zeile – je Maler eine eigene Zeile in der Planung)</label><textarea id="maAdd" rows="2"></textarea></div>`);
+        modal("Personal hinzufügen", body, [
           { label: "Abbrechen", fn: () => {} },
           { label: "Hinzufügen", cls: "primary", fn: () => {
             const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
-            const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value);
-            if (!rm.length && !m.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
-            const r = M.importPeople({ rm, m });
-            toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuT} Trupp(s) angelegt.`, "info", 3500);
+            const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value), maler = split(body.querySelector("#maAdd").value);
+            if (!rm.length && !m.length && !maler.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
+            const r = M.importPeople({ rm, m, maler });
+            toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuMa} Maler angelegt.`, "info", 3500);
             changed();
           } },
         ]);
         setTimeout(() => body.querySelector("#rmAdd").focus(), 50);
       });
-      U.$$("[data-rm]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.rm); M.put("monteure", { ...m, rm: !m.rm }); if (!m.rm) M.importPeople({ rm: [m.name] }); changed(); }; });
+      U.$$("[data-kind]", card).forEach((sel) => { sel.onchange = () => { M.setKind(M.get("monteure", sel.dataset.kind), sel.value); changed(); }; });
       U.$$("[data-ren]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
       U.$$("[data-tog]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
     }
   } else if (kind === "trupps") {
-    const card = U.el(`<div class="card list-card">${M.sortedTrupps().map((t) => `<button type="button" class="mon-brow" data-tid="${h(t.id)}"><span class="mon-brow-main"><b>${h(M.truppName(t))}</b></span>
-      <span class="muted">${(() => { const ms = (t.monteure || []).filter((id) => id !== t.fuehrerId); return ms.length ? h(monteurNames(ms)) : "noch keine Monteure"; })()}</span></button>`).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>`);
+    const tRow = (t) => `<button type="button" class="mon-brow" data-tid="${h(t.id)}"><span class="mon-brow-main"><b>${h(M.truppName(t))}</b></span>
+      <span class="muted">${(() => { const ms = (t.monteure || []).filter((id) => id !== t.fuehrerId); return ms.length ? h(monteurNames(ms)) : M.isMalerTrupp(t) ? "Maler" : "noch keine Monteure"; })()}</span></button>`;
+    const ts = M.sortedTrupps(), ma = ts.filter((t) => M.isMalerTrupp(t));
+    const card = U.el(`<div><div class="card list-card">${ts.filter((t) => !M.isMalerTrupp(t)).map(tRow).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>
+      ${ma.length ? `<div class="card list-card"><h3 class="section-title">Maler</h3>${ma.map(tRow).join("")}</div>` : ""}</div>`);
     app.appendChild(card);
     setAdd(() => editTrupp(null));
     U.$$("[data-tid]", card).forEach((b) => { b.onclick = () => editTrupp(M.get("trupps", b.dataset.tid)); });

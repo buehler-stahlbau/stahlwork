@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.11.10-beta" />
+  <meta name="app-version" content="3.12.0-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -244,6 +244,11 @@
     .g-cell.we { background: var(--brand-gray-100); }
     .g-cell.today { background: var(--brand-primary-soft); }
     .g-cell.sel { background: rgba(46,91,138,.22) !important; }
+    .g-sep { grid-column: 1 / -1; display: flex; align-items: flex-end; border-top: 2px solid var(--brand-gray-300, #c9c9c9); border-bottom: 1px solid var(--brand-gray-200); background: var(--brand-gray-100); }
+    .g-sep span { position: sticky; left: 0; padding: 0 10px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand-gray-500); }
+    .kind-sel { min-height: 34px; padding: 0 8px; font-size: .85rem; width: 118px; flex: 0 0 auto; border-radius: 8px; }
+    .mon-mrow > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 600px) { .kind-sel { width: 100px; } }
     @media (hover: hover) and (pointer: fine){ .g-cell:hover { background: rgba(46,91,138,.06); } }
     .g-bar { position: relative; z-index: 1; margin: 5px 2px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: var(--c); color: #fff; font-weight: 600; font-size: .78rem; text-align: left; display: flex; align-items: center; gap: 6px; overflow: hidden; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
     .g-bar.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
@@ -259,6 +264,15 @@
       margin-top: calc(5px + var(--lane) * (var(--rowh) - 10px) / var(--lanes)); margin-bottom: 0; font-size: .7rem; border-radius: 5px; padding-top: 0; padding-bottom: 0; }
     .g-bar.stack .g-lift { padding: 0; } .g-bar.stack .g-lift .ico { width: 12px; height: 12px; }
     .g-bar.stack .g-h::after { top: 20%; bottom: 20%; }
+    /* Überschneidung nur an einzelnen Tagen: dort schmal, sonst volle Höhe */
+    .g-bar.part { background: transparent; box-shadow: none; overflow: visible; }
+    .g-bar { padding-left: max(var(--padl, 8px), var(--follow, 8px)); padding-right: var(--padr, 8px); }
+    .g-bar.part.cut-l .g-bg.first, .g-bar.part.cut-r .g-bg.last { border-radius: 0; }
+    .g-bg { position: absolute; top: 0; bottom: 0; background: var(--c); z-index: -1; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+    .g-bg.first { border-top-left-radius: 7px; border-bottom-left-radius: 7px; }
+    .g-bg.last { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
+    .g-bg.ov { top: calc(var(--lane) * 100% / var(--lanes)); bottom: auto; height: calc(100% / var(--lanes) - 1px); }
+    .g-bar.part > .g-bar-t, .g-bar.part > .g-lift { position: relative; }
     .gantt.wochen .g-day { padding: 0; height: 6px; }
     .g-day.hol, .g-cell.hol { background: rgba(203,49,48,.07); }
     .g-day.hol b { color: var(--brand-red-dark); }
@@ -280,7 +294,7 @@
       .gantt { grid-template-columns: 110px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(110px + var(--days) * 38px); }
       .gantt.wochen { grid-template-columns: 88px repeat(var(--days), minmax(11px, 1fr)); min-width: calc(88px + var(--days) * 11px); }
       .gantt.wochen .g-week span { display: none; }
-      .gantt.wochen .g-bar { padding: 0 3px; gap: 3px; font-size: .68rem; text-overflow: clip; }
+      .gantt.wochen .g-bar { padding: 0 var(--padr, 3px) 0 max(var(--padl, 3px), var(--follow, 3px)); gap: 3px; font-size: .68rem; text-overflow: clip; }
       .gantt.wochen .g-bar-t { text-overflow: clip; }
       /* Wochenansicht am Handy: nur BV-Nummer (Name im Einsatz beim Antippen) */
       .gantt.wochen .g-name:not(.only), .gantt.wochen .g-lift, .gantt.wochen .g-h::after { display: none; }
@@ -549,6 +563,10 @@
     .place-field { position: relative; }
     .place-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60; background: #fff; border: 1px solid var(--brand-gray-200); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); overflow: hidden; }
     .place-list:empty { display: none; }
+    .typ-field { position: relative; }
+    .typ-field .f-typ { padding-right: 40px; }
+    .typ-field .typ-open { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 36px; min-height: 36px; padding: 0; background: none; border: 0; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; }
+    .typ-list { max-height: 260px; overflow-y: auto; right: auto; min-width: 100%; width: max-content; max-width: 280px; }
     .place-opt { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: #fff; padding: 9px 12px; min-height: 0; font-weight: 600; border-top: 1px solid var(--brand-gray-100); }
     .place-opt:first-child { border-top: 0; }
     .place-opt span { display: block; font-weight: 400; font-size: .8rem; color: var(--brand-gray-500); }

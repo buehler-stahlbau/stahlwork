@@ -130,30 +130,45 @@ export function baustelleLabel(x) {
 }
 // Trupps alphabetisch nach Name (= Richtmeister) – überall gleich: Übersicht, Planung, PDF, Stammdaten
 export function sortedTrupps() {
-  return list("trupps").sort((a, b) => truppName(a).localeCompare(truppName(b), "de", { sensitivity: "base" }));
+  return list("trupps").sort((a, b) => (isMalerTrupp(a) - isMalerTrupp(b)) || truppName(a).localeCompare(truppName(b), "de", { sensitivity: "base" }));
 }
 export function sortedMonteure(all = false) {
   return list("monteure").filter((x) => all || x.aktiv !== false).sort((a, b) => a.name.localeCompare(b.name));
 }
 // Namen übernehmen: Richtmeister (je mit eigenem Trupp) und Monteure; Vorhandene werden nicht doppelt angelegt
-export function importPeople({ rm = [], m = [] }) {
+export function importPeople({ rm = [], m = [], maler = [] }) {
   const clean = (a) => [...new Set((a || []).map((x) => String(x).trim().slice(0, 80)).filter(Boolean))];
   const byName = new Map(list("monteure").map((x) => [x.name.toLowerCase(), x]));
-  let neuM = 0, neuRm = 0, neuT = 0;
-  for (const name of clean(rm)) {
+  let neuM = 0, neuRm = 0, neuT = 0, neuMa = 0;
+  // Richtmeister und Maler bekommen je eine eigene Zeile (Trupp) in der Planung
+  const withTrupp = (name, kat) => {
     let p = byName.get(name.toLowerCase());
-    if (!p) { p = put("monteure", { name, aktiv: true, rm: true }); byName.set(name.toLowerCase(), p); neuRm++; }
-    else if (!p.rm) put("monteure", { ...p, rm: true, aktiv: true });
-    if (!list("trupps").some((t) => t.fuehrerId === p.id)) {
-      put("trupps", { name: "", fuehrerId: p.id, monteure: [p.id], sort: list("trupps").length });
-      neuT++;
-    }
-  }
+    if (!p) { p = put("monteure", { name, aktiv: true, rm: kat === "rm", maler: kat === "maler" }); byName.set(name.toLowerCase(), p); kat === "rm" ? neuRm++ : neuMa++; }
+    else if (kind(p) !== kat) p = put("monteure", { ...p, rm: kat === "rm", maler: kat === "maler", aktiv: true });
+    if (ensureTrupp(p)) neuT++;
+  };
+  for (const name of clean(rm)) withTrupp(name, "rm");
+  for (const name of clean(maler)) withTrupp(name, "maler");
   for (const name of clean(m)) {
-    if (!byName.has(name.toLowerCase())) { const p = put("monteure", { name, aktiv: true, rm: false }); byName.set(name.toLowerCase(), p); neuM++; }
+    if (!byName.has(name.toLowerCase())) { const p = put("monteure", { name, aktiv: true, rm: false, maler: false }); byName.set(name.toLowerCase(), p); neuM++; }
   }
-  return { neuRm, neuM, neuT };
+  return { neuRm, neuM, neuT, neuMa };
 }
+// Kategorie einer Person: "rm" (Richtmeister), "maler" oder "monteur"
+export function kind(p) { return p && p.maler ? "maler" : p && p.rm ? "rm" : "monteur"; }
+export const PERSON_KINDS = { rm: "Richtmeister", monteur: "Monteur", maler: "Maler" };
+function ensureTrupp(p) {
+  if (list("trupps").some((t) => t.fuehrerId === p.id)) return false;
+  put("trupps", { name: "", fuehrerId: p.id, monteure: [p.id], sort: list("trupps").length });
+  return true;
+}
+export function setKind(p, k) {
+  const np = put("monteure", { ...p, rm: k === "rm", maler: k === "maler" });
+  if (k !== "monteur") ensureTrupp(np);
+  return np;
+}
+// Maler-Zeile? (Trupp, dessen "Richtmeister" ein Maler ist)
+export function isMalerTrupp(t) { const f = t && t.fuehrerId && get("monteure", t.fuehrerId); return !!(f && f.maler); }
 
 // Doppelt eingeteilt? Monteure (auch Richtmeister) dürfen je Tag nur in EINEM Trupp stehen.
 // Derselbe Trupp darf zwei Baustellen am Tag haben (Wechsel, Kurzeinsatz).
@@ -202,10 +217,20 @@ export function sameSite(a, b) {
 }
 export function buehnenOf(site) { return list("buehnen").filter((b) => sameSite(b, site)); }
 
-// Bühnen von Vermietern, die ab dem Tag "benötigt bis" abgemeldet werden können
+// Bühnen von Vermietern, die abgemeldet werden müssen (ab dem Werktag vor dem Mietende)
+// Abmelden fällig ab dem Werktag (Mo–Fr, ohne Feiertage) VOR dem Mietende:
+// Mietende Di 24.11. -> rot ab Mo 23.11.; Mietende Mo 30.11. -> rot ab Fr 27.11.
+export function abmeldenAb(b) {
+  let d = addDays(b.bis, -1);
+  while (["Sa", "So"].includes(wdName(d)) || holiday(d)) d = addDays(d, -1);
+  return d;
+}
+export function isDue(b, day = today()) {
+  return !b.abgemeldetAm && !!b.vermieterId && !!b.bis && abmeldenAb(b) <= day;
+}
 export function dueBuehnen(day = today()) {
   return list("buehnen")
-    .filter((b) => !b.abgemeldetAm && b.vermieterId && b.bis && b.bis <= day)
+    .filter((b) => isDue(b, day))
     .sort((a, b) => a.bis.localeCompare(b.bis));
 }
 
@@ -221,7 +246,7 @@ export function abmeldeMail(vermieter, buehnen, absender) {
   const lines = buehnen.map((b) => {
     const parts = [`- ${buehneText(b)}`, `Baustelle: ${baustelleLabel(b)}${b.standort ? ", " + b.standort : ""}`];
     if (b.auftragsNr) parts.push(`Ihre Auftrags-Nr.: ${b.auftragsNr}`);
-    parts.push(`benötigt bis: ${longDate(b.bis)}`);
+    parts.push(`Mietende: ${longDate(b.bis)}`);
     return parts.join("\n  ");
   });
   const body = [
@@ -247,9 +272,9 @@ export function dueFile() {
       const v = get("vermieter", b.vermieterId);
       return { buehne: buehneText(b), baustelle: baustelleLabel(b), bis: b.bis, vermieter: v ? v.firma : "", email: v ? v.email || "" : "" };
     });
-    const text = rows.map((r) => `- ${r.buehne} – ${r.baustelle} – ${r.vermieter} (benötigt bis ${longDate(r.bis)})`).join("\n");
+    const text = rows.map((r) => `- ${r.buehne} – ${r.baustelle} – ${r.vermieter} (Mietende ${longDate(r.bis)})`).join("\n");
     const html = rows.length
-      ? `<p>Diese Bühnen können abgemeldet werden:</p><ul>${rows.map((r) => `<li><b>${esc(r.buehne)}</b> – ${esc(r.baustelle)} – ${esc(r.vermieter)} (benötigt bis ${esc(longDate(r.bis))})</li>`).join("")}</ul>`
+      ? `<p>Diese Bühnen können abgemeldet werden:</p><ul>${rows.map((r) => `<li><b>${esc(r.buehne)}</b> – ${esc(r.baustelle)} – ${esc(r.vermieter)} (Mietende ${esc(longDate(r.bis))})</li>`).join("")}</ul>`
       : "";
     tage[day] = { anzahl: rows.length, text, html, buehnen: rows };
   }
@@ -265,7 +290,7 @@ function cleanRecord(kind, r) {
   const base = { id: r.id, updatedAt: Number(r.updatedAt) || 0 };
   switch (kind) {
     case "vermieter": return { ...base, firma: s(r.firma), ansprechpartner: s(r.ansprechpartner), email: s(r.email), telefon: s(r.telefon), kundenNr: s(r.kundenNr) };
-    case "monteure": return { ...base, name: s(r.name), aktiv: r.aktiv !== false, rm: r.rm === true };
+    case "monteure": return { ...base, name: s(r.name), aktiv: r.aktiv !== false, rm: r.rm === true && r.maler !== true, maler: r.maler === true };
     case "trupps": return { ...base, name: s(r.name), fuehrerId: ID_RE.test(String(r.fuehrerId || "")) ? r.fuehrerId : null, monteure: ids(r.monteure), sort: Number(r.sort) || 0 };
     case "einsaetze": return { ...base, truppId: ID_RE.test(String(r.truppId || "")) ? r.truppId : null, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "",
       baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
