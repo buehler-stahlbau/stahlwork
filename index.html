@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.12.0-beta" />
+  <meta name="app-version" content="3.12.1-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -314,9 +314,13 @@
     .mon-today-row.free .mon-today-trupp { color: var(--brand-gray-500); font-weight: 600; }
     .mon-today-sites { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; padding-top: 2px; }
     .mon-today-row.free .mon-today-sites { padding-top: 6px; }
-    .mon-site { display: flex; flex-direction: column; align-items: flex-start; text-align: left; border: 1px solid var(--brand-gray-200); border-left: 5px solid var(--c); border-radius: 8px; background: #fff; padding: 6px 10px; min-height: 0; cursor: pointer; }
+    .mon-site { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; border: 1px solid var(--brand-gray-200); border-left: 5px solid var(--c); border-radius: 8px; background: #fff; padding: 6px 10px; min-height: 0; cursor: pointer; }
     .mon-site-name { font-weight: 700; }
-    @media (max-width: 600px){ .mon-today-row { flex-direction: column; gap: 4px; } .mon-today-trupp { flex: none; padding-top: 0; } }
+    .mon-site-txt { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0; }
+    .mon-site-lift { flex: 0 0 auto; display: inline-flex; padding: 3px; border-radius: 6px; background: var(--brand-gray-100); color: var(--brand-gray-700); }
+    .mon-site-lift .ico { width: 18px; height: 18px; }
+    .mon-site-lift.due { background: var(--brand-red); color: #fff; }
+    @media (max-width: 600px){ .mon-today-row { flex-direction: column; align-items: stretch; gap: 4px; } .mon-today-trupp { flex: none; padding-top: 0; } }
     .mon-vgroup { border-top: 1px solid var(--brand-gray-100); padding-top: 8px; margin-top: 8px; }
     .mon-vhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
     .mon-vhead .ico { width: 16px; height: 16px; vertical-align: -3px; }

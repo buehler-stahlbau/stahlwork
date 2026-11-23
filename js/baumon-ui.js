@@ -84,8 +84,8 @@ export function renderMonStart(app) {
   if (due.length) {
     const card = U.el(`<div class="card mon-due">
       <div class="mon-due-head"><span class="mon-due-ico">${ICO.lift}</span><div><h3>${due.length} Bühne${due.length > 1 ? "n" : ""} abmelden</h3>
-      <div class="muted">Montage beendet – können beim Vermieter abgemeldet werden.</div></div></div>
-      <ul class="mon-list">${due.slice(0, 6).map((b) => `<li><b>${h(M.buehneText(b))}</b> · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} <span class="muted">bis ${h(M.shortDate(b.bis))}</span></li>`).join("")}</ul>
+      <div class="muted">Mietende am nächsten Werktag oder schon erreicht – beim Vermieter abmelden.</div></div></div>
+      <ul class="mon-list">${due.slice(0, 6).map((b) => `<li><b>${h(M.buehneText(b))}</b> · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} <span class="muted">Mietende ${h(M.shortDate(b.bis))}</span></li>`).join("")}</ul>
       <button class="primary" id="toBuehnen" type="button">Zu den Bühnen</button></div>`);
     app.appendChild(card);
     U.$("#toBuehnen").onclick = () => U.go({ view: "monbuehnen" });
@@ -103,9 +103,12 @@ export function renderMonStart(app) {
     any = true;
     const row = U.el(`<div class="mon-today-row ${r.list.length ? "" : "free"}">
       <div class="mon-today-trupp">${h(M.truppName(r.tr))}</div>
-      <div class="mon-today-sites">${r.list.length ? r.list.map((e) => `<button type="button" class="mon-site" data-eid="${h(e.id)}" style="--c:${siteColor(e)}">
+      <div class="mon-today-sites">${r.list.length ? r.list.map((e) => {
+        const bs = M.buehnenOf(e).filter((b) => !b.abgemeldetAm), due = bs.some((b) => M.isDue(b, t));
+        return `<button type="button" class="mon-site" data-eid="${h(e.id)}" style="--c:${siteColor(e)}"><span class="mon-site-txt">
         <span class="mon-site-name">${h(M.baustelleLabel(e))}</span>
-        <span class="muted">${h(monteurNames(e.monteure, 4))} · bis ${h(M.wdName(e.bis))} ${h(M.shortDate(e.bis))}</span></button>`).join("") : `<span class="muted">nicht eingeplant</span>`}</div></div>`);
+        <span class="muted">${h(monteurNames(e.monteure, 4))} · bis ${h(M.wdName(e.bis))} ${h(M.shortDate(e.bis))}</span></span>${bs.length ? `<span class="mon-site-lift ${due ? "due" : ""}" title="${bs.length} Bühne(n)${due ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}</button>`;
+      }).join("") : `<span class="muted">nicht eingeplant</span>`}</div></div>`);
     box.appendChild(row);
   }
   if (!any) box.appendChild(U.el(`<p class="muted">Noch keine Trupps angelegt.</p>`));
@@ -503,7 +506,7 @@ export function renderMonBuehnen(app) {
   const all = M.list("buehnen");
   const due = M.dueBuehnen(t);
   const aktiv = all.filter((b) => !b.abgemeldetAm && !due.includes(b)).sort((a, b) => (a.bis || "9").localeCompare(b.bis || "9"));
-  const ab = all.filter((b) => b.abgemeldetAm && b.abgemeldetAm >= M.addDays(t, -30)).sort((a, b) => b.abgemeldetAm.localeCompare(a.abgemeldetAm));
+  const ab = all.filter((b) => b.abgemeldetAm && b.abgemeldetAm >= M.addDays(t, -30)).sort((a, b) => (a.bis || "9").localeCompare(b.bis || "9"));
 
   // fällig: je Vermieter eine E-Mail
   if (due.length) {
