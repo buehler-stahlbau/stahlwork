@@ -41,7 +41,16 @@ export async function init() {
     },
     cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
   });
-  const res = await pca.handleRedirectPromise();
+  let res = null;
+  try {
+    res = await pca.handleRedirectPromise();
+  } finally {
+    // Anmelde-Antwort (#code=…) sofort aus der Adresse entfernen: beim Neuladen würde
+    // sonst der alte, schon verbrauchte Code erneut eingelöst (Fehler AADSTS70008)
+    if (/[#&](code|error|state)=/.test(location.hash)) {
+      try { history.replaceState(history.state, "", location.pathname + location.search); } catch {}
+    }
+  }
   account = (res && res.account) || pca.getAllAccounts()[0] || null;
   if (account) pca.setActiveAccount(account);
   return account;

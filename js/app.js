@@ -2070,7 +2070,7 @@ async function storageRescue(err) {
     <div class="row wrap"><button class="primary" type="button" id="resetState">Gespeicherten Stand zurücksetzen</button>
     <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div>
     <p class="muted" id="resetInfo"></p></div>`;
-  $("#retryDb").onclick = () => location.reload();
+  $("#retryDb").onclick = () => location.replace(location.pathname + location.search);
   $("#resetState").onclick = async () => {
     const b = $("#resetState"); b.disabled = true; b.textContent = "Wird zurückgesetzt …";
     // Löschen beim nächsten Start, BEVOR gelesen wird (der hängende Lesevorgang dieser Seite würde es blockieren)
@@ -2079,7 +2079,7 @@ async function storageRescue(err) {
       await offerNewDb(msg);
       return;
     }
-    location.reload();
+    location.replace(location.pathname + location.search);
   };
 }
 
@@ -2094,7 +2094,7 @@ async function offerNewDb(msg) {
       Der alte Speicher wird <strong>nicht gelöscht</strong> – Änderungen, die dort noch nicht hochgeladen sind, bleiben erhalten.</p>
       <div class="row wrap"><button class="primary" type="button" id="useNewDb">Mit neuem Speicher starten</button>
       <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div></div>`;
-    $("#useNewDb").onclick = () => { try { localStorage.setItem("stahlwork-db", alt); } catch {} location.reload(); };
+    $("#useNewDb").onclick = () => { try { localStorage.setItem("stahlwork-db", alt); } catch {} location.replace(location.pathname + location.search); };
   } else {
     app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher nicht verfügbar</h3>
       <p>Safari erlaubt dieser Seite gerade gar keinen Gerätespeicher (${h(msg)}; Test: ${h(probe.why || "")}).</p>
@@ -2102,7 +2102,7 @@ async function offerNewDb(msg) {
       (danach lädt Stahlwork alles aus OneDrive; nur noch nicht Hochgeladenes geht verloren).</p>
       <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div>`;
   }
-  $("#retryDb").onclick = () => location.reload();
+  $("#retryDb").onclick = () => location.replace(location.pathname + location.search);
 }
 
 // Passen Startseite (index.html) und Programm (js) zusammen? Sonst Offline-Speicher erneuern.

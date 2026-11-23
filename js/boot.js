@@ -5,7 +5,7 @@
 (function () {
   var shown = false;
   function repair() {
-    var done = function () { location.reload(); };
+    var done = function () { location.replace(location.pathname + location.search); }; // ohne alten Anmelde-Code in der Adresse
     var jobs = [];
     try {
       if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
