@@ -2060,7 +2060,31 @@ async function storageRescue(err) {
   window.__appReady = true; // Startwächter: wir zeigen selbst einen Hinweis
   const app = $("#app");
   const msg = (err && err.message) || String(err);
-  app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher öffnet nicht</h3><p class="muted">Prüfe, ob ein neuer Speicher funktioniert …</p></div>`;
+  if (/^Zurücksetzen nicht möglich/.test(msg)) { await offerNewDb(msg); return; } // Zurücksetzen hat nicht geklappt -> neuer Speicher
+  // 1. Wahl: nur den gespeicherten App-Stand entfernen (Speicher selbst funktioniert meist,
+  //    nur dieser eine Eintrag ist unlesbar). Daten kommen danach aus OneDrive.
+  app.innerHTML = `<div class="card boot-fail"><h3>Gespeicherter Stand nicht lesbar</h3>
+    <p>Safari kann den gespeicherten App-Stand auf diesem Gerät nicht mehr lesen (${h(msg)}).</p>
+    <p class="muted">„Zurücksetzen“ entfernt nur diesen Stand. Danach lädt Stahlwork deine Bauvorhaben nach dem Anmelden aus OneDrive.
+    Was auf diesem Gerät noch nicht hochgeladen war, geht dabei verloren.</p>
+    <div class="row wrap"><button class="primary" type="button" id="resetState">Gespeicherten Stand zurücksetzen</button>
+    <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div>
+    <p class="muted" id="resetInfo"></p></div>`;
+  $("#retryDb").onclick = () => location.reload();
+  $("#resetState").onclick = async () => {
+    const b = $("#resetState"); b.disabled = true; b.textContent = "Wird zurückgesetzt …";
+    // Löschen beim nächsten Start, BEVOR gelesen wird (der hängende Lesevorgang dieser Seite würde es blockieren)
+    try { localStorage.setItem("stahlwork-reset-state", "1"); } catch {
+      $("#resetInfo").textContent = "Zurücksetzen nicht möglich – es wird ein neuer Speicher geprüft …";
+      await offerNewDb(msg);
+      return;
+    }
+    location.reload();
+  };
+}
+
+async function offerNewDb(msg) {
+  const app = $("#app");
   const alt = db.dbName === "baudoc_db_v1" ? "stahlwork_db_2" : "stahlwork_db_" + Date.now();
   const probe = await db.probeDb(alt + "_probe");
   if (probe.ok) {

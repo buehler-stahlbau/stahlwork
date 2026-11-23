@@ -78,6 +78,7 @@ async function tx(storeName, mode, fn) {
 
 export const kvGet = (key) => tx("kv", "readonly", (s) => s.get(key));
 export const kvSet = (key, val) => tx("kv", "readwrite", (s) => s.put(val, key));
+export const kvDelete = (key) => tx("kv", "readwrite", (s) => s.delete(key));
 
 export const imgGet = (id) => tx("images", "readonly", (s) => s.get(id));
 export const imgPut = (rec) => tx("images", "readwrite", (s) => s.put(rec));

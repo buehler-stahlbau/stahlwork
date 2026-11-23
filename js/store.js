@@ -47,8 +47,23 @@ function emit(kind) {
 /* ---------- Laden / Speichern ---------- */
 export async function load() {
   let saved = null;
+  // "Gespeicherten Stand zurücksetzen" (nach unlesbarem Stand): vor dem Lesen löschen
+  let reset = false;
+  try { reset = localStorage.getItem("stahlwork-reset-state") === "1"; } catch {}
+  if (reset) {
+    try {
+      await Promise.race([db.kvDelete("state"), new Promise((_, rej) => setTimeout(() => rej(new Error("keine Antwort")), 8000))]);
+      try { localStorage.removeItem("stahlwork-reset-state"); } catch {}
+    } catch (e) {
+      try { localStorage.removeItem("stahlwork-reset-state"); } catch {}
+      S.loadFailed = true;
+      throw new Error("Zurücksetzen nicht möglich: " + e.message);
+    }
+  }
   try {
     saved = await Promise.race([db.kvGet("state"), new Promise((_, rej) => setTimeout(() => rej(new Error("Gerätespeicher antwortet nicht")), 10000))]);
+    // seit 3.10.9 als Text gespeichert (robuster in Safari); ältere Stände sind Objekte
+    if (typeof saved === "string") saved = JSON.parse(saved);
   } catch (e) {
     console.warn("Konnte Zustand nicht laden", e);
     // NICHT mit leerem Zustand weitermachen – sonst würden die Daten auf dem Gerät überschrieben
@@ -88,7 +103,8 @@ export async function saveNow() {
   saveTimer = null;
   if (S.loadFailed) return false; // Gerätespeicher nicht gelesen -> nichts überschreiben
   try {
-    await db.kvSet("state", S.state);
+    // als Text speichern: Safari kann gespeicherte Objekte in seltenen Fällen nicht mehr lesen
+    await db.kvSet("state", JSON.stringify(S.state));
     saveErrorShown = false;
     return true;
   } catch (e) {
