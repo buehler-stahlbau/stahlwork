@@ -184,8 +184,7 @@ export function renderMonPlan(app) {
   const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[20] && M.get("monteure", a.monteurId));
   const abwPeople = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((a, b) => a.name.localeCompare(b.name, "de"));
   if (abwPeople.length || editable()) {
-    if (zoom === "kompakt") rows.push({ sep: `Krank / Urlaub${abwPeople.length ? ` (${abwPeople.length})` : ""}`, add: editable() }); // eingeklappt
-    else rows.push({ sep: "Krank / Urlaub", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
+    rows.push({ sep: "Krank / Urlaub", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
   }
   // Detail je Trupp: Personal (eine Zeile je Person) oder Bühnen (eine Zeile je Bühne)
   for (const r of rows) {
