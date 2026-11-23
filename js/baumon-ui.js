@@ -205,7 +205,7 @@ export function renderMonPlan(app) {
   days.forEach((d, i) => {
     const we = ["Sa", "So"].includes(M.wdName(d));
     const hol = M.holiday(d);
-    head += `<div class="g-day ${we ? "we" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" style="grid-column:${2 + i}" ${hol ? `title="${h(hol)}"` : ""}>${M.wdName(d)}<b>${Number(d.slice(8))}</b>${hol ? `<i class="g-hol">${h(HOL_SHORT[hol] || hol)}</i>` : ""}</div>`;
+    head += `<div class="g-day ${we ? "we" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" style="grid-column:${2 + i}" ${hol ? `title="${h(hol)}"` : ""}>${M.wdName(d)}<b>${Number(d.slice(8))}</b><i class="g-hol">${hol ? h(HOL_SHORT[hol] || hol) : "&nbsp;"}</i></div>`;
   });
   g.insertAdjacentHTML("beforeend", head);
 
