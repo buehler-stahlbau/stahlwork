@@ -520,6 +520,7 @@ function siteField(init) {
       val = { bvNumber: b.dataset.n, baustelle: b.dataset.t };
       input.value = M.baustelleLabel(val);
       listEl.innerHTML = "";
+      box.dispatchEvent(new Event("sitechange"));
     }));
   };
   input.addEventListener("focus", show);
@@ -550,14 +551,14 @@ function chipPicker(all, selected) {
 
 export function openEinsatz(e, preset = {}) {
   const isNew = !e;
-  const cur = e ? { ...e } : { id: null, truppId: preset.truppId || (M.sortedTrupps()[0] || {}).id || null, bvNumber: "", baustelle: "", von: preset.von, bis: preset.bis, monteure: [], leih: "", kran: "", notiz: "" };
+  const cur = e ? { ...e } : { id: null, truppId: preset.truppId || null, bvNumber: "", baustelle: "", von: preset.von, bis: preset.bis, monteure: [], leih: "", kran: "", notiz: "" };
   if (isNew && cur.truppId) cur.monteure = (M.get("trupps", cur.truppId) || {}).monteure || [];
   const ro = !editable();
   const body = U.el(`<div class="mon-form"></div>`);
   const site = siteField(cur);
   body.appendChild(site.box);
   body.appendChild(U.el(`<div class="grid2">
-    <div><label class="field-label">Trupp</label><select class="f-trupp">${M.sortedTrupps().map((t) => `<option value="${h(t.id)}" ${t.id === cur.truppId ? "selected" : ""}>${h(M.truppName(t))}</option>`).join("")}<option value="" ${!cur.truppId ? "selected" : ""}>Ohne Trupp</option></select></div>
+    <div><label class="field-label">Trupp</label><select class="f-trupp"><option value="" ${!cur.truppId ? "selected" : ""}>– kein Trupp –</option>${M.sortedTrupps().map((t) => `<option value="${h(t.id)}" ${t.id === cur.truppId ? "selected" : ""}>${h(M.truppName(t))}</option>`).join("")}</select></div>
     <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von || "")}" /></div>
     <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis || "")}" /></div></div></div>`));
   body.appendChild(U.el(`<label class="field-label">Monteure</label>`));
@@ -584,6 +585,7 @@ export function openEinsatz(e, preset = {}) {
   };
   body.appendChild(bbox);
   drawB();
+  site.box.addEventListener("sitechange", drawB);
   site.box.querySelector(".site-in").addEventListener("blur", () => setTimeout(drawB, 200));
   const truppSel = body.querySelector(".f-trupp");
   const updBusy = () => {
@@ -631,16 +633,38 @@ export function openBuehne(b, preset = {}, after) {
   const site = siteField(cur);
   body.appendChild(site.box);
   const vs = M.list("vermieter").sort((a, c) => a.firma.localeCompare(c.firma));
+  const typen = [...new Set([...TYPEN, ...M.list("buehnen").map((b) => b.typ).filter(Boolean)])];
   body.appendChild(U.el(`<div><div class="grid2">
     <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === cur.vermieterId ? "selected" : ""}>${h(v.firma)}</option>`).join("")}<option value="" ${!cur.vermieterId ? "selected" : ""}>Bühler (eigen)</option></select></div>
-    <div class="grid2 tight"><div><label class="field-label">Typ</label><input type="text" class="f-typ" list="mon-typen" value="${h(cur.typ)}" placeholder="Arbeitsbühne" /></div>
+    <div class="grid2 tight"><div><label class="field-label">Typ</label><select class="f-tsel"><option value="">– wählen –</option>${typen.map((x) => `<option value="${h(x)}" ${x === cur.typ ? "selected" : ""}>${h(x)}</option>`).join("")}<option value="__frei">Anderer …</option></select>
+      <input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="Typ eingeben" hidden /></div>
     <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
-    <datalist id="mon-typen">${TYPEN.map((x) => `<option value="${h(x)}">`).join("")}</datalist>
     <div class="grid2"><div class="grid2 tight"><div><label class="field-label">angeliefert</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">benötigt bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
-    <div><label class="field-label">Auftrags-Nr. Vermieter</label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" /></div></div>
+    <div><label class="field-label">Auftrags-Nr. Vermieter <span class="muted">(optional)</span></label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" /></div></div>
     <label class="field-label">Standort / Adresse (für den Vermieter)</label><input type="text" class="f-ort" value="${h(cur.standort)}" placeholder="optional" />
     ${cur.abgemeldetAm ? `<p class="muted">Abgemeldet am ${h(M.longDate(cur.abgemeldetAm))}.</p>` : ""}</div>`));
+  // Typ: Auswahl aus Liste (Standard + bisher verwendete) oder frei eingeben
+  const tsel = body.querySelector(".f-tsel"), tin = body.querySelector(".f-typ");
+  const syncTyp = () => { const frei = tsel.value === "__frei"; tin.hidden = !frei; if (!frei) tin.value = tsel.value; else if (typen.includes(tin.value)) tin.value = ""; };
+  if (cur.typ && !typen.includes(cur.typ)) { tsel.value = "__frei"; tin.hidden = false; }
+  tsel.onchange = () => { syncTyp(); if (!tin.hidden) tin.focus(); };
+  // Dauer: standardmäßig wie die Einsätze des BV, solange nicht von Hand geändert
+  if (isNew) {
+    const vonIn = body.querySelector(".f-von"), bisIn = body.querySelector(".f-bis");
+    let manual = !!(preset.von || preset.bis);
+    vonIn.addEventListener("input", () => { manual = true; });
+    bisIn.addEventListener("input", () => { manual = true; });
+    const fromSite = () => {
+      if (manual) return;
+      const es = M.list("einsaetze").filter((e) => M.sameSite(e, site.value()) && e.von && e.bis && e.bis >= M.today());
+      if (!es.length) return;
+      vonIn.value = es.reduce((m, e) => (e.von < m ? e.von : m), es[0].von);
+      bisIn.value = es.reduce((m, e) => (e.bis > m ? e.bis : m), es[0].bis);
+    };
+    site.box.addEventListener("sitechange", fromSite);
+    fromSite();
+  }
   if (ro) U.$$("input,select,textarea", body).forEach((x) => { x.disabled = true; });
   const save = () => {
     const s = site.value();

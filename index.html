@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.11.3-beta" />
+  <meta name="app-version" content="3.11.5-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -373,6 +373,7 @@
     button.danger-outline { background: #fff; border-color: rgba(203,49,48,.45); color: var(--brand-red-dark); }
     button.secondary { background: #fff; border-color: var(--brand-gray-200); }
     button.small { min-height: 34px; padding: 0 10px; font-size: 0.85rem; }
+    button.small:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; } button.small > .ico { width: 16px; height: 16px; }
     button.block { width: 100%; margin-top: 10px; }
     button.link-danger { background: none; border: 0; color: var(--brand-red-dark); padding: 0 6px; min-height: 30px; font-weight: 500; }
     /* runde Symbol-Knöpfe (Zurück, Schließen, Entfernen) – gleicher Stil wie Stern und Kopfzeile */
