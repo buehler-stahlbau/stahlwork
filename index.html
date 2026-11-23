@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.11.6-beta" />
+  <meta name="app-version" content="3.11.7-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -307,10 +307,16 @@
     .mon-vhead .ico { width: 16px; height: 16px; vertical-align: -3px; }
     .mon-sent { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--brand-gray-100); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
     .mon-sent[hidden] { display: none; }
-    .mon-brow { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--brand-gray-100); padding: 8px 2px; min-height: 0; cursor: pointer; }
+    .mon-brow { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; border-top: 1px solid var(--brand-gray-100); padding: 10px 14px; min-height: 60px; cursor: pointer; font-weight: 400; }
+    .mon-brow .muted { font-size: .85rem; }
+    .list-card > .mon-brow:first-child, .list-card > .mon-mrow:first-child, .list-card > .section-title + .mon-mrow { border-top: 0; }
     .mon-brow.due .mon-brow-main b { color: var(--brand-red-dark); }
     @media (hover: hover) and (pointer: fine){ .mon-brow:hover { background: var(--brand-gray-100); } }
-    .mon-mrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--brand-gray-100); }
+    .mon-mrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 14px; min-height: 52px; border-top: 1px solid var(--brand-gray-100); }
+    .mon-mrow > .row { gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+    .page-head > .primary { white-space: nowrap; }
+    @media (max-width: 600px) { .mon-mrow .lbl { display: none; } .mon-mrow button.small { min-width: 38px; justify-content: center; } }
+    .mon-mrow .rm-on { color: var(--fav); }
     .mon-mrow.off { color: var(--brand-gray-500); }
     .mon-stamm-links .drawer-item { border-color: var(--brand-gray-200); }
     .mon-modal { position: fixed; inset: 0; z-index: 3000; background: rgba(20,20,18,.4); display: flex; align-items: flex-start; justify-content: center; padding: calc(16px + var(--safe-top)) 12px 16px; overflow-y: auto; }
@@ -343,6 +349,9 @@
     .container { max-width: 1200px; margin: 0 auto; padding: 14px calc(14px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(14px + var(--safe-left)); }
     .page-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 2px 12px; min-height: 44px; }
     .page-head button { min-height: 40px; }
+    .page-head .head-title { gap: 10px; min-width: 0; flex-wrap: nowrap; }
+    .page-head .head-title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .page-head .head-title .icon-btn { min-height: 0; }
 
     .card { background:#fff; border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid var(--brand-gray-200); }
     .list-card { padding: 4px 0; }

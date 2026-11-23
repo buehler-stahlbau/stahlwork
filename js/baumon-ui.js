@@ -694,7 +694,7 @@ export function monSettingsCard() {
   const card = U.el(`<div class="card"><h3 class="section-title">BauMon – Stammdaten</h3>
     <div class="mon-stamm-links">
       <button type="button" class="drawer-item" data-stamm="vermieter"><span class="d-ico">${ICO.lift}</span><span class="d-text"><b>Bühnenvermieter</b><small>${n("vermieter")} angelegt · Ansprechpartner, E-Mail</small></span></button>
-      <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Monteure</b><small>${M.sortedMonteure().length} aktiv</small></span></button>
+      <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Richtmeister und Monteure</b><small>${M.sortedMonteure().filter((m) => m.rm).length} Richtmeister · ${M.sortedMonteure().filter((m) => !m.rm).length} Monteure</small></span></button>
       <button type="button" class="drawer-item" data-stamm="trupps"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Trupps</b><small>${n("trupps")} angelegt · Richtmeister + Monteure</small></span></button>
     </div></div>`);
   bindStammButtons(card);
@@ -704,8 +704,10 @@ export function monSettingsCard() {
 export function renderMonStamm(app) {
   const kind = S.state.monStamm || "vermieter";
   const ro = !editable();
-  const titles = { vermieter: "Bühnenvermieter", monteure: "Monteure", trupps: "Trupps" };
-  app.appendChild(U.el(`<div class="page-head"><h1>${titles[kind] || ""}</h1><button class="secondary" id="stBack" type="button">Zurück</button></div>`));
+  const titles = { vermieter: "Bühnenvermieter", monteure: "Richtmeister und Monteure", trupps: "Trupps" };
+  const addLabel = "+ Neu";
+  app.appendChild(U.el(`<div class="page-head"><div class="row head-title"><button id="stBack" class="icon-btn" type="button" aria-label="Zurück" title="Zurück"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${titles[kind] || ""}</h1></div>${ro ? "" : `<button class="primary" id="stAdd" type="button">${h(addLabel)}</button>`}</div>`));
+  const setAdd = (fn) => { const b = U.$("#stAdd"); if (b) b.onclick = fn; };
   // zurück dorthin, woher man kam (Einstellungen oder BauMon-Startseite)
   U.$("#stBack").onclick = () => { if (history.state && history.length > 1) history.back(); else U.go({ view: "settings" }); };
   if (kind === "vermieter") {
@@ -713,37 +715,43 @@ export function renderMonStamm(app) {
       <button type="button" class="mon-brow" data-vid="${h(v.id)}"><span class="mon-brow-main"><b>${h(v.firma)}</b>${v.ansprechpartner ? " · " + h(v.ansprechpartner) : ""}</span>
       <span class="muted">${h(v.email || "keine E-Mail")}${v.telefon ? " · " + h(v.telefon) : ""}${v.kundenNr ? " · Kd.-Nr. " + h(v.kundenNr) : ""}</span></button>`).join("") || `<p class="muted">Noch keine Vermieter.</p>`}</div>`);
     app.appendChild(card);
-    if (!ro) app.appendChild(btn("+ Vermieter", () => editVermieter(null)));
+    setAdd(() => editVermieter(null));
     U.$$("[data-vid]", card).forEach((b) => { b.onclick = () => editVermieter(M.get("vermieter", b.dataset.vid)); });
   } else if (kind === "monteure") {
     const all = M.sortedMonteure(true);
     const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-      ${ro ? "" : `<span class="row"><button type="button" class="secondary small" data-rm="${h(m.id)}" title="Als Richtmeister kennzeichnen">${m.rm ? "★ Richtmeister" : "☆ Richtmeister"}</button><button type="button" class="secondary small" data-ren="${h(m.id)}">Umbenennen</button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
+      ${ro ? "" : `<span class="row"><button type="button" class="secondary small" data-rm="${h(m.id)}" title="Als Richtmeister kennzeichnen" aria-label="Richtmeister">${m.rm ? '<span class="rm-on">★</span>' : "☆"}<span class="lbl"> Richtmeister</span></button><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
     const rms = all.filter((m) => m.rm), mons = all.filter((m) => !m.rm);
     const card = U.el(`<div><div class="card list-card"><h3 class="section-title">Richtmeister (${rms.length})</h3>${rms.map(row).join("") || `<p class="muted">Noch keine Richtmeister.</p>`}</div>
       <div class="card list-card"><h3 class="section-title">Monteure (${mons.length})</h3>${mons.map(row).join("") || `<p class="muted">Noch keine Monteure.</p>`}</div></div>`);
     app.appendChild(card);
     if (!ro) {
-      const add = U.el(`<div class="card"><div class="grid2">
-        <div><label class="field-label">Richtmeister hinzufügen (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="4"></textarea></div>
-        <div><label class="field-label">Monteure hinzufügen (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea></div></div>
-        <button class="primary" id="mAddBtn" type="button">Hinzufügen</button></div>`);
-      app.appendChild(add);
-      U.$("#mAddBtn").onclick = () => {
-        const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
-        const r = M.importPeople({ rm: split(U.$("#rmAdd").value), m: split(U.$("#mAdd").value) });
-        toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuT} Trupp(s) angelegt.`, "info", 3500);
-        changed();
-      };
+      setAdd(() => {
+        const body = U.el(`<div class="mon-form">
+          <label class="field-label">Richtmeister (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="3"></textarea>
+          <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea></div>`);
+        modal("Richtmeister und Monteure hinzufügen", body, [
+          { label: "Abbrechen", fn: () => {} },
+          { label: "Hinzufügen", cls: "primary", fn: () => {
+            const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+            const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value);
+            if (!rm.length && !m.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
+            const r = M.importPeople({ rm, m });
+            toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuT} Trupp(s) angelegt.`, "info", 3500);
+            changed();
+          } },
+        ]);
+        setTimeout(() => body.querySelector("#rmAdd").focus(), 50);
+      });
       U.$$("[data-rm]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.rm); M.put("monteure", { ...m, rm: !m.rm }); if (!m.rm) M.importPeople({ rm: [m.name] }); changed(); }; });
       U.$$("[data-ren]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
       U.$$("[data-tog]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
     }
   } else if (kind === "trupps") {
     const card = U.el(`<div class="card list-card">${M.sortedTrupps().map((t) => `<button type="button" class="mon-brow" data-tid="${h(t.id)}"><span class="mon-brow-main"><b>${h(M.truppName(t))}</b></span>
-      <span class="muted">${h(monteurNames(t.monteure))}</span></button>`).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>`);
+      <span class="muted">${(() => { const ms = (t.monteure || []).filter((id) => id !== t.fuehrerId); return ms.length ? h(monteurNames(ms)) : "noch keine Monteure"; })()}</span></button>`).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>`);
     app.appendChild(card);
-    if (!ro) app.appendChild(btn("+ Trupp", () => editTrupp(null)));
+    setAdd(() => editTrupp(null));
     U.$$("[data-tid]", card).forEach((b) => { b.onclick = () => editTrupp(M.get("trupps", b.dataset.tid)); });
   }
 }
