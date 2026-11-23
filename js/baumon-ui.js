@@ -227,7 +227,7 @@ export function renderMonPlan(app) {
       });
       for (const a of r.list) {
         const s0 = Math.max(0, days.indexOf(a.von < days[0] ? days[0] : a.von)), e0 = days.indexOf(a.bis > days[20] ? days[20] : a.bis);
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-abw ${a.typ}" data-aid="${h(a.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow}" title="${h(p.name)}: ${M.ABW_TYPES[a.typ]} ${h(M.longDate(a.von))} – ${h(M.longDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}">${M.ABW_TYPES[a.typ]}</button>`);
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-abw ${a.typ}" data-aid="${h(a.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow}" title="${h(p.name)}: ${M.ABW_TYPES[a.typ]} ${h(M.longDate(a.von))} – ${h(M.longDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}">${editable() && a.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${M.ABW_TYPES[a.typ]}${editable() && a.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
       gridRow++;
       continue;
@@ -285,7 +285,7 @@ export function renderMonPlan(app) {
   app.appendChild(card);
 
   U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
-  U.$$(".g-abw", card).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
+  U.$$(".g-abw", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openAbw(M.get("abwesenheiten", b.dataset.aid)); }; });
   const aa = card.querySelector("#abwAdd"); if (aa) aa.onclick = () => openAbw(null, { von: t, bis: t });
   if (editable()) enableDrag(card, g, days);
   if (editable()) {
@@ -416,9 +416,10 @@ function enableDrag(card, g, days) {
   g.appendChild(ghost);
 
   const start = (bar, mode, ev) => {
-    const e = M.get("einsaetze", bar.dataset.eid);
+    const abw = !!bar.dataset.aid;
+    const e = abw ? M.get("abwesenheiten", bar.dataset.aid) : M.get("einsaetze", bar.dataset.eid);
     if (!e) return;
-    st = { bar, e, mode, x0: ev.clientX, y0: ev.clientY, i0: dayAt(ev.clientX), von: e.von, bis: e.bis, truppId: e.truppId || "", active: false, pid: ev.pointerId, touch: ev.pointerType === "touch", timer: null };
+    st = { bar, e, abw, mode, x0: ev.clientX, y0: ev.clientY, i0: dayAt(ev.clientX), von: e.von, bis: e.bis, truppId: e.truppId || "", active: false, pid: ev.pointerId, touch: ev.pointerType === "touch", timer: null };
     if (st.touch) {
       st.timer = setTimeout(() => { if (st && !st.moved) activate(); }, 350);
     }
@@ -437,7 +438,7 @@ function enableDrag(card, g, days) {
     let von = e.von, bis = e.bis, truppId = e.truppId || "";
     if (st.mode === "move") {
       von = M.addDays(e.von, di); bis = M.addDays(e.bis, di);
-      truppId = rowAt(y).dataset.row || "";
+      if (!st.abw) truppId = rowAt(y).dataset.row || "";
     } else if (st.mode === "start") {
       von = M.addDays(e.von, di); if (von > bis) von = bis;
     } else {
@@ -449,9 +450,8 @@ function enableDrag(card, g, days) {
     const iv = clampDay(days.indexOf(von) >= 0 ? days.indexOf(von) : (von < days[0] ? 0 : days.length - 1));
     const ib = clampDay(days.indexOf(bis) >= 0 ? days.indexOf(bis) : (bis < days[0] ? 0 : days.length - 1));
     const a = dayEls[iv].getBoundingClientRect(), b = dayEls[ib].getBoundingClientRect();
-    const row = rowEls.find((r) => (r.dataset.row || "") === truppId) || rowAt(y);
-    const rr = row.getBoundingClientRect();
-    Object.assign(ghost.style, { left: `${a.left - gr.left + 2}px`, width: `${b.right - a.left - 4}px`, top: `${rr.top - gr.top + 4}px`, height: `${rr.height - 8}px` });
+    const rr = st.abw ? st.bar.getBoundingClientRect() : (rowEls.find((r) => (r.dataset.row || "") === truppId) || rowAt(y)).getBoundingClientRect();
+    Object.assign(ghost.style, { left: `${a.left - gr.left + 2}px`, width: `${b.right - a.left - 4}px`, top: `${rr.top - gr.top + (st.abw ? 0 : 4)}px`, height: `${rr.height - (st.abw ? 0 : 8)}px` });
     ghost.querySelector("span").textContent = `${M.wdName(von)} ${M.shortDate(von)} – ${M.wdName(bis)} ${M.shortDate(bis)}`;
     ghost.hidden = false;
   };
@@ -468,6 +468,15 @@ function enableDrag(card, g, days) {
     setTimeout(() => { dragJustEnded = false; }, 50);
     const e = s0.e;
     if (!commit || (s0.von === e.von && s0.bis === e.bis && s0.truppId === (e.truppId || ""))) return;
+    if (s0.abw) {
+      const rec = M.put("abwesenheiten", { ...e, von: s0.von, bis: s0.bis });
+      const pn = (M.get("monteure", rec.monteurId) || {}).name || "";
+      toast(`${pn}: ${M.ABW_TYPES[rec.typ]} ${M.longDate(rec.von)} – ${M.longDate(rec.bis)}`, "info", 2500);
+      const hits = M.list("einsaetze").filter((x) => (x.monteure || []).includes(rec.monteurId) && x.von <= rec.bis && x.bis >= rec.von);
+      if (hits.length) toast(`${pn} ist in diesem Zeitraum eingeplant (im Plan rot gestrichelt).`, "warn", 5000);
+      changed();
+      return;
+    }
     const next = { ...e, von: s0.von, bis: s0.bis, truppId: s0.truppId || null };
     // Trupp gewechselt: Monteure übernehmen, wenn noch die Stammbesetzung eingetragen war
     if (next.truppId !== (e.truppId || null)) {
@@ -490,7 +499,7 @@ function enableDrag(card, g, days) {
   // Maus/Stift: Zeiger-Ereignisse
   g.addEventListener("pointerdown", (ev) => {
     if (ev.pointerType === "touch") return;
-    const bar = ev.target.closest(".g-bar");
+    const bar = ev.target.closest(".g-bar, .g-abw");
     if (!bar || ev.button > 0) return;
     const hnd = ev.target.closest(".g-h");
     start(bar, hnd ? hnd.dataset.h : "move", ev);
@@ -509,7 +518,7 @@ function enableDrag(card, g, days) {
   // Finger: Touch-Ereignisse (kurz halten, dann ziehen; sonst normal wischen/scrollen)
   g.addEventListener("touchstart", (ev) => {
     if (ev.touches.length !== 1) { finish(false); return; }
-    const bar = ev.target.closest(".g-bar");
+    const bar = ev.target.closest(".g-bar, .g-abw");
     if (!bar) return;
     const t = ev.touches[0];
     const hnd = ev.target.closest(".g-h");
