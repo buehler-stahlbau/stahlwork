@@ -124,7 +124,7 @@ export function renderMonStart(app) {
   bindStammButtons(app);
 }
 
-function vermieterName(id) { const v = M.get("vermieter", id); return v ? v.firma : "Bühler (eigen)"; }
+function vermieterName(id) { const v = M.get("vermieter", id); return v ? v.firma : "Bühler (eigene)"; }
 function monteurNames(ids, max = 99) {
   const names = (ids || []).map((id) => M.get("monteure", id)).filter(Boolean).map((m) => m.name);
   return names.length > max ? names.slice(0, max).join(", ") + ` +${names.length - max}` : names.join(", ") || "keine Monteure";
@@ -573,7 +573,7 @@ export function renderMonBuehnen(app) {
     for (const [vid, list] of byV) {
       const v = M.get("vermieter", vid);
       const grp = U.el(`<div class="mon-vgroup">
-        <div class="mon-vhead"><div><b>${h(v ? v.firma : vid ? "Unbekannter Vermieter" : "Bühler (eigen)")}</b>${v && v.ansprechpartner ? ` <span class="muted">· ${h(v.ansprechpartner)}</span>` : ""}</div>
+        <div class="mon-vhead"><div><b>${h(v ? v.firma : vid ? "Unbekannter Vermieter" : "Bühler (eigene)")}</b>${v && v.ansprechpartner ? ` <span class="muted">· ${h(v.ansprechpartner)}</span>` : ""}</div>
           ${!editable() ? "" : v ? `<button class="primary small" type="button" data-mail="${h(vid)}">${ICO.mail} Abmelden per E-Mail</button>` : `<button class="primary small" type="button" data-done="${h(vid || "")}">${ICO.check} Als abgemeldet markieren</button>`}</div>
         ${list.map((b) => buehneRow(b, true)).join("")}
         <div class="mon-sent" hidden><span>E-Mail an ${h(v ? v.firma : "")} gesendet?</span><button class="secondary small" type="button" data-done="${h(vid)}">${ICO.check} Als abgemeldet markieren</button></div>
@@ -881,7 +881,7 @@ export function openBuehne(b, preset = {}, after) {
   const vs = M.list("vermieter").sort((a, c) => a.firma.localeCompare(c.firma));
   const typen = [...new Set([...TYPEN, ...M.list("buehnen").map((b) => b.typ).filter(Boolean)])];
   body.appendChild(U.el(`<div><div class="grid2">
-    <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === cur.vermieterId ? "selected" : ""}>${h(v.firma)}</option>`).join("")}<option value="" ${!cur.vermieterId ? "selected" : ""}>Bühler (eigen)</option></select></div>
+    <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === cur.vermieterId ? "selected" : ""}>${h(v.firma)}</option>`).join("")}<option value="" ${!cur.vermieterId ? "selected" : ""}>Bühler (eigene)</option></select></div>
     <div class="grid2 tight"><div><label class="field-label">Typ</label><div class="typ-field"><input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="eingeben" autocomplete="off" />
       <button type="button" class="typ-open" aria-label="Typen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list"></div></div></div>
     <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
