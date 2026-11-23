@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.13.0-beta" />
+  <meta name="app-version" content="3.13.1-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -381,6 +381,8 @@
     .chip.busy:not(.on) { color: var(--brand-gray-500); border-style: dashed; }
     .chip.busy.on { background: var(--brand-red); border-color: var(--brand-red); }
     .chip small { font-weight: 500; opacity: .85; }
+    .p-badge { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; font-size: .68rem; font-weight: 700; line-height: 1.5; vertical-align: 1px; background: var(--brand-gray-200); color: var(--brand-gray-700); }
+    .chip.on .p-badge { background: rgba(255,255,255,.25); color: #fff; }
     .g-bar.conflict { outline: 2px dashed var(--brand-red); outline-offset: 1px; }
     .mon-site-field { position: relative; }
     .mon-bbox { margin-top: 6px; }

@@ -667,7 +667,7 @@ function chipPicker(all, selected) {
   const draw = () => {
     box.innerHTML = all.map((x) => {
       const b = busy.get(x.id);
-      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="${h(b.title)}"` : ""}>${x.rm ? "★ " : ""}${h(x.name)}${b ? ` <small>· ${h(b.label)}</small>` : ""}</button>`;
+      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="${h(b.title)}"` : ""}>${h(x.name)}${x.rm ? ' <span class="p-badge">RM</span>' : x.maler ? ' <span class="p-badge">Maler</span>' : ""}${b ? ` <small>· ${h(b.label)}</small>` : ""}</button>`;
     }).join("") || `<span class="muted">Noch keine Monteure angelegt.</span>`;
     U.$$(".chip", box).forEach((c) => { c.onclick = () => { sel.has(c.dataset.id) ? sel.delete(c.dataset.id) : sel.add(c.dataset.id); draw(); }; });
   };
@@ -717,7 +717,7 @@ export function openAbw(a, preset = {}) {
   const ro = !editable();
   const people = M.sortedMonteure();
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Person</label><select class="f-p"><option value="">– wählen –</option>${people.map((p) => `<option value="${h(p.id)}" ${p.id === cur.monteurId ? "selected" : ""}>${h(p.name)}${p.maler ? " (Maler)" : p.rm ? " (Richtmeister)" : ""}</option>`).join("")}</select>
+    <label class="field-label">Person</label><select class="f-p"><option value="">– wählen –</option>${people.map((p) => `<option value="${h(p.id)}" ${p.id === cur.monteurId ? "selected" : ""}>${h(p.name)}${p.maler ? " · Maler" : p.rm ? " · RM" : ""}</option>`).join("")}</select>
     <label class="field-label">Art</label><div class="seg abw-seg" role="group">${Object.entries(M.ABW_TYPES).map(([k, l]) => `<button type="button" data-typ="${k}" class="${cur.typ === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
@@ -939,6 +939,8 @@ function addPeopleDialog() {
 
 export function renderMonPersonal(app) {
   const ro = !editable();
+  // Wer einen Trupp führt, aber noch als Monteur geführt wird -> Richtmeister
+  if (!ro) for (const tr of M.list("trupps")) { const f = tr.fuehrerId && M.get("monteure", tr.fuehrerId); if (f && M.kind(f) === "monteur") M.setKind(f, "rm"); }
   const t = M.today();
   app.appendChild(U.el(`<div class="page-head"><h1>Personal</h1>${ro ? "" : `<button class="primary" id="stAdd" type="button">+ Neu</button>`}</div>`));
   const add = U.$("#stAdd"); if (add) add.onclick = addPeopleDialog;
@@ -1014,7 +1016,7 @@ function editVermieter(v) {
 function editTrupp(t) {
   const cur = t ? { ...t } : { name: "", fuehrerId: null, monteure: [] };
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${[...M.sortedMonteure().filter((m) => m.rm), ...M.sortedMonteure().filter((m) => !m.rm)].map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}${m.rm ? " (Richtmeister)" : ""}</option>`).join("")}</select>
+    <label class="field-label">Richtmeister</label><select class="f-f"><option value="">– ohne Richtmeister –</option>${[...M.sortedMonteure().filter((m) => m.rm), ...M.sortedMonteure().filter((m) => !m.rm)].map((m) => `<option value="${h(m.id)}" ${m.id === cur.fuehrerId ? "selected" : ""}>${h(m.name)}${m.rm ? " · RM" : m.maler ? " · Maler" : ""}</option>`).join("")}</select>
     <label class="field-label">Name (optional)</label><input type="text" class="f-name" value="${h(cur.name)}" placeholder="leer = Name des Richtmeisters" />
     <label class="field-label">Monteure im Trupp (werden bei neuen Einsätzen vorgeschlagen)</label></div>`);
   const chips = chipPicker(M.sortedMonteure(), cur.monteure);
@@ -1027,6 +1029,8 @@ function editTrupp(t) {
     const ids = chips.value();
     if (!fuehrerId && !name && !ids.length) { toast("Bitte Richtmeister, Monteure oder einen Namen angeben.", "warn"); return false; }
     if (fuehrerId && !ids.includes(fuehrerId)) ids.unshift(fuehrerId);
+    const f = fuehrerId && M.get("monteure", fuehrerId);
+    if (f && M.kind(f) === "monteur") M.setKind(f, "rm");
     M.put("trupps", { ...cur, fuehrerId, name, monteure: ids, sort: cur.sort ?? M.list("trupps").length });
     changed();
   };
