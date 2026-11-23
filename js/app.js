@@ -392,20 +392,13 @@ function setupDrawer() {
 
 // BauMon (Montage): Bereich in Vorbereitung
 /* ---------- Anmeldung abgelaufen ----------
-   Konto ist bekannt, aber Microsoft verlangt eine neue Anmeldung: Hinweis mit Knopf.
-   Einmal je Sitzung (online, kurz nach dem Start) wird automatisch neu angemeldet. */
-const appStart = Date.now();
+   Konto ist bekannt, aber Microsoft verlangt eine neue Anmeldung: Hinweis mit Knopf. */
 function authExpired() { return od.isConfigured() && od.isSignedIn() && sync.status.kind === "signedout"; }
 function updateAuthBar() {
   let bar = $("#authBar");
   if (!authExpired()) { if (bar) bar.remove(); return; }
-  let tried = false;
-  try { tried = sessionStorage.getItem("relogin") === "1"; } catch {}
-  if (!tried && navigator.onLine && Date.now() - appStart < 60000) {
-    try { sessionStorage.setItem("relogin", "1"); } catch {}
-    saveNow().finally(() => od.relogin());
-    return;
-  }
+  // Kein automatisches Neuanmelden mehr: am iPhone konnte das in eine Schleife aus
+  // Weiterleitungen laufen ("Stahlwork wird geladen …"). Nur Hinweis mit Knopf.
   if (bar) return;
   bar = el(`<div id="authBar" class="update-bar auth-bar"><span>Anmeldung abgelaufen – Änderungen bleiben auf dem Gerät und werden nach dem Anmelden hochgeladen.</span><button class="primary small" type="button">Neu anmelden</button></div>`);
   bar.querySelector("button").onclick = async () => { await saveNow(); od.relogin(); };
@@ -2072,7 +2065,8 @@ function setupServiceWorker() {
   S.state.selectedDocId = null;
 
   try {
-    await od.init();
+    // Anmeldung vorbereiten – höchstens 10 s warten, damit die App nie an dieser Stelle hängen bleibt
+    await Promise.race([od.init(), new Promise((_, rej) => setTimeout(() => rej(new Error("Zeitüberschreitung")), 10000))]);
   } catch (e) {
     console.warn("Anmeldung", e);
     loginError = "Anmeldung fehlgeschlagen: " + (e.message || e);
