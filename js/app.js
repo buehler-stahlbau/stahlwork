@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonStamm, monSettingsCard } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal } from "./baumon-ui.js";
 import { dueBuehnen } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -283,10 +283,10 @@ function renderInner() {
   const st = S.state;
 
   if (st.view === "settings") renderSettings(app);
-  else if (st.view === "monstamm") renderMonStamm(app);
   else if (st.sparte === "mon") {
     if (st.view === "monplan") renderMonPlan(app);
     else if (st.view === "monbuehnen") renderMonBuehnen(app);
+    else if (st.view === "monpersonal") renderMonPersonal(app);
     else renderMonStart(app);
   }
   else if (st.view === "archive") renderArchive(app);
@@ -313,8 +313,9 @@ function updateHeader() {
     tabMon: "mon",
     tabMonPlan: "monplan",
     tabMonBuehnen: "monbuehnen",
+    tabMonPersonal: "monpersonal",
   };
-  const inSettings = st.view === "settings" || st.view === "monstamm";
+  const inSettings = st.view === "settings";
   document.body.classList.toggle("sparte-mon", st.sparte === "mon");
   document.body.classList.toggle("view-settings", inSettings); // Einstellungen gehören zu keiner Sparte
   // oben rechts: Logo der aktuellen Sparte, in den Einstellungen das Stahlwork-Logo
@@ -753,6 +754,35 @@ async function addProject() {
   const row = $(`.project-item[data-pid="${CSS.escape(p.id)}"]`);
   if (row) row.scrollIntoView({ block: "center", behavior: "smooth" });
   setTimeout(() => { justAdded = null; }, 2500);
+}
+
+// BV schnell anlegen (z. B. aus BauMon): gleiche Regeln wie in BauDoc.
+// Ergebnis: { p } | { error, field } | { pick: [Orte] } (mehrere Orte passen -> auswählen lassen)
+async function quickCreateBV({ num, client, place, geo }) {
+  num = String(num || "").trim(); client = String(client || "").trim(); place = String(place || "").trim();
+  if (!/^\d{5}$/.test(num)) return { error: "Bitte eine 5-stellige Bauvorhaben-Nummer eingeben (nur Ziffern).", field: "num" };
+  if (!client) return { error: "Bitte Bauherr / Auftraggeber eingeben.", field: "client" };
+  if (!place) return { error: "Bitte den Bauort eingeben.", field: "place" };
+  const ex = findByNumber(num);
+  if (ex) return { error: `Bauvorhaben ${num} existiert bereits${S.state.archivedProjects.includes(ex) ? " (im Archiv)" : ""}: ${ex.number} ${ex.title}`, field: "num" };
+  if (!(geo && geo.place === place)) {
+    geo = null;
+    if (navigator.onLine) {
+      let res = null;
+      try { res = await searchPlaces(place); } catch (e) { console.warn("Ortssuche", e); }
+      if (res && res.length === 1) geo = placeToGeo(res[0]);
+      else if (res && !res.length) return { error: `Ort „${place}“ nicht gefunden – bitte Schreibweise prüfen.`, field: "place" };
+      else if (res && res.length > 1) return { pick: res };
+      else toast("Ortssuche nicht erreichbar – BV wird ohne Kartenposition angelegt.", "warn", 6000);
+    } else toast("Offline: BV wird ohne Kartenposition angelegt.", "warn", 6000);
+  }
+  const p = newProject(num, client, geo ? geo.place : place);
+  if (geo) { p.geo = geo; S.state.mapDirty = true; }
+  S.state.projects.push(p);
+  touchProject(p);
+  favoritesChanged();
+  sync.schedule(1500);
+  return { p };
 }
 
 function toggleFav(p) {
@@ -1900,7 +1930,6 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="page-head"><h1>Einstellungen</h1></div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
-  app.appendChild(monSettingsCard());
   app.appendChild(el(`
     <div class="card">
       <h3 class="section-title">Datensicherung</h3>
@@ -2170,7 +2199,7 @@ function versionMismatch() {
   window.__bootStep = "Anzeige aufbauen";
   setupSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {

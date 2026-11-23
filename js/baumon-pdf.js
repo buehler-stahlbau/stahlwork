@@ -113,7 +113,30 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     if (rest.length) rows.push({ tr: null, list: rest });
     const malerRows = trupps.filter((tr) => M.isMalerTrupp(tr)).map(rowOf);
     if (malerRows.length) rows.push({ sep: "MALER" }, ...malerRows);
+    const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[last] && M.get("monteure", a.monteurId));
+    const abwP = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((x, z) => x.name.localeCompare(z.name, "de"));
+    if (abwP.length) rows.push({ sep: "KRANK / URLAUB" }, ...abwP.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
     for (const r of rows) {
+      if (r.abw) {
+        const rh = LANE + 6;
+        if (y + rh > BOTTOM) { pdf.addPage(); y = header(false); gridHead(); }
+        days.forEach((d, i) => {
+          const hol = M.holiday(d), we = ["Sa", "So"].includes(M.wdName(d));
+          if (hol || we) { fill(hol ? HOL : WE); pdf.rect(colX(i), y, colW(i), rh, "F"); }
+        });
+        font("normal", 9, DARK); pdf.text(fit(r.abw.name, NAME_W - 6), ML, y + 15);
+        for (const a of r.list) {
+          const i0 = Math.max(0, days.indexOf(a.von < days[0] ? days[0] : a.von)), i1 = days.indexOf(a.bis > days[last] ? days[last] : a.bis);
+          const x0 = colX(i0) + 1.5, x1 = colX(i1) + colW(i1) - 1.5;
+          fill(a.typ === "krank" ? [246, 220, 220] : [236, 234, 230]);
+          pdf.setDrawColor(...(a.typ === "krank" ? [226, 164, 164] : [201, 201, 201])); pdf.setLineWidth(0.6);
+          pdf.roundedRect(x0, y + 5, x1 - x0, LANE - 7, 2, 2, "FD");
+          font("bold", 7.5, a.typ === "krank" ? [143, 36, 36] : MUTED);
+          pdf.text(fit(M.ABW_TYPES[a.typ] + (a.notiz ? " · " + a.notiz : ""), x1 - x0 - 6), x0 + 3, y + 5 + (LANE - 7) / 2 + 2.6);
+        }
+        y += rh; hair(ML, y, W - ML);
+        continue;
+      }
       if (r.sep) { // Maler getrennt unter den Trupps
         if (y + 16 + LANE + 6 > BOTTOM) { pdf.addPage(); y = header(false); gridHead(); }
         hair(ML, y, W - ML, GRAY, 1.2);

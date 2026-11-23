@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.12.3-beta" />
+  <meta name="app-version" content="3.13.0-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -175,14 +175,14 @@
     .menu-btn .ico { width: 26px; height: 26px; }
     @media (hover: hover) and (pointer: fine){ .menu-btn:hover { background: var(--brand-gray-100); } }
     .menu-btn .sync-dot { top: 6px; right: 2px; }
-    #tabMon, #tabMonPlan, #tabMonBuehnen { display: none; }
-    body.sparte-mon #tabMon, body.sparte-mon #tabMonPlan, body.sparte-mon #tabMonBuehnen { display: inline-flex; }
+    #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { display: none; }
+    body.sparte-mon #tabMon, body.sparte-mon #tabMonPlan, body.sparte-mon #tabMonBuehnen, body.sparte-mon #tabMonPersonal { display: inline-flex; }
     .tab .cnt.due:not(:empty) { background: var(--brand-red); color: #fff; }
     body.sparte-mon #tabProjects, body.sparte-mon #tabFav, body.sparte-mon #tabMap, body.sparte-mon #tabArchive,
     body.sparte-mon .search-wrap, body.sparte-mon #searchBtn { display: none !important; }
     /* Einstellungen: neutrale Kopfzeile (keine Reiter der Sparten) */
     body.view-settings .tabs, body.view-settings .search-wrap, body.view-settings #searchBtn { display: none !important; }
-    @media (min-width: 1051px){ #tabMon, #tabMonPlan, #tabMonBuehnen { width: 184px; } }
+    @media (min-width: 1051px){ #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { width: 184px; } }
     body.locked .menu-btn { display: none; }
     .drawer { position: fixed; inset: 0; z-index: 2000; }
     .drawer[hidden] { display: none; }
@@ -244,6 +244,19 @@
     .g-cell.we { background: var(--brand-gray-100); }
     .g-cell.today { background: var(--brand-primary-soft); }
     .g-cell.sel { background: rgba(46,91,138,.22) !important; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px 4px; }
+    .list-card > .card-head > .section-title { padding: 0; margin: 0; }
+    .abw-tag { font-weight: 600; } .abw-tag.krank { color: #8f2424; }
+    .mon-brow.now { background: #faf9f6; }
+    .g-sep-add { margin-left: 10px; min-height: 22px; padding: 0 8px; font-size: .7rem; letter-spacing: 0; text-transform: none; border-radius: 6px; background: #fff; border: 1px solid var(--brand-gray-200); color: var(--brand-gray-700); }
+    .g-arow b { font-weight: 600; }
+    .g-abw { position: relative; z-index: 1; margin: 8px 2px; min-height: 0; padding: 0 5px; border-radius: 6px; font-size: .75rem; font-weight: 700; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
+      color: var(--brand-gray-700); border: 1px solid var(--brand-gray-300, #c9c9c9); background: repeating-linear-gradient(135deg, #eceae6 0 6px, #f7f6f3 6px 12px); }
+    .g-abw.krank { color: #8f2424; border-color: #e2a4a4; background: repeating-linear-gradient(135deg, #f6dcdc 0 6px, #fbefef 6px 12px); }
+    .mon-abw-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mon-abw-chip { min-height: 34px; font-weight: 500; font-size: .85rem; background: #f3f2ef; border: 1px solid var(--brand-gray-200); }
+    .mon-abw-chip.krank { background: #fbefef; border-color: #e2a4a4; }
+    .abw-seg { margin-bottom: 6px; }
     .g-sep { grid-column: 1 / -1; display: flex; align-items: flex-end; border-top: 2px solid var(--brand-gray-300, #c9c9c9); border-bottom: 1px solid var(--brand-gray-200); background: var(--brand-gray-100); }
     .g-sep span { position: sticky; left: 0; padding: 0 10px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand-gray-500); }
     .kind-sel { min-height: 34px; padding: 0 8px; font-size: .85rem; width: 118px; flex: 0 0 auto; border-radius: 8px; }
@@ -577,6 +590,7 @@
     .place-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60; background: #fff; border: 1px solid var(--brand-gray-200); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); overflow: hidden; }
     .place-list:empty { display: none; }
     .typ-field { position: relative; }
+    .place-opt.new-bv { color: var(--brand-primary); font-weight: 700; background: var(--brand-primary-soft, #eef3f8); }
     .typ-field .f-typ { padding-right: 40px; }
     .typ-field .typ-open { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 36px; min-height: 36px; padding: 0; background: none; border: 0; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; }
     .typ-list { max-height: 260px; overflow-y: auto; right: auto; min-width: 100%; width: max-content; max-width: 280px; }
@@ -766,6 +780,7 @@
         <button id="tabMon" class="tab" type="button" title="Übersicht" aria-label="Übersicht"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span class="label">Übersicht</span></button>
         <button id="tabMonPlan" class="tab" type="button" title="Planung" aria-label="Planung"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg><span class="label">Planung</span></button>
         <button id="tabMonBuehnen" class="tab" type="button" title="Bühnen" aria-label="Bühnen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v4M19 3v4M4 3h16M3 7.5h18M6 8l12 7M18 8L6 15"/><rect x="3" y="15" width="18" height="3.5" rx="1" fill="currentColor"/><circle cx="7" cy="20.5" r="1.6"/><circle cx="17" cy="20.5" r="1.6"/></svg><span class="label">Bühnen</span><span class="cnt due" id="cntMonB"></span></button>
+        <button id="tabMonPersonal" class="tab" type="button" title="Personal" aria-label="Personal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-6 6.5-6s5.9 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14c2.7.2 4.6 2.3 5 5"/></svg><span class="label">Personal</span></button>
         <button id="tabProjects" class="tab" type="button" title="Bauvorhaben" aria-label="Bauvorhaben"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M10 21v-5h4v5"/><path d="M9 10h1M14 10h1M9 13h1M14 13h1"/></svg><span class="label">Bauvorhaben</span><span class="cnt" id="cntProjects"></span></button>
         <button id="tabFav" class="tab" type="button" title="Favoriten" aria-label="Favoriten"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.9 6.2.7-4.6 4.3 1.2 6.1L12 17l-5.6 3 1.2-6.1L3 9.6l6.2-.7z"/></svg><span class="label">Favoriten</span><span class="cnt" id="cntFav"></span></button>
         <button id="tabMap" class="tab" type="button" title="Karte" aria-label="Karte"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4z"/><path d="M9 4v13M15 6.5v13"/></svg><span class="label">Karte</span></button>

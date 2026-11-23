@@ -28,7 +28,7 @@ export function checkImportLink() {
   if (!confirm(`BauMon-Stammdaten übernehmen?\n\nRichtmeister (je mit Trupp): ${rm.length}\n${rm.join(", ")}\n\nMonteure: ${mon.length}\n${mon.join(", ")}${maler.length ? `\n\nMaler: ${maler.length}\n${maler.join(", ")}` : ""}\n\nBereits vorhandene Namen werden nicht doppelt angelegt.`)) return;
   const r = M.importPeople({ rm, m: mon, maler });
   toast(`Übernommen: ${r.neuRm} Richtmeister, ${r.neuM} Monteure, ${r.neuMa} Maler.`, "info", 5000);
-  U.go({ sparte: "mon", view: "monstamm", monStamm: "monteure" });
+  U.go({ sparte: "mon", view: "monpersonal" });
   U.schedule();
 }
 
@@ -91,6 +91,13 @@ export function renderMonStart(app) {
     U.$("#toBuehnen").onclick = () => U.go({ view: "monbuehnen" });
   }
 
+  // Heute krank / im Urlaub
+  const abwHeute = M.absentOn(t).sort((a, b) => (M.get("monteure", a.monteurId).name).localeCompare(M.get("monteure", b.monteurId).name, "de"));
+  if (abwHeute.length) {
+    const ac = U.el(`<div class="card"><h3 class="section-title">Heute krank / im Urlaub</h3><div class="mon-abw-list">${abwHeute.map((a) => `<button type="button" class="mon-abw-chip ${a.typ}" data-aid="${h(a.id)}"><b>${h(M.get("monteure", a.monteurId).name)}</b> · ${M.ABW_TYPES[a.typ]} bis ${h(M.wdName(a.bis))} ${h(M.shortDate(a.bis))}</button>`).join("")}</div></div>`);
+    U.$$("[data-aid]", ac).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
+    app.appendChild(ac);
+  }
   // Heute im Einsatz
   const heute = M.activeOn(t);
   const hol = M.holiday(t);
@@ -123,7 +130,7 @@ function monteurNames(ids, max = 99) {
   return names.length > max ? names.slice(0, max).join(", ") + ` +${names.length - max}` : names.join(", ") || "keine Monteure";
 }
 function bindStammButtons(root) {
-  U.$$("[data-stamm]", root).forEach((b) => { b.onclick = () => U.go({ view: "monstamm", monStamm: b.dataset.stamm }); });
+  U.$$("[data-stamm]", root).forEach((b) => { b.onclick = () => U.go({ sparte: "mon", view: b.dataset.stamm === "vermieter" ? "monbuehnen" : "monpersonal" }); });
 }
 
 /* =========================================================
@@ -158,8 +165,11 @@ export function renderMonPlan(app) {
   if (rest.length) rows.push({ tr: null, list: rest });
   const malerRows = trupps.filter((tr) => M.isMalerTrupp(tr)).map(rowOf);
   if (malerRows.length) rows.push({ sep: "Maler" }, ...malerRows);
+  const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[20] && M.get("monteure", a.monteurId));
+  const abwPeople = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((a, b) => a.name.localeCompare(b.name, "de"));
+  if (abwPeople.length || editable()) rows.push({ sep: "Krank / Urlaub", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
 
-  if (!rows.length) {
+  if (!rows.some((r) => !r.sep && !r.abw)) {
     const empty = U.el(`<div class="card mon-empty-card"><h3>Noch keine Trupps</h3>
       <p class="muted">Für die Planung zuerst Monteure und Trupps anlegen.</p>
       <div class="row wrap"><button class="primary" data-stamm="trupps" type="button">Trupps anlegen</button>
@@ -204,7 +214,21 @@ export function renderMonPlan(app) {
   let gridRow = 3;
   for (const r of rows) {
     if (r.sep) {
-      g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}</span></div>`);
+      g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}${r.add ? ` <button type="button" class="g-sep-add" id="abwAdd">+ Krank / Urlaub</button>` : ""}</span></div>`);
+      gridRow++;
+      continue;
+    }
+    if (r.abw) {
+      const p = r.abw;
+      g.insertAdjacentHTML("beforeend", `<div class="g-trupp g-arow" style="grid-row:${gridRow}"><b>${h(p.name)}</b></div>`);
+      days.forEach((d, i) => {
+        const we = ["Sa", "So"].includes(M.wdName(d)), hol = M.holiday(d);
+        g.insertAdjacentHTML("beforeend", `<div class="g-cell ${we ? "we" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" data-trupp="abw:${h(p.id)}" style="grid-column:${2 + i};grid-row:${gridRow}"></div>`);
+      });
+      for (const a of r.list) {
+        const s0 = Math.max(0, days.indexOf(a.von < days[0] ? days[0] : a.von)), e0 = days.indexOf(a.bis > days[20] ? days[20] : a.bis);
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-abw ${a.typ}" data-aid="${h(a.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow}" title="${h(p.name)}: ${M.ABW_TYPES[a.typ]} ${h(M.longDate(a.von))} – ${h(M.longDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}">${M.ABW_TYPES[a.typ]}</button>`);
+      }
       gridRow++;
       continue;
     }
@@ -232,7 +256,7 @@ export function renderMonPlan(app) {
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
         const bh = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
         const dueHere = bh.some((b) => M.isDue(b, t));
-        const dbl = M.conflicts(e);
+        const dbl = M.conflicts(e), abs = M.absenceConflicts(e);
         // Tagesansicht: zweite Zeile mit Besetzung (ohne Richtmeister) und Leiharbeiter/Kran
         const sub = [(e.monteure || []).filter((id) => !tr || id !== tr.fuehrerId).map((id) => (M.get("monteure", id) || {}).name).filter(Boolean).join(", "), e.leih, e.kran].filter(Boolean).join(" · ");
         // Nur an den Tagen, an denen sich zwei Baustellen überschneiden, wird der Balken schmal
@@ -251,8 +275,8 @@ export function renderMonPlan(app) {
             pad = `--padl:calc(${(pl / N) * 100}% + 8px);--padr:calc(${(pr / N) * 100}% + 8px);`;
           }
         }
-        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
-          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
+        g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length || abs.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
+          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – KRANK/URLAUB: " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
           ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
@@ -261,6 +285,8 @@ export function renderMonPlan(app) {
   app.appendChild(card);
 
   U.$$(".g-bar", card).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openEinsatz(M.get("einsaetze", b.dataset.eid)); }; });
+  U.$$(".g-abw", card).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
+  const aa = card.querySelector("#abwAdd"); if (aa) aa.onclick = () => openAbw(null, { von: t, bis: t });
   if (editable()) enableDrag(card, g, days);
   if (editable()) {
     // Maus: gedrückt halten und über mehrere Tage ziehen -> Zeitraum für neuen Einsatz
@@ -290,10 +316,15 @@ export function renderMonPlan(app) {
       if (s.from === s.to) return; // einzelner Tag: normaler Klick
       selJustEnded = true; setTimeout(() => { selJustEnded = false; }, 50);
       const [von, bis] = [s.from, s.to].sort();
-      openEinsatz(null, { von, bis, truppId: s.trupp || null });
+      if (s.trupp.startsWith("abw:")) openAbw(null, { von, bis, monteurId: s.trupp.slice(4) });
+      else openEinsatz(null, { von, bis, truppId: s.trupp || null });
     });
     U.$$(".g-cell", card).forEach((c) => {
-      c.onclick = () => { if (selJustEnded) return; openEinsatz(null, { von: c.dataset.day, bis: c.dataset.day, truppId: c.dataset.trupp || null }); };
+      c.onclick = () => {
+        if (selJustEnded) return;
+        if (c.dataset.trupp.startsWith("abw:")) openAbw(null, { von: c.dataset.day, bis: c.dataset.day, monteurId: c.dataset.trupp.slice(4) });
+        else openEinsatz(null, { von: c.dataset.day, bis: c.dataset.day, truppId: c.dataset.trupp || null });
+      };
     });
   }
   // heutigen Tag ins Bild scrollen
@@ -370,7 +401,7 @@ function openPlanPdf() {
 let dragJustEnded = false;
 function enableDrag(card, g, days) {
   const dayEls = U.$$(".g-day", g);
-  const rowEls = U.$$(".g-trupp", g);
+  const rowEls = U.$$(".g-trupp:not(.g-arow)", g);
   const dayAt = (x) => {
     let best = 0, bd = Infinity;
     dayEls.forEach((el, i) => { const r = el.getBoundingClientRect(); const c = (r.left + r.right) / 2; const d = Math.abs(x - c); if (d < bd) { bd = d; best = i; } });
@@ -448,6 +479,8 @@ function enableDrag(card, g, days) {
     if (ob) { alert("Nicht möglich:\n\n" + M.overbookedText(next, ob)); return; }
     const cf = M.conflicts(next);
     if (cf.length) { alert("Nicht möglich – doppelt eingeteilt:\n\n" + M.conflictText(cf)); return; }
+    const ac = M.absenceConflicts(next);
+    if (ac.length) { alert("Nicht möglich – Krank / Urlaub:\n\n" + M.absenceText(ac)); return; }
     M.put("einsaetze", next);
     followBuehnen(e, next);
     toast(`${M.baustelleLabel(next)}: ${M.longDate(next.von)} – ${M.longDate(next.bis)}${next.truppId !== (e.truppId || null) ? " · " + M.truppName(M.get("trupps", next.truppId)) : ""}`, "info", 2500);
@@ -551,6 +584,7 @@ export function renderMonBuehnen(app) {
   sec("Im Einsatz", aktiv, "Keine Bühnen im Einsatz.");
   if (ab.length) sec("Abgemeldet (letzte 30 Tage)", ab, "");
   U.$$("[data-bid]", app).forEach((r) => { r.onclick = () => openBuehne(M.get("buehnen", r.dataset.bid)); });
+  app.appendChild(vermieterCard());
 }
 
 function buehneRow(b, due = false) {
@@ -595,8 +629,20 @@ function siteField(init) {
   const show = () => {
     const q = input.value.trim().toLowerCase();
     const ps = U.projects().filter((p) => !q || (p.number + " " + p.title).toLowerCase().includes(q)).slice(0, 8);
-    listEl.innerHTML = ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("");
-    U.$$(".place-opt", listEl).forEach((b) => b.addEventListener("pointerdown", (e) => {
+    const qRaw = input.value.trim();
+    listEl.innerHTML = ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("")
+      + (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "");
+    const nb = listEl.querySelector("[data-new]");
+    if (nb) nb.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      listEl.innerHTML = "";
+      openNewBV(qRaw, (p) => {
+        val = { bvNumber: p.number, baustelle: p.title };
+        input.value = M.baustelleLabel(val);
+        box.dispatchEvent(new Event("sitechange"));
+      });
+    });
+    U.$$(".place-opt:not([data-new])", listEl).forEach((b) => b.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       val = { bvNumber: b.dataset.n, baustelle: b.dataset.t };
       input.value = M.baustelleLabel(val);
@@ -621,13 +667,81 @@ function chipPicker(all, selected) {
   const draw = () => {
     box.innerHTML = all.map((x) => {
       const b = busy.get(x.id);
-      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="schon bei ${h(M.baustelleLabel(b))}"` : ""}>${x.rm ? "★ " : ""}${h(x.name)}${b ? ` <small>· ${h(b.bvNumber || "belegt")}</small>` : ""}</button>`;
+      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="${h(b.title)}"` : ""}>${x.rm ? "★ " : ""}${h(x.name)}${b ? ` <small>· ${h(b.label)}</small>` : ""}</button>`;
     }).join("") || `<span class="muted">Noch keine Monteure angelegt.</span>`;
     U.$$(".chip", box).forEach((c) => { c.onclick = () => { sel.has(c.dataset.id) ? sel.delete(c.dataset.id) : sel.add(c.dataset.id); draw(); }; });
   };
   draw();
   return { box, value: () => [...sel], set: (ids) => { sel.clear(); ids.forEach((i) => sel.add(i)); draw(); },
     setBusy: (m) => { busy = m; draw(); } };
+}
+
+// Neues BV direkt aus BauMon anlegen (erscheint auch in BauDoc)
+function openNewBV(text, done) {
+  const t = String(text || "").trim();
+  const m = t.match(/^(\d{5})\s*(.*)$/);
+  const num = m ? m[1] : /^\d{1,5}$/.test(t) ? t : "";
+  const client = m ? m[2] : /^\d+$/.test(t) ? "" : t;
+  const body = U.el(`<div class="mon-form">
+    <label class="field-label">BV-Nummer</label><input type="text" class="f-num" inputmode="numeric" maxlength="5" value="${h(num)}" placeholder="5-stellig" />
+    <label class="field-label">Bauherr / Auftraggeber</label><input type="text" class="f-client" value="${h(client)}" autocomplete="off" />
+    <label class="field-label">Bauort</label><div class="place-field"><input type="text" class="f-place" autocomplete="off" placeholder="Ort aus der Liste wählen" /><div class="place-list f-plist"></div></div>
+    <p class="muted small-note">Das BV wird wie in BauDoc angelegt und steht dort sofort zur Verfügung.</p></div>`);
+  const numEl = body.querySelector(".f-num"), cEl = body.querySelector(".f-client"), pEl = body.querySelector(".f-place");
+  numEl.addEventListener("input", () => { numEl.value = numEl.value.replace(/\D/g, "").slice(0, 5); });
+  let geo = null, busy = false;
+  const sug = U.placeSuggest(pEl, body.querySelector(".f-plist"), (g) => { geo = g; });
+  const dlg = modal("Neues Bauvorhaben", body, [
+    { label: "Abbrechen", fn: () => {} },
+    { label: "Anlegen", cls: "primary", fn: () => {
+      if (busy) return false;
+      busy = true;
+      U.createBV({ num: numEl.value, client: cEl.value, place: pEl.value, geo }).then((r) => {
+        busy = false;
+        if (r.pick) { toast("Mehrere Orte passen – bitte den Ort aus der Liste wählen.", "warn", 5000); pEl.focus(); sug.show(r.pick); return; }
+        if (r.error) { toast(r.error, "warn", 6000); ({ num: numEl, client: cEl, place: pEl })[r.field]?.focus(); return; }
+        dlg.close();
+        toast(`BV ${r.p.number} angelegt.`, "info", 2500);
+        done(r.p);
+      });
+      return false; // Dialog bleibt offen, bis das BV angelegt ist
+    } },
+  ]);
+  setTimeout(() => (num.length === 5 ? (client ? pEl : cEl) : numEl).focus(), 50);
+}
+
+// Krank / Urlaub eintragen
+export function openAbw(a, preset = {}) {
+  const isNew = !a;
+  const cur = a ? { ...a } : { id: null, monteurId: preset.monteurId || "", typ: preset.typ || "urlaub", von: preset.von || M.today(), bis: preset.bis || preset.von || M.today(), notiz: "" };
+  const ro = !editable();
+  const people = M.sortedMonteure();
+  const body = U.el(`<div class="mon-form">
+    <label class="field-label">Person</label><select class="f-p"><option value="">– wählen –</option>${people.map((p) => `<option value="${h(p.id)}" ${p.id === cur.monteurId ? "selected" : ""}>${h(p.name)}${p.maler ? " (Maler)" : p.rm ? " (Richtmeister)" : ""}</option>`).join("")}</select>
+    <label class="field-label">Art</label><div class="seg abw-seg" role="group">${Object.entries(M.ABW_TYPES).map(([k, l]) => `<button type="button" data-typ="${k}" class="${cur.typ === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
+    <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
+    <label class="field-label">Notiz</label><input type="text" class="f-notiz" value="${h(cur.notiz)}" placeholder="optional" /></div>`);
+  let typ = cur.typ;
+  U.$$("[data-typ]", body).forEach((b) => { b.onclick = () => { typ = b.dataset.typ; U.$$("[data-typ]", body).forEach((x) => x.classList.toggle("on", x === b)); }; });
+  if (ro) U.$$("input,select,button", body).forEach((x) => { x.disabled = true; });
+  const save = () => {
+    const monteurId = body.querySelector(".f-p").value;
+    const von = body.querySelector(".f-von").value, bis = body.querySelector(".f-bis").value;
+    if (!monteurId) { toast("Bitte die Person wählen.", "warn"); return false; }
+    if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
+    const rec = M.put("abwesenheiten", { ...cur, monteurId, typ, von, bis, notiz: body.querySelector(".f-notiz").value.trim() });
+    // schon eingeplant? -> Hinweis (Einsatz wird im Plan rot gestrichelt markiert)
+    const hits = M.list("einsaetze").filter((e) => (e.monteure || []).includes(monteurId) && e.von <= rec.bis && e.bis >= rec.von);
+    if (hits.length) alert(`${M.get("monteure", monteurId).name} ist in diesem Zeitraum eingeplant:\n\n${hits.map((e) => `${M.baustelleLabel(e)} (${M.shortDate(e.von)}–${M.shortDate(e.bis)})`).join("\n")}\n\nBitte dort aus dem Einsatz nehmen (im Plan rot gestrichelt).`);
+    changed();
+  };
+  const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
+    ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Eintrag löschen?")) return false; M.remove("abwesenheiten", cur.id); changed(); } }]),
+    { label: "Abbrechen", fn: () => {} },
+    { label: isNew ? "Eintragen" : "Speichern", cls: "primary", fn: save },
+  ];
+  modal(isNew ? "Krank / Urlaub eintragen" : "Krank / Urlaub", body, actions);
 }
 
 export function openEinsatz(e, preset = {}) {
@@ -674,7 +788,11 @@ export function openEinsatz(e, preset = {}) {
   const updBusy = () => {
     const von = body.querySelector(".f-von").value, bis = body.querySelector(".f-bis").value;
     const map = new Map();
-    if (von && bis && bis >= von) for (const c of M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, M.list("monteure").map((x) => x.id))) map.set(c.monteurId, c.other);
+    const allIds = M.list("monteure").map((x) => x.id);
+    if (von && bis && bis >= von) {
+      for (const c of M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, allIds)) map.set(c.monteurId, { label: c.other.bvNumber || "belegt", title: "schon bei " + M.baustelleLabel(c.other) });
+      for (const c of M.absenceConflicts({ von, bis }, allIds)) map.set(c.monteurId, { label: M.ABW_TYPES[c.abw.typ], title: `${M.ABW_TYPES[c.abw.typ]} ${M.shortDate(c.abw.von)}–${M.shortDate(c.abw.bis)}` });
+    }
     chips.setBusy(map);
   };
   body.querySelector(".f-von").addEventListener("change", updBusy);
@@ -693,6 +811,8 @@ export function openEinsatz(e, preset = {}) {
     if (ob) { alert(M.overbookedText({ truppId: truppSel.value }, ob)); return false; }
     const cf = M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, chips.value());
     if (cf.length) { alert("Doppelt eingeteilt – bitte ändern:\n\n" + M.conflictText(cf)); return false; }
+    const ac = M.absenceConflicts({ von, bis }, chips.value());
+    if (ac.length) { alert("Krank / Urlaub – bitte aus dem Einsatz nehmen:\n\n" + M.absenceText(ac)); return false; }
     M.put("einsaetze", { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(),
       leih: body.querySelector(".f-leih").value.trim(), kran: body.querySelector(".f-kran").value.trim(), notiz: body.querySelector(".f-notiz").value.trim() });
     // Bühnen ohne Enddatum dieser Baustelle bekommen das Einsatzende
@@ -792,74 +912,78 @@ export function openBuehne(b, preset = {}, after) {
 /* =========================================================
    Stammdaten (Einstellungen › BauMon)
 ========================================================= */
-export function monSettingsCard() {
-  const n = (k) => M.list(k).length;
-  const card = U.el(`<div class="card"><h3 class="section-title">BauMon – Stammdaten</h3>
-    <div class="mon-stamm-links">
-      <button type="button" class="drawer-item" data-stamm="vermieter"><span class="d-ico">${ICO.lift}</span><span class="d-text"><b>Bühnenvermieter</b><small>${n("vermieter")} angelegt · Ansprechpartner, E-Mail</small></span></button>
-      <button type="button" class="drawer-item" data-stamm="monteure"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Personal</b><small>${M.sortedMonteure().filter((m) => M.kind(m) === "rm").length} Richtmeister · ${M.sortedMonteure().filter((m) => M.kind(m) === "monteur").length} Monteure · ${M.sortedMonteure().filter((m) => M.kind(m) === "maler").length} Maler</small></span></button>
-      <button type="button" class="drawer-item" data-stamm="trupps"><span class="d-ico">${ICO.people}</span><span class="d-text"><b>Trupps</b><small>${n("trupps")} angelegt · Richtmeister + Monteure</small></span></button>
-    </div></div>`);
-  bindStammButtons(card);
-  return card;
+/* =========================================================
+   Reiter "Personal": Krank/Urlaub, Trupps, Richtmeister/Monteure/Maler
+========================================================= */
+function cardHead(title, btnId, label, ro) {
+  return `<div class="card-head"><h3 class="section-title">${title}</h3>${ro || !btnId ? "" : `<button type="button" class="secondary small" id="${btnId}">${h(label)}</button>`}</div>`;
+}
+function addPeopleDialog() {
+  const body = U.el(`<div class="mon-form">
+    <label class="field-label">Richtmeister (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="3"></textarea>
+    <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea>
+    <label class="field-label">Maler (ein Name pro Zeile – je Maler eine eigene Zeile in der Planung)</label><textarea id="maAdd" rows="2"></textarea></div>`);
+  modal("Personal hinzufügen", body, [
+    { label: "Abbrechen", fn: () => {} },
+    { label: "Hinzufügen", cls: "primary", fn: () => {
+      const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+      const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value), maler = split(body.querySelector("#maAdd").value);
+      if (!rm.length && !m.length && !maler.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
+      const r = M.importPeople({ rm, m, maler });
+      toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuMa} Maler angelegt.`, "info", 3500);
+      changed();
+    } },
+  ]);
+  setTimeout(() => body.querySelector("#rmAdd").focus(), 50);
 }
 
-export function renderMonStamm(app) {
-  const kind = S.state.monStamm || "vermieter";
+export function renderMonPersonal(app) {
   const ro = !editable();
-  const titles = { vermieter: "Bühnenvermieter", monteure: "Personal", trupps: "Trupps" };
-  const addLabel = "+ Neu";
-  app.appendChild(U.el(`<div class="page-head"><div class="row head-title"><button id="stBack" class="icon-btn" type="button" aria-label="Zurück" title="Zurück"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${titles[kind] || ""}</h1></div>${ro ? "" : `<button class="primary" id="stAdd" type="button">${h(addLabel)}</button>`}</div>`));
-  const setAdd = (fn) => { const b = U.$("#stAdd"); if (b) b.onclick = fn; };
-  // zurück dorthin, woher man kam (Einstellungen oder BauMon-Startseite)
-  U.$("#stBack").onclick = () => { if (history.state && history.length > 1) history.back(); else U.go({ view: "settings" }); };
-  if (kind === "vermieter") {
-    const card = U.el(`<div class="card list-card">${M.list("vermieter").sort((a, b) => a.firma.localeCompare(b.firma)).map((v) => `
-      <button type="button" class="mon-brow" data-vid="${h(v.id)}"><span class="mon-brow-main"><b>${h(v.firma)}</b>${v.ansprechpartner ? " · " + h(v.ansprechpartner) : ""}</span>
-      <span class="muted">${h(v.email || "keine E-Mail")}${v.telefon ? " · " + h(v.telefon) : ""}${v.kundenNr ? " · Kd.-Nr. " + h(v.kundenNr) : ""}</span></button>`).join("") || `<p class="muted">Noch keine Vermieter.</p>`}</div>`);
-    app.appendChild(card);
-    setAdd(() => editVermieter(null));
-    U.$$("[data-vid]", card).forEach((b) => { b.onclick = () => editVermieter(M.get("vermieter", b.dataset.vid)); });
-  } else if (kind === "monteure") {
-    const all = M.sortedMonteure(true);
-    const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-      ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
-    const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
-    const card = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
-    app.appendChild(card);
-    if (!ro) {
-      setAdd(() => {
-        const body = U.el(`<div class="mon-form">
-          <label class="field-label">Richtmeister (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="3"></textarea>
-          <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea>
-          <label class="field-label">Maler (ein Name pro Zeile – je Maler eine eigene Zeile in der Planung)</label><textarea id="maAdd" rows="2"></textarea></div>`);
-        modal("Personal hinzufügen", body, [
-          { label: "Abbrechen", fn: () => {} },
-          { label: "Hinzufügen", cls: "primary", fn: () => {
-            const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
-            const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value), maler = split(body.querySelector("#maAdd").value);
-            if (!rm.length && !m.length && !maler.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
-            const r = M.importPeople({ rm, m, maler });
-            toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuMa} Maler angelegt.`, "info", 3500);
-            changed();
-          } },
-        ]);
-        setTimeout(() => body.querySelector("#rmAdd").focus(), 50);
-      });
-      U.$$("[data-kind]", card).forEach((sel) => { sel.onchange = () => { M.setKind(M.get("monteure", sel.dataset.kind), sel.value); changed(); }; });
-      U.$$("[data-ren]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
-      U.$$("[data-tog]", card).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
-    }
-  } else if (kind === "trupps") {
-    const tRow = (t) => `<button type="button" class="mon-brow" data-tid="${h(t.id)}"><span class="mon-brow-main"><b>${h(M.truppName(t))}</b></span>
-      <span class="muted">${(() => { const ms = (t.monteure || []).filter((id) => id !== t.fuehrerId); return ms.length ? h(monteurNames(ms)) : M.isMalerTrupp(t) ? "Maler" : "noch keine Monteure"; })()}</span></button>`;
-    const ts = M.sortedTrupps(), ma = ts.filter((t) => M.isMalerTrupp(t));
-    const card = U.el(`<div><div class="card list-card">${ts.filter((t) => !M.isMalerTrupp(t)).map(tRow).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>
-      ${ma.length ? `<div class="card list-card"><h3 class="section-title">Maler</h3>${ma.map(tRow).join("")}</div>` : ""}</div>`);
-    app.appendChild(card);
-    setAdd(() => editTrupp(null));
-    U.$$("[data-tid]", card).forEach((b) => { b.onclick = () => editTrupp(M.get("trupps", b.dataset.tid)); });
+  const t = M.today();
+  app.appendChild(U.el(`<div class="page-head"><h1>Personal</h1>${ro ? "" : `<button class="primary" id="stAdd" type="button">+ Neu</button>`}</div>`));
+  const add = U.$("#stAdd"); if (add) add.onclick = addPeopleDialog;
+
+  // Krank / Urlaub: laufende und kommende (plus die letzten 14 Tage)
+  const abw = M.list("abwesenheiten").filter((a) => a.bis >= M.addDays(t, -14) && M.get("monteure", a.monteurId)).sort((a, b) => a.von.localeCompare(b.von));
+  const abwCard = U.el(`<div class="card list-card">${cardHead("Krank / Urlaub", "abwNew", "+ Krank / Urlaub", ro)}
+    ${abw.map((a) => `<button type="button" class="mon-brow ${a.von <= t && a.bis >= t ? "now" : ""}" data-aid="${h(a.id)}"><span class="mon-brow-main"><b>${h(M.get("monteure", a.monteurId).name)}</b> · <span class="abw-tag ${a.typ}">${M.ABW_TYPES[a.typ]}</span></span>
+      <span class="muted">${h(M.wdName(a.von))} ${h(M.shortDate(a.von))} – ${h(M.wdName(a.bis))} ${h(M.shortDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}${a.bis < t ? " · vorbei" : ""}</span></button>`).join("") || `<p class="muted">Niemand krank oder im Urlaub eingetragen.</p>`}</div>`);
+  app.appendChild(abwCard);
+  const an = abwCard.querySelector("#abwNew"); if (an) an.onclick = () => openAbw(null, { von: t, bis: t });
+  U.$$("[data-aid]", abwCard).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
+
+  // Trupps (Maler haben je eine eigene Zeile und stehen unten bei "Maler")
+  const tRow = (tr) => `<button type="button" class="mon-brow" data-tid="${h(tr.id)}"><span class="mon-brow-main"><b>${h(M.truppName(tr))}</b></span>
+    <span class="muted">${(() => { const ms = (tr.monteure || []).filter((id) => id !== tr.fuehrerId); return ms.length ? h(monteurNames(ms)) : "noch keine Monteure"; })()}</span></button>`;
+  const ts = M.sortedTrupps().filter((tr) => !M.isMalerTrupp(tr));
+  const tCard = U.el(`<div class="card list-card">${cardHead(`Trupps (${ts.length})`, "truppNew", "+ Trupp", ro)}${ts.map(tRow).join("") || `<p class="muted">Noch keine Trupps.</p>`}</div>`);
+  app.appendChild(tCard);
+  const tn = tCard.querySelector("#truppNew"); if (tn) tn.onclick = () => editTrupp(null);
+  U.$$("[data-tid]", tCard).forEach((b) => { b.onclick = () => editTrupp(M.get("trupps", b.dataset.tid)); });
+
+  // Personen
+  const all = M.sortedMonteure(true);
+  const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
+    ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
+  const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
+  const pCard = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
+  app.appendChild(pCard);
+  if (!ro) {
+    U.$$("[data-kind]", pCard).forEach((sel) => { sel.onchange = () => { M.setKind(M.get("monteure", sel.dataset.kind), sel.value); changed(); }; });
+    U.$$("[data-ren]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
+    U.$$("[data-tog]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
   }
+}
+
+// Bühnenvermieter (im Reiter "Bühnen" unten)
+function vermieterCard() {
+  const ro = !editable();
+  const card = U.el(`<div class="card list-card">${cardHead("Bühnenvermieter", "vermNew", "+ Vermieter", ro)}${M.list("vermieter").sort((a, b) => a.firma.localeCompare(b.firma)).map((v) => `
+    <button type="button" class="mon-brow" data-vid="${h(v.id)}"><span class="mon-brow-main"><b>${h(v.firma)}</b>${v.ansprechpartner ? " · " + h(v.ansprechpartner) : ""}</span>
+    <span class="muted">${h(v.email || "keine E-Mail")}${v.telefon ? " · " + h(v.telefon) : ""}${v.kundenNr ? " · Kd.-Nr. " + h(v.kundenNr) : ""}</span></button>`).join("") || `<p class="muted">Noch keine Vermieter.</p>`}</div>`);
+  const vn = card.querySelector("#vermNew"); if (vn) vn.onclick = () => editVermieter(null);
+  U.$$("[data-vid]", card).forEach((b) => { b.onclick = () => editVermieter(M.get("vermieter", b.dataset.vid)); });
+  return card;
 }
 
 function btn(label, fn) { const b = U.el(`<button class="primary" type="button">${h(label)}</button>`); b.onclick = fn; return b; }

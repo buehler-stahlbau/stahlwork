@@ -15,7 +15,7 @@ import { CONFIG } from "./config.js";
 import { S, saveSoon } from "./store.js";
 import { newId } from "./util.js";
 
-export const KINDS = ["vermieter", "monteure", "trupps", "einsaetze", "buehnen"];
+export const KINDS = ["vermieter", "monteure", "trupps", "einsaetze", "buehnen", "abwesenheiten"];
 const FILE = "baumon.json";
 const DUE_FILE = "abmelden.json";
 const TOMB_MAX_AGE = 180 * 24 * 3600 * 1000;
@@ -198,6 +198,25 @@ export function overbookedText(e, d) {
   return `${truppName(get("trupps", e.truppId))} hat am ${longDate(d)} schon ${MAX_SITES_PER_DAY} Baustellen – mehr sind je Tag nicht möglich.`;
 }
 
+// Krank / Urlaub
+export const ABW_TYPES = { urlaub: "Urlaub", krank: "Krank" };
+export function absences(monteurId, von, bis) {
+  return list("abwesenheiten").filter((a) => a.monteurId === monteurId && a.von && a.bis && a.von <= bis && a.bis >= von);
+}
+export function absentOn(day) {
+  return list("abwesenheiten").filter((a) => a.monteurId && a.von <= day && a.bis >= day && get("monteure", a.monteurId));
+}
+// Eingeplante Personen, die im Zeitraum krank sind oder Urlaub haben
+export function absenceConflicts(e, ids = e.monteure) {
+  const out = [];
+  if (!e.von || !e.bis) return out;
+  for (const mid of ids || []) for (const a of absences(mid, e.von, e.bis)) out.push({ monteurId: mid, abw: a });
+  return out;
+}
+export function absenceText(list) {
+  return list.slice(0, 6).map((c) => `${(get("monteure", c.monteurId) || {}).name || "?"}: ${ABW_TYPES[c.abw.typ]} ${shortDate(c.abw.von)}–${shortDate(c.abw.bis)}`).join("\n");
+}
+
 export function conflictText(list) {
   return list.slice(0, 6).map((c) => {
     const p = get("monteure", c.monteurId);
@@ -294,6 +313,8 @@ function cleanRecord(kind, r) {
     case "trupps": return { ...base, name: s(r.name), fuehrerId: ID_RE.test(String(r.fuehrerId || "")) ? r.fuehrerId : null, monteure: ids(r.monteure), sort: Number(r.sort) || 0 };
     case "einsaetze": return { ...base, truppId: ID_RE.test(String(r.truppId || "")) ? r.truppId : null, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "",
       baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
+    case "abwesenheiten": return { ...base, monteurId: ID_RE.test(String(r.monteurId || "")) ? r.monteurId : null,
+      typ: r.typ === "krank" ? "krank" : "urlaub", von: day(r.von), bis: day(r.bis), notiz: s(r.notiz, 500) };
     case "buehnen": return { ...base, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "", baustelle: s(r.baustelle), standort: s(r.standort),
       vermieterId: ID_RE.test(String(r.vermieterId || "")) ? r.vermieterId : null, typ: s(r.typ), anzahl: Math.max(1, Math.min(99, Number(r.anzahl) || 1)),
       von: day(r.von), bis: day(r.bis), abgemeldetAm: day(r.abgemeldetAm), auftragsNr: s(r.auftragsNr), notiz: s(r.notiz, 1000) };

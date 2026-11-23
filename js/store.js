@@ -86,10 +86,11 @@ export async function load() {
       if (!S.state[k] || typeof S.state[k] !== "object" || Array.isArray(S.state[k])) S.state[k] = {};
     }
     if (!Array.isArray(S.state.mapRemove)) S.state.mapRemove = [];
-    const MON_VIEWS = ["mon", "monplan", "monbuehnen"];
-    if (!["projects", "favorites", "map", "archive", "settings", "monstamm", ...MON_VIEWS].includes(S.state.view)) S.state.view = "projects";
+    const MON_VIEWS = ["mon", "monplan", "monbuehnen", "monpersonal"];
+    if (S.state.view === "monstamm") { S.state.sparte = "mon"; S.state.view = S.state.monStamm === "vermieter" ? "monbuehnen" : "monpersonal"; } // früher: Stammdaten in den Einstellungen
+    if (!["projects", "favorites", "map", "archive", "settings", ...MON_VIEWS].includes(S.state.view)) S.state.view = "projects";
     if (S.state.sparte === "doc" && MON_VIEWS.includes(S.state.view)) S.state.view = "projects";
-    if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && S.state.view !== "settings" && S.state.view !== "monstamm") S.state.view = "mon";
+    if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && S.state.view !== "settings") S.state.view = "mon";
     allProjects().forEach(normalizeProject);
     if (migrated) await saveNow();
   }
