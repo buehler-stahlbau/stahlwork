@@ -391,6 +391,26 @@ async function refreshListing(root, dataDir) {
   }
 }
 
+// Zurückgeholter Ordner: Doku-Ordner und Fotos über ihre Namen neu zuordnen
+// (beim Kopieren vom Server bekommen alle Dateien in OneDrive neue IDs)
+async function relinkArchive(folderId, proj) {
+  const data = JSON.parse(JSON.stringify(proj));
+  const kids = (await od.listChildren(folderId)).filter((k) => k.folder);
+  for (const d of data.docs) {
+    const r = d.remote || {};
+    const f = kids.find((k) => k.name === r.baseName);
+    if (!f) { d.remote = { folderId: null, baseName: null, bilderId: null }; continue; }
+    const bilder = (await od.listChildren(f.id)).find((k) => k.folder && k.name === "Bilder");
+    d.remote = { folderId: f.id, baseName: f.name, bilderId: bilder ? bilder.id : null };
+    const files = bilder ? await od.listChildren(bilder.id) : [];
+    const byName = new Map(files.filter((x) => x.file).map((x) => [x.name, x.id]));
+    for (const e of d.entries || []) {
+      for (const i of e.images || []) i.rid = byName.get(`${i.id}.jpg`) || null;
+    }
+  }
+  return data;
+}
+
 // Archiviertes BV wurde aus OneDrive verschoben (z. B. auf den Server):
 // Prüfcodes behalten, Datendatei und Karteneintrag aufräumen
 async function forgetMovedArchive(p, dataDir) {
@@ -443,7 +463,19 @@ async function syncProject(p, root, dataDir, outbox) {
       legacy = await od.getJson(p.remote.folderId, LEGACY_PROJECT_FILE);
       if (legacy) remote = { data: legacy.data, eTag: legacy.eTag, id: null };
     }
-    if (remote && remote.eTag !== p.remote.etag) {
+    if (!remote) {
+      // Ordner z. B. vom Server zurückgeholt: alle Daten stehen in Stahlwork-Daten.json
+      const arc = await od.getJson(p.remote.folderId, ARCHIVE_FILE);
+      const a = arc && arc.data;
+      if (a && a.format === "stahlwork-bv-archiv" && a.project && Array.isArray(a.project.docs)) {
+        remote = { data: await relinkArchive(p.remote.folderId, a.project), eTag: null, id: null, restored: true };
+        if (a.folderId && a.folderId !== p.remote.folderId) {
+          S.state.codeIndexPending = { ...(S.state.codeIndexPending || {}), [a.folderId]: null }; // alter Eintrag "ausgelagert"
+        }
+        if (p.docs !== null && !p.docs.length) p.docs = null; // leeren Stand durch die Archivdaten ersetzen
+      }
+    }
+    if (remote && (remote.restored || remote.eTag !== p.remote.etag)) {
       if (p.docs === null) adoptRemote(p, remote.data);
       else await mergeRemote(p, remote.data);
     }
@@ -481,8 +513,8 @@ async function syncProject(p, root, dataDir, outbox) {
     // 8) Datendatei in _daten schreiben (nur wenn sich etwas geändert hat oder umgezogen wird)
     const rev = p.rev;
     const json = serialize(p);
-    if (!remote || legacy || JSON.stringify(remote.data) !== JSON.stringify(json)) {
-      const res = await od.putJson(dataDir.id, dataFileName(p), json, remote && !legacy ? remote.eTag : null);
+    if (!remote || legacy || remote.restored || JSON.stringify(remote.data) !== JSON.stringify(json)) {
+      const res = await od.putJson(dataDir.id, dataFileName(p), json, remote && !legacy && !remote.restored ? remote.eTag : null);
       if (res.conflict) continue; // zwischenzeitlich von anderem Gerät geändert -> nochmal
       p.remote.etag = res.eTag;
       if (legacy) await od.deleteItem(legacy.id); // alte baudoc.json aus dem BV-Ordner entfernen
@@ -494,7 +526,7 @@ async function syncProject(p, root, dataDir, outbox) {
       const fp = fingerprint(JSON.stringify(json));
       if (p.remote.archiveSnap !== fp) {
         await od.putJson(p.remote.folderId, ARCHIVE_FILE, {
-          format: "stahlwork-bv-archiv", version: 1, savedAt: new Date().toISOString(),
+          format: "stahlwork-bv-archiv", version: 1, savedAt: new Date().toISOString(), folderId: p.remote.folderId,
           hinweis: "Alle Daten dieses Bauvorhabens aus Stahlwork (Texte, Unterschriften, Prüfcodes). PDFs und Bilder liegen in den Unterordnern.",
           project: json,
         }, null);
