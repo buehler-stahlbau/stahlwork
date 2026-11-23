@@ -586,14 +586,17 @@ function renderProjectList(app, onlyFav) {
     numEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#newClient").focus(); } });
     $("#addP").onclick = () => addProject();
     newGeo = null;
-    attachPlaceSuggest($("#newPlace"), $("#newPlaceList"), (g) => { newGeo = g; });
+    newPlaceSuggest = attachPlaceSuggest($("#newPlace"), $("#newPlaceList"), (g) => {
+      newGeo = g;
+      if (pickToAdd) { pickToAdd = false; addProject(); } // Auswahl nach Hinweis -> gleich anlegen
+    });
     $("#newClient").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#newPlace").focus(); });
     $("#newPlace").addEventListener("keydown", (e) => { if (e.key === "Enter") addProject(); });
     // Cursor ins Nummernfeld – nur wenn noch kein Feld des Formulars aktiv ist
     setTimeout(() => { if (!form.contains(document.activeElement)) numEl.focus(); }, 50);
   }
   const t = $("#toggleAdd");
-  if (t) t.onclick = () => { addOpen = !addOpen; render(); };
+  if (t) t.onclick = () => { addOpen = !addOpen; pickToAdd = false; newGeo = null; render(); };
 
   const isCode = renderCodeCheck(app);
   if (isCode && !shown.length) return;
@@ -650,7 +653,12 @@ function projectRow(p) {
   return row;
 }
 
-function addProject() {
+let newPlaceSuggest = null;
+let pickToAdd = false;
+let adding = false;
+
+async function addProject() {
+  if (adding) return;
   const num = $("#newNum").value.trim();
   const client = $("#newClient").value.trim();
   const place = $("#newPlace").value.trim();
@@ -675,8 +683,37 @@ function addProject() {
     toast(`Bauvorhaben ${num} existiert bereits${where}: ${ex.number} ${ex.title}`, "warn", 6000);
     return;
   }
-  const p = newProject(num, client, place);
-  if (newGeo && newGeo.place === place) { p.geo = newGeo; S.state.mapDirty = true; }
+  // Bauort immer aus der Vorschlagsliste (damit das BV auf der Karte erscheint):
+  // eindeutiger Vorschlag -> automatisch übernehmen, mehrere -> auswählen lassen
+  let geo = newGeo && newGeo.place === place ? newGeo : null;
+  if (!geo) {
+    if (!navigator.onLine) {
+      toast("Offline: BV wird ohne Kartenposition angelegt. Den Ort später im BV aus der Liste wählen.", "warn", 7000);
+    } else {
+      let res = null;
+      adding = true;
+      try { res = await searchPlaces(place); } catch (e) { console.warn("Ortssuche", e); } finally { adding = false; }
+      if (!$("#newPlace")) return; // Formular inzwischen geschlossen
+      if (res === null) {
+        toast("Ortssuche nicht erreichbar – BV wird ohne Kartenposition angelegt.", "warn", 7000);
+      } else if (res.length === 1) {
+        geo = placeToGeo(res[0]);
+        $("#newPlace").value = geo.place;
+      } else if (!res.length) {
+        toast(`Ort „${place}“ nicht gefunden – bitte Schreibweise prüfen.`, "warn", 6000);
+        $("#newPlace").focus();
+        return;
+      } else {
+        toast("Mehrere Orte passen – bitte den Ort aus der Liste wählen.", "warn", 6000);
+        $("#newPlace").focus();
+        pickToAdd = true;
+        if (newPlaceSuggest) newPlaceSuggest.show(res);
+        return;
+      }
+    }
+  }
+  const p = newProject(num, client, geo ? geo.place : place);
+  if (geo) { p.geo = geo; S.state.mapDirty = true; }
   S.state.projects.push(p);
   touchProject(p);
   favoritesChanged();
@@ -716,10 +753,28 @@ function showPlaceGeo(p) {
     : `${PIN_ICON} Ort aus den Vorschlägen wählen, damit das BV auf der Karte erscheint`;
 }
 
+// Ortsvorschlag -> Kartenposition
+function placeToGeo(r) {
+  return { lat: r.lat, lon: r.lon, place: r.name, label: r.ctx ? `${r.name}, ${r.ctx}` : r.name };
+}
+
 function attachPlaceSuggest(input, list, onPick) {
   let timer = null;
   let seq = 0;
   const close = () => { list.innerHTML = ""; };
+  const show = (res) => {
+    list.innerHTML = res.map((r, i) => `<button type="button" class="place-opt" data-i="${i}">${h(r.name)}${r.ctx ? `<span>${h(r.ctx)}</span>` : ""}</button>`).join("");
+    $$(".place-opt", list).forEach((b) => {
+      // pointerdown statt click: Auswahl vor dem Verlassen des Feldes
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        const g = placeToGeo(res[Number(b.dataset.i)]);
+        input.value = g.place;
+        close();
+        onPick(g);
+      });
+    });
+  };
   input.addEventListener("input", () => {
     clearTimeout(timer);
     const q = input.value.trim();
@@ -732,24 +787,15 @@ function attachPlaceSuggest(input, list, onPick) {
         const res = await searchPlaces(q);
         if (my !== seq || document.activeElement !== input) { if (my === seq) close(); return; }
         if (!res.length) { list.innerHTML = `<div class="place-msg">Kein Ort gefunden</div>`; return; }
-        list.innerHTML = res.map((r, i) => `<button type="button" class="place-opt" data-i="${i}">${h(r.name)}${r.ctx ? `<span>${h(r.ctx)}</span>` : ""}</button>`).join("");
-        $$(".place-opt", list).forEach((b) => {
-          // pointerdown statt click: Auswahl vor dem Verlassen des Feldes
-          b.addEventListener("pointerdown", (e) => {
-            e.preventDefault();
-            const r = res[Number(b.dataset.i)];
-            input.value = r.name;
-            close();
-            onPick({ lat: r.lat, lon: r.lon, place: r.name, label: r.ctx ? `${r.name}, ${r.ctx}` : r.name });
-          });
-        });
+        show(res);
       } catch (e) {
         if (my === seq) list.innerHTML = `<div class="place-msg">${h(e.message)}</div>`;
       }
     }, 450);
   });
-  input.addEventListener("blur", () => setTimeout(close, 150));
+  input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) close(); }, 150));
   input.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  return { show, close };
 }
 
 /* =========================================================
@@ -967,8 +1013,10 @@ function renderArchive(app) {
     $('[data-a="restore"]', row).onclick = () => {
       moveLocal(p, "active");
       if (p.remote.folderId) p.moveTo = "active";
+      // wer wiederherstellt, arbeitet daran -> bei ihm immer Favorit (andere Nutzer unverändert)
+      if (!p.fav) { p.fav = true; favoritesChanged(); }
       touchProject(p);
-      toast(`${p.number} wiederhergestellt.`, "info", 2500);
+      toast(`${p.number} wiederhergestellt – in deinen Favoriten.`, "info", 3000);
       render();
     };
     $('[data-a="delete"]', row).onclick = async () => {

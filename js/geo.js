@@ -24,7 +24,13 @@ export async function searchPlaces(query) {
   lastCall = Date.now();
 
   const url = `${NOMINATIM}?format=jsonv2&addressdetails=1&limit=8&featureType=settlement&accept-language=de&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, { referrerPolicy: "strict-origin-when-cross-origin" });
+  // höchstens 6 s warten (langsames Netz / Dienst nicht erreichbar)
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 6000);
+  let res;
+  try { res = await fetch(url, { referrerPolicy: "strict-origin-when-cross-origin", signal: ctl.signal }); }
+  catch (e) { throw new Error(e && e.name === "AbortError" ? "Ortssuche antwortet nicht" : "Ortssuche nicht erreichbar"); }
+  finally { clearTimeout(t); }
   if (!res.ok) throw new Error(`Ortssuche nicht erreichbar (${res.status})`);
   const data = await res.json();
 
