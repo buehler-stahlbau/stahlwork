@@ -630,8 +630,8 @@ function siteField(init) {
     const q = input.value.trim().toLowerCase();
     const ps = U.projects().filter((p) => !q || (p.number + " " + p.title).toLowerCase().includes(q)).slice(0, 8);
     const qRaw = input.value.trim();
-    listEl.innerHTML = ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("")
-      + (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "");
+    listEl.innerHTML = (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "")
+      + ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("");
     const nb = listEl.querySelector("[data-new]");
     if (nb) nb.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -684,11 +684,25 @@ function openNewBV(text, done) {
   const client = m ? m[2] : /^\d+$/.test(t) ? "" : t;
   const body = U.el(`<div class="mon-form">
     <label class="field-label">BV-Nummer</label><input type="text" class="f-num" inputmode="numeric" maxlength="5" value="${h(num)}" placeholder="5-stellig" />
+    <div class="num-exists" hidden></div>
     <label class="field-label">Bauherr / Auftraggeber</label><input type="text" class="f-client" value="${h(client)}" autocomplete="off" />
-    <label class="field-label">Bauort</label><div class="place-field"><input type="text" class="f-place" autocomplete="off" placeholder="Ort aus der Liste wählen" /><div class="place-list f-plist"></div></div>
+    <label class="field-label">Bauort</label><div class="place-field"><input type="text" class="f-place" autocomplete="off" placeholder="Ort eingeben" /><div class="place-list f-plist"></div></div>
     <p class="muted small-note">Das BV wird wie in BauDoc angelegt und steht dort sofort zur Verfügung.</p></div>`);
   const numEl = body.querySelector(".f-num"), cEl = body.querySelector(".f-client"), pEl = body.querySelector(".f-place");
-  numEl.addEventListener("input", () => { numEl.value = numEl.value.replace(/\D/g, "").slice(0, 5); });
+  // Nummer schon vergeben? -> sofort anzeigen, vorhandenes BV kann direkt übernommen werden
+  const exBox = body.querySelector(".num-exists");
+  const checkNum = () => {
+    numEl.value = numEl.value.replace(/\D/g, "").slice(0, 5);
+    const ex = numEl.value.length === 5 && U.findBV ? U.findBV(numEl.value) : null;
+    numEl.classList.toggle("invalid", !!ex);
+    exBox.hidden = !ex;
+    if (!ex) return;
+    exBox.innerHTML = `BV ${h(ex.p.number)} gibt es schon${ex.archived ? " (im Archiv)" : ""}: ${h(ex.p.client || ex.p.title)}${ex.p.place ? ", " + h(ex.p.place) : ""}
+      ${ex.archived ? "" : `<button type="button" class="secondary small" data-use>Dieses BV übernehmen</button>`}`;
+    const use = exBox.querySelector("[data-use]");
+    if (use) use.onclick = () => { dlg.close(); done(ex.p); };
+  };
+  numEl.addEventListener("input", checkNum);
   let geo = null, busy = false;
   const sug = U.placeSuggest(pEl, body.querySelector(".f-plist"), (g) => { geo = g; });
   const dlg = modal("Neues Bauvorhaben", body, [
@@ -707,6 +721,7 @@ function openNewBV(text, done) {
       return false; // Dialog bleibt offen, bis das BV angelegt ist
     } },
   ]);
+  checkNum();
   setTimeout(() => (num.length === 5 ? (client ? pEl : cEl) : numEl).focus(), 50);
 }
 

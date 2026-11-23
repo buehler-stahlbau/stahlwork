@@ -603,12 +603,19 @@ function renderProjectList(app, onlyFav) {
             <div class="place-list" id="newPlaceList"></div>
           </div>
         </div>
+        <div class="num-exists" id="numExists" hidden></div>
         <button class="primary block" id="addP" type="button">Bauvorhaben anlegen</button>
       </div>`);
     app.appendChild(form);
     const numEl = $("#newNum");
     numEl.addEventListener("input", () => {
       numEl.value = numEl.value.replace(/\D/g, "").slice(0, 5);
+      // Nummer schon vergeben? -> sofort anzeigen
+      const ex = numEl.value.length === 5 ? findByNumber(numEl.value) : null;
+      const box = $("#numExists");
+      numEl.classList.toggle("invalid", !!ex);
+      box.hidden = !ex;
+      box.textContent = ex ? `BV ${ex.number} gibt es schon${S.state.archivedProjects.includes(ex) ? " (im Archiv)" : ""}: ${ex.client || ex.title}${ex.place ? ", " + ex.place : ""}` : "";
     });
     // Kein automatisches Weiterspringen (Tab-Gewohnheit); Enter = nächstes Feld
     numEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#newClient").focus(); } });
@@ -2199,7 +2206,7 @@ function versionMismatch() {
   window.__bootStep = "Anzeige aufbauen";
   setupSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {
