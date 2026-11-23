@@ -2091,8 +2091,8 @@ function versionMismatch() {
       e.returnValue = "";
     }
   });
-  // Startseite ist immer die Liste "Bauvorhaben"
-  S.state.view = "projects";
+  // Startseite ist immer die erste Seite der Sparte: BauDoc "Bauvorhaben", BauMon "Übersicht"
+  S.state.view = S.state.sparte === "mon" ? "mon" : "projects";
   S.state.selectedProjectId = null;
   S.state.selectedDocId = null;
 
