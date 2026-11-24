@@ -195,39 +195,26 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           let pr = 0; while (pr < ov.length - pl && ov[ov.length - 1 - pr]) pr++;
           const inner = ov.slice(pl, ov.length - pr).some(Boolean);
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis);
-          const allOv = L > 1 && (ov.every(Boolean) || inner || contains || pl > 1 || pr > 1);
+          const allOv = L > 1 && (ov.every(Boolean) || inner || contains);
           let bx0 = x0, bx1 = x1;
-          if (!allOv && pl) bx0 = colX(i0) + (colX(i0 + pl) - colX(i0)) / 2;
-          if (!allOv && pr) bx1 = (i1 + 1 < xs.length ? colX(i1 + 1) : x1) - ((i1 + 1 < xs.length ? colX(i1 + 1) : x1) - colX(i1 - pr + 1)) / 2;
+          // Überschneidung: Schräge über die überschneidenden Tage (Beginn unten, Ende oben)
+          const ovL = !allOv && pl ? colX(i0 + pl) - colX(i0) : 0;
+          const ovR = !allOv && pr ? (i1 + 1 < xs.length ? colX(i1 + 1) : colX(i1) + colW(i1)) - colX(i1 - pr + 1) : 0;
+          if (ovL) bx0 = colX(i0);
+          if (ovR) bx1 = colX(i1) + colW(i1);
           const by = allOv ? y + 3 + li * (bh + 1) : y + 3, th = allOv ? bh : LANE - 3;
           fill(hex(colorOf(e)));
           if (!allOv && (pl || pr)) {
-            // schräge Kante am Wechseltag: Balken greifen ineinander
-            const k = 4, L0 = pl ? bx0 - k : bx0, R0 = pr ? bx1 + k : bx1;
-            const pts = [[pl ? L0 + 2 * k : L0, by], [R0, by], [pr ? R0 - 2 * k : R0, by + th], [L0, by + th]];
+            const gap = 1.5;
+            const pts = [[pl ? bx0 + ovL + gap : bx0, by], [bx1, by], [pr ? bx1 - ovR : bx1, by + th], [pl ? bx0 + gap : bx0, by + th]];
             pdf.lines(pts.slice(1).map((q, i) => [q[0] - pts[i][0], q[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], "F", true);
           } else pdf.roundedRect(bx0, by, bx1 - bx0, th, 2, 2, "F");
-          const tx0 = bx0, tx1 = bx1;
+          const tx0 = bx0 + ovL / 2, tx1 = bx1 - ovR / 2;
           font("bold", allOv && L > 1 ? 6.2 : 7.8, [255, 255, 255]);
           const nb = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm).length : 0;
           pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), tx1 - tx0 - 6), tx0 + 3, by + th / 2 + (allOv && L > 1 ? 2.2 : 2.8));
         }
       });
-      // Überschneidung: Zeitraum gestrichelt umrahmt, Anzahl Tage
-      if (L > 1) {
-        const both = days.map((d) => r.list.filter((o) => o.von <= d && o.bis >= d).length > 1);
-        for (let i = 0; i < days.length; i++) {
-          if (!both[i]) continue;
-          let j = i; while (j + 1 < days.length && both[j + 1]) j++;
-          const k = j - i + 1, ox0 = colX(i) + 0.5, ox1 = colX(j) + colW(j) - 0.5;
-          if (k > 1) { pdf.setDrawColor(...RED); pdf.setLineWidth(0.8); pdf.setLineDashPattern([2, 1.5], 0); pdf.roundedRect(ox0, y + 1.5, ox1 - ox0, rowH - 3, 2, 2, "S"); pdf.setLineDashPattern([], 0); }
-          const lbl = `${k} T`; font("bold", 6, [255, 255, 255]);
-          const lw = pdf.getTextWidth(lbl) + 4, lx = (ox0 + ox1) / 2 - lw / 2;
-          fill(RED); pdf.roundedRect(lx, y - 2, lw, 7, 2, 2, "F");
-          pdf.text(lbl, lx + 2, y + 3);
-          i = j;
-        }
-      }
       y += rowH;
       hair(ML, y, W - ML);
     }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.9-beta" />
+  <meta name="app-version" content="3.14.10-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -311,9 +311,6 @@
     .g-tools .g-nav .icon-btn { width: 36px; height: 36px; }
     .g-range { font-weight: 700; font-size: .85rem; min-width: 84px; text-align: center; white-space: nowrap; }
     .g-tools .grow { flex: 1; }
-    .g-ov { position: relative; z-index: 3; pointer-events: none; margin: 2px 0; border: 1.5px dashed var(--brand-red); border-radius: 6px; }
-    .g-ov span { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); background: var(--brand-red); color: #fff; font-size: .6rem; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: 6px; white-space: nowrap; }
-    .g-ov.one { border-color: transparent; }
     .g-bar.stack { align-self: start; min-height: 0; height: calc((var(--rowh) - 10px) / var(--lanes) - 2px);
       margin-top: calc(5px + var(--lane) * (var(--rowh) - 10px) / var(--lanes)); margin-bottom: 0; font-size: .7rem; border-radius: 5px; padding-top: 0; padding-bottom: 0; }
     .g-bar.stack .g-lift { padding: 0; } .g-bar.stack .g-lift .ico { width: 12px; height: 12px; }
@@ -322,9 +319,11 @@
     .g-bar.part { background: transparent; box-shadow: none; overflow: visible; }
     /* Wechsel am selben Tag: schräge Kanten greifen ineinander (10px Überlappung, keine Lücke) */
     .g-bar.join { box-shadow: none; }
-    .g-bar.join-r { border-top-right-radius: 0; border-bottom-right-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
-    .g-bar.join-l { border-top-left-radius: 0; border-bottom-left-radius: 0; clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%); --padl: 16px; }
-    .g-bar.join-l.join-r { clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+    /* Überschneidung: Schräge über die gesamten überschneidenden Tage, schmaler Spalt zwischen den Balken */
+    .g-bar.join { --xl: calc(var(--ovl, 0) * (100% + 2px)); --xr: calc(var(--ovr, 0) * (100% + 2px)); }
+    .g-bar.join-r { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - var(--xr)) 100%, 0 100%); }
+    .g-bar.join-l { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, 100% 100%, 3px 100%); --padl: calc(var(--ovl) * 50% + 10px); }
+    .g-bar.join-l.join-r { clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, calc(100% - var(--xr)) 100%, 3px 100%); }
     .g-bar.join-r .g-h.r { right: 6px; } .g-bar.join-l .g-h.l { left: 6px; }
     .g-bar { padding-left: max(var(--padl, 8px), var(--follow, 8px)); padding-right: var(--padr, 8px); }
     .g-bar.part.cut-l .g-bg.first, .g-bar.part.cut-r .g-bg.last { border-radius: 0; }

@@ -330,11 +330,12 @@ export function renderMonPlan(app) {
           let pr = 0; while (pr < N - pl && ov[N - 1 - pr]) pr++;
           const inner = ov.slice(pl, N - pr).some(Boolean);
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis); // anderer Einsatz liegt ganz in diesem
-          if (ov.every(Boolean) || inner || contains || pl > 1 || pr > 1) mode = "stack";
+          if (ov.every(Boolean) || inner || contains) mode = "stack";
           else if (pl || pr) {
-            // Übergang: schräge Kante in der Tagesmitte, beide Balken greifen nahtlos ineinander
+            // Überschneidung: die Balken laufen über die überschneidenden Tage schräg ineinander
+            // (alter Balken oben bis Ende der Überschneidung, neuer unten ab Beginn) – Breite der Schräge = Anzahl Tage
             mode = `join ${pl ? "join-l" : ""} ${pr ? "join-r" : ""}`;
-            pad = `${pl ? `margin-left:calc(${(pl / N / 2) * 100}% - 5px);` : ""}${pr ? `margin-right:calc(${(pr / N / 2) * 100}% - 5px);` : ""}`;
+            pad = `--ovl:${pl / N};--ovr:${pr / N};`;
           }
         }
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
@@ -342,17 +343,6 @@ export function renderMonPlan(app) {
           ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
-    // Überschneidungen sichtbar machen: Zeitraum umrahmt, Anzahl Tage als Marke
-    if (L > 1) {
-      const both = days.map((d) => r.list.filter((o) => o.von <= d && o.bis >= d).length > 1);
-      for (let i = 0; i < 21; i++) {
-        if (!both[i]) continue;
-        let j = i; while (j + 1 < 21 && both[j + 1]) j++;
-        const k = j - i + 1;
-        g.insertAdjacentHTML("beforeend", `<div class="g-ov ${k === 1 ? "one" : ""}" style="grid-column:${2 + i} / ${3 + j};grid-row:${gridRow}" title="Überschneidung: ${k} Tag${k > 1 ? "e" : ""}"><span>${k} T</span></div>`);
-        i = j;
-      }
-    }
     gridRow += n;
     for (const sub of r.subs) {
       const bgCls = (d) => `${["Sa", "So"].includes(M.wdName(d)) ? "we" : ""} ${M.holiday(d) ? "hol" : ""} ${d === t ? "today" : ""}`;
