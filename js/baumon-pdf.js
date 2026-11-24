@@ -195,7 +195,7 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           let pr = 0; while (pr < ov.length - pl && ov[ov.length - 1 - pr]) pr++;
           const inner = ov.slice(pl, ov.length - pr).some(Boolean);
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis);
-          const allOv = L > 1 && (ov.every(Boolean) || inner || contains);
+          const allOv = L > 1 && (ov.every(Boolean) || inner || contains || pl > 1 || pr > 1);
           let bx0 = x0, bx1 = x1;
           if (!allOv && pl) bx0 = colX(i0) + (colX(i0 + pl) - colX(i0)) / 2;
           if (!allOv && pr) bx1 = (i1 + 1 < xs.length ? colX(i1 + 1) : x1) - ((i1 + 1 < xs.length ? colX(i1 + 1) : x1) - colX(i1 - pr + 1)) / 2;
@@ -213,6 +213,21 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
           pdf.text(fit(M.baustelleLabel(e) + (nb ? `  [${nb} Bühne${nb > 1 ? "n" : ""}]` : ""), tx1 - tx0 - 6), tx0 + 3, by + th / 2 + (allOv && L > 1 ? 2.2 : 2.8));
         }
       });
+      // Überschneidung: Zeitraum gestrichelt umrahmt, Anzahl Tage
+      if (L > 1) {
+        const both = days.map((d) => r.list.filter((o) => o.von <= d && o.bis >= d).length > 1);
+        for (let i = 0; i < days.length; i++) {
+          if (!both[i]) continue;
+          let j = i; while (j + 1 < days.length && both[j + 1]) j++;
+          const k = j - i + 1, ox0 = colX(i) + 0.5, ox1 = colX(j) + colW(j) - 0.5;
+          if (k > 1) { pdf.setDrawColor(...RED); pdf.setLineWidth(0.8); pdf.setLineDashPattern([2, 1.5], 0); pdf.roundedRect(ox0, y + 1.5, ox1 - ox0, rowH - 3, 2, 2, "S"); pdf.setLineDashPattern([], 0); }
+          const lbl = `${k} T`; font("bold", 6, [255, 255, 255]);
+          const lw = pdf.getTextWidth(lbl) + 4, lx = (ox0 + ox1) / 2 - lw / 2;
+          fill(RED); pdf.roundedRect(lx, y - 2, lw, 7, 2, 2, "F");
+          pdf.text(lbl, lx + 2, y + 3);
+          i = j;
+        }
+      }
       y += rowH;
       hair(ML, y, W - ML);
     }

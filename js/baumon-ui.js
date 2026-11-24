@@ -173,7 +173,7 @@ function bindStammButtons(root) {
 ========================================================= */
 let planKeep = null; // Scrollposition nach einer Änderung in der Detailansicht beibehalten
 function keepPlanScroll(card) { const sc = card.querySelector(".g-scroll"); planKeep = { x: sc ? sc.scrollLeft : 0, y: window.scrollY }; }
-let weekOffset = 0; // Planung: um ganze Wochen nach vorne/hinten verschoben (0 = Vorwoche, aktuelle, nächste)
+let weekOffset = 0; // Planung: um ganze Wochen nach vorne/hinten verschoben (0 = aktuelle KW + zwei kommende)
 export function renderMonPlan(app) {
   const m = M.mon();
   const start = M.addDays(M.range().start, weekOffset * 7);
@@ -330,7 +330,7 @@ export function renderMonPlan(app) {
           let pr = 0; while (pr < N - pl && ov[N - 1 - pr]) pr++;
           const inner = ov.slice(pl, N - pr).some(Boolean);
           const contains = r.list.some((o) => o !== e && o.von > e.von && o.bis < e.bis); // anderer Einsatz liegt ganz in diesem
-          if (ov.every(Boolean) || inner || contains) mode = "stack";
+          if (ov.every(Boolean) || inner || contains || pl > 1 || pr > 1) mode = "stack";
           else if (pl || pr) {
             // Übergang: schräge Kante in der Tagesmitte, beide Balken greifen nahtlos ineinander
             mode = `join ${pl ? "join-l" : ""} ${pr ? "join-r" : ""}`;
@@ -342,6 +342,17 @@ export function renderMonPlan(app) {
           ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
       }
     });
+    // Überschneidungen sichtbar machen: Zeitraum umrahmt, Anzahl Tage als Marke
+    if (L > 1) {
+      const both = days.map((d) => r.list.filter((o) => o.von <= d && o.bis >= d).length > 1);
+      for (let i = 0; i < 21; i++) {
+        if (!both[i]) continue;
+        let j = i; while (j + 1 < 21 && both[j + 1]) j++;
+        const k = j - i + 1;
+        g.insertAdjacentHTML("beforeend", `<div class="g-ov ${k === 1 ? "one" : ""}" style="grid-column:${2 + i} / ${3 + j};grid-row:${gridRow}" title="Überschneidung: ${k} Tag${k > 1 ? "e" : ""}"><span>${k} T</span></div>`);
+        i = j;
+      }
+    }
     gridRow += n;
     for (const sub of r.subs) {
       const bgCls = (d) => `${["Sa", "So"].includes(M.wdName(d)) ? "we" : ""} ${M.holiday(d) ? "hol" : ""} ${d === t ? "today" : ""}`;
@@ -527,10 +538,10 @@ export function renderMonPlan(app) {
   app.appendChild(U.el(`<p class="muted center">${editable()
     ? (touch ? "Antippen: öffnen · freier Tag: neuer Einsatz · kurz halten + ziehen: verschieben · Rand ziehen: Länge"
       : "Freier Tag: neuer Einsatz (mit gedrückter Maus über mehrere Tage ziehen: Zeitraum) · Balken ziehen: verschieben (auch zu anderem Trupp) · Rand ziehen: Länge ändern")
-    : "Vorwoche, aktuelle und nächste Woche"}</p>`));
+    : "Aktuelle und zwei kommende Wochen"}</p>`));
 }
 
-/* ---------- PDF: Kalenderwochen wählen (Standard: aktuelle + nächste Woche) ---------- */
+/* ---------- PDF: Kalenderwochen wählen (Standard: aktuelle + zwei kommende Wochen) ---------- */
 function openPlanPdf() {
   const cur = M.mondayOf(M.today());
   const weeks = Array.from({ length: 31 }, (_, i) => M.addDays(cur, (i - 10) * 7)); // 10 Wochen zurück, 20 voraus
@@ -539,7 +550,7 @@ function openPlanPdf() {
   const opts = (sel) => weeks.map((mo) => `<option value="${mo}" ${mo === sel ? "selected" : ""}>${h(label(mo))}</option>`).join("");
   const body = U.el(`<div class="mon-form">
     <div class="grid2"><div><label class="field-label">von KW</label><select class="f-from">${opts(cur)}</select></div>
-    <div><label class="field-label">bis KW</label><select class="f-to">${opts(M.addDays(cur, 7))}</select></div></div>
+    <div><label class="field-label">bis KW</label><select class="f-to">${opts(M.addDays(cur, 14))}</select></div></div>
     <p class="muted pdf-range-info"></p></div>`);
   const from = body.querySelector(".f-from"), to = body.querySelector(".f-to"), info = body.querySelector(".pdf-range-info");
   const upd = () => {

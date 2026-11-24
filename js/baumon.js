@@ -111,9 +111,9 @@ export function holidaysBW(y) {
 }
 export function holiday(day) { return holidaysBW(Number(day.slice(0, 4)))[day] || ""; }
 
-// angezeigter Zeitraum: Vorwoche, aktuelle Woche, nächste Woche
+// angezeigter Zeitraum: aktuelle Woche + zwei kommende
 export function range() {
-  const start = addDays(mondayOf(today()), -7);
+  const start = mondayOf(today());
   return { start, end: addDays(start, 20) };
 }
 
