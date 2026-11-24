@@ -186,7 +186,9 @@ async function openViewer(id, rid) {
   const im = $("#imgModalImg");
   im.src = (await thumbUrl(id, rid)) || "";
   modal.style.display = "flex";
-  const close = () => { modal.style.display = "none"; im.src = ""; };
+  const close = () => { modal.style.display = "none"; im.src = ""; document.removeEventListener("keydown", onEsc, true); };
+  const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); } };
+  document.addEventListener("keydown", onEsc, true);
   modal.onclick = close;
   try {
     const rec = await db.imgGet(id);
@@ -1813,8 +1815,11 @@ function openPdfPreview(blob, filename, shareText = "") {
     frame.src = "about:blank";
     pages.innerHTML = "";
     document.body.style.overflow = "";
+    document.removeEventListener("keydown", onPdfEsc, true);
   };
   $("#pdfClose").onclick = () => { if (history.state && history.state.pdf) history.back(); else close(); };
+  const onPdfEsc = (e) => { if (e.key === "Escape" && modal.style.display !== "none") { e.preventDefault(); e.stopImmediatePropagation(); document.removeEventListener("keydown", onPdfEsc, true); $("#pdfClose").click(); } };
+  document.addEventListener("keydown", onPdfEsc, true);
   window.addEventListener("popstate", close, { once: true });
 
   $("#pdfOpenTab").onclick = () => window.open(lastPdf.url, "_blank");

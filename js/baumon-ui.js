@@ -50,6 +50,20 @@ document.addEventListener("pointerdown", (ev) => {
   for (const l of document.querySelectorAll(".mon-modal .place-list")) if (l.innerHTML && !l.parentElement.contains(ev.target)) l.innerHTML = "";
 }, true);
 document.addEventListener("click", (ev) => { if (ev.target.closest(".mon-modal .place-list")) setTimeout(() => { listTouchAt = 0; }, 0); }, true);
+// Esc schließt immer das oberste Popup: erst Schnellmenü bzw. offene Auswahlliste, dann den obersten Dialog
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || ev.defaultPrevented) return;
+  const qm = document.querySelector(".quick-menu");
+  if (qm) { ev.preventDefault(); qm.remove(); return; }
+  const dlgs = document.querySelectorAll(".mon-modal");
+  const top = dlgs[dlgs.length - 1];
+  if (!top) return;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+  const list = [...top.querySelectorAll(".place-list")].find((l) => l.innerHTML.trim());
+  if (list) { list.innerHTML = ""; return; }
+  top.querySelector("[data-x]")?.click();
+}, true);
 // Kurzformen der Feiertage für die schmale Tagesspalte
 const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Ostermo.", "Tag der Arbeit": "1. Mai", "Christi Himmelfahrt": "Himmelf.",
   "Pfingstmontag": "Pfingstmo.", "Fronleichnam": "Fronleichn.", "Tag der Deutschen Einheit": "Dt. Einheit", "Allerheiligen": "Allerheil.",
