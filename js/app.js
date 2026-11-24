@@ -233,29 +233,37 @@ function renderNow() {
 
 // Anmeldepflicht: BauDoc ist nur nach Anmeldung mit einem Bühler-Konto nutzbar.
 // Nach der ersten Anmeldung bleibt das Konto auf dem Gerät gespeichert -> auch offline nutzbar.
+// Anmeldung abgelaufen: ebenfalls gesperrt (nichts bearbeitbar), bis neu angemeldet.
+// Bereits gespeicherte, noch nicht hochgeladene Änderungen bleiben auf dem Gerät und gehen danach hoch.
 function isLocked() {
-  return od.isConfigured() && !od.getAccount();
+  return od.isConfigured() && (!od.getAccount() || authExpired());
 }
 
 let loginError = "";
 
 function renderLogin(app) {
   const offline = !navigator.onLine;
+  const expired = authExpired();
+  // offene Dialoge/Menüs schließen – im gesperrten Zustand darf nichts bearbeitet werden
+  document.querySelectorAll(".mon-modal, .quick-menu").forEach((x) => x.remove());
+  document.body.classList.remove("modal-open");
+  if (!$("#drawer").hidden) closeDrawer();
   app.appendChild(el(`
     <div class="login-wrap">
       <div class="card login-card">
         <img class="login-logo" src="logo.png" alt="Bühler Stahlbau" />
         <h1>Stahlwork</h1>
         <p class="muted">Anwendung der Friedrich Bühler GmbH &amp; Co. KG</p>
-        <p>Bitte mit dem <strong>Bühler-Firmenkonto</strong> anmelden.</p>
-        <button class="primary block" id="loginGate" type="button" ${offline ? "disabled" : ""}>Mit Microsoft anmelden</button>
+        ${expired ? `<p><strong>Anmeldung abgelaufen.</strong> Bitte neu anmelden, um weiterzuarbeiten.</p>${sync.status.pending ? `<p class="muted">${sync.status.pending} Änderung(en) sind auf diesem Gerät gespeichert und werden nach dem Anmelden hochgeladen.</p>` : ""}`
+          : `<p>Bitte mit dem <strong>Bühler-Firmenkonto</strong> anmelden.</p>`}
+        <button class="primary block" id="loginGate" type="button" ${offline ? "disabled" : ""}>${expired ? "Neu anmelden" : "Mit Microsoft anmelden"}</button>
         ${offline ? `<p class="muted">Für die erste Anmeldung wird eine Internetverbindung benötigt.</p>` : ""}
         ${loginError ? `<p class="error-text">${h(loginError)}</p>` : ""}
         <p class="muted login-hint">Nach der Anmeldung funktioniert Stahlwork auf diesem Gerät auch ohne Netz.</p>
       </div>
     </div>`));
   const b = $("#loginGate");
-  if (b) b.onclick = () => od.login();
+  if (b) b.onclick = async () => { if (expired) { await saveNow(); od.relogin(); } else od.login(); };
 }
 
 function render() {
@@ -410,15 +418,14 @@ function setupDrawer() {
 /* ---------- Anmeldung abgelaufen ----------
    Konto ist bekannt, aber Microsoft verlangt eine neue Anmeldung: Hinweis mit Knopf. */
 function authExpired() { return od.isConfigured() && od.isSignedIn() && sync.status.kind === "signedout"; }
+// Kein automatisches Neuanmelden (am iPhone konnte das in eine Weiterleitungs-Schleife laufen):
+// die App sperrt sich und zeigt die Anmeldeseite mit Knopf „Neu anmelden“.
+let wasExpired = false;
 function updateAuthBar() {
-  let bar = $("#authBar");
-  if (!authExpired()) { if (bar) bar.remove(); return; }
-  // Kein automatisches Neuanmelden mehr: am iPhone konnte das in eine Schleife aus
-  // Weiterleitungen laufen ("Stahlwork wird geladen …"). Nur Hinweis mit Knopf.
-  if (bar) return;
-  bar = el(`<div id="authBar" class="update-bar auth-bar"><span>Anmeldung abgelaufen – Änderungen bleiben auf dem Gerät und werden nach dem Anmelden hochgeladen.</span><button class="primary small" type="button">Neu anmelden</button></div>`);
-  bar.querySelector("button").onclick = async () => { await saveNow(); od.relogin(); };
-  document.body.appendChild(bar);
+  const ex = authExpired();
+  if (ex === wasExpired) return;
+  wasExpired = ex;
+  render();
 }
 
 function setupSearch() {
