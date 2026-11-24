@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.10-beta" />
+  <meta name="app-version" content="3.14.11-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -108,7 +108,8 @@
     .sync-chip { position: relative; width: 42px; height: 42px; min-height: 0; padding: 0; flex: 0 0 auto; border-radius: 50%; border:1px solid var(--brand-gray-200); background:#fff; cursor:pointer; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; }
     .sync-chip.idle { color: var(--ok); border-color: rgba(22,128,61,.35); }
     .sync-chip.pending, .sync-chip.syncing { color: var(--brand-primary); border-color: rgba(46,91,138,.35); }
-    .sync-chip.signedout { color: var(--warn); border-color: rgba(180,110,0,.45); }
+    .sync-chip.offline { color: var(--warn); border-color: rgba(180,110,0,.45); }
+    .sync-chip.signedout { color: var(--brand-gray-500); }
     .sync-chip.error { color: var(--brand-red); border-color: rgba(203,49,48,.45); background: var(--brand-red-soft); }
     .sync-cnt { position: absolute; top: -5px; right: -6px; font-size: .68rem; font-weight: 700; line-height: 16px; min-width: 18px; padding: 0 4px; border-radius: 999px; background: var(--brand-primary); color: #fff; border: 2px solid #fff; }
     .ico.spin { animation: spin 1s linear infinite; }
@@ -117,9 +118,11 @@
     /* Sync-Punkt am Zahnrad (nur App-Ansicht) */
     .sync-dot { display: none; position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fff; background: var(--brand-gray-500); }
     .sync-dot.idle { background: #2fb35a; }
-    /* wartet / läuft: blauer Ring statt Punkt – deutlich anders als Grün */
-    .sync-dot.pending, .sync-dot.syncing { background: #fff; box-shadow: inset 0 0 0 3px var(--brand-primary); width: 13px; height: 13px; }
-    .sync-dot.signedout { background: var(--warn); }
+    /* wartet auf Upload: blauer Punkt · offline: orange · nicht angemeldet: grau */
+    .sync-dot.pending { background: var(--brand-primary); }
+    .sync-dot.syncing { display: none !important; }
+    .sync-dot.offline { background: var(--warn); }
+    .sync-dot.signedout { background: var(--brand-gray-500); }
     .sync-dot.error { background: var(--brand-red); }
     .sync-dot.off { display: none !important; }
 
@@ -175,6 +178,11 @@
     .menu-btn .ico { width: 26px; height: 26px; }
     @media (hover: hover) and (pointer: fine){ .menu-btn:hover { background: var(--brand-gray-100); } }
     .menu-btn .sync-dot { top: 6px; right: 2px; }
+    /* Synchronisierung läuft: blauer Kreis dreht sich um das Burger-Symbol (nur App-Ansicht) */
+    .menu-btn .sync-ring { display: none; position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 3px solid rgba(46,91,138,.15); border-top-color: var(--brand-primary); border-right-color: var(--brand-primary); pointer-events: none; animation: spin .9s linear infinite; }
+    @media (max-width: 760px){ .menu-btn.syncing .sync-ring { display: block; } }
+    @media (max-width: 400px){ .menu-btn .sync-ring { width: 34px; height: 34px; margin: -17px 0 0 -17px; } }
+    @media (prefers-reduced-motion: reduce){ .menu-btn .sync-ring { animation-duration: 2.5s; } }
     #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { display: none; }
     body.sparte-mon #tabMon, body.sparte-mon #tabMonPlan, body.sparte-mon #tabMonBuehnen, body.sparte-mon #tabMonPersonal { display: inline-flex; }
     .tab .cnt.due:not(:empty) { background: var(--brand-red); color: #fff; }
@@ -830,7 +838,7 @@
 <body>
   <header class="appbar" id="appbar">
     <div class="appbar-inner">
-      <button id="menuBtn" class="menu-btn" type="button" title="Menü" aria-label="Menü" aria-haspopup="dialog" aria-controls="drawer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="sync-dot off" id="menuDot"></span></button>
+      <button id="menuBtn" class="menu-btn" type="button" title="Menü" aria-label="Menü" aria-haspopup="dialog" aria-controls="drawer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="sync-ring" aria-hidden="true"></span><span class="sync-dot off" id="menuDot"></span></button>
       <nav class="tabs" aria-label="Hauptmenü">
         <button id="tabMon" class="tab" type="button" title="Übersicht" aria-label="Übersicht"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span class="label">Übersicht</span></button>
         <button id="tabMonPlan" class="tab" type="button" title="Planung" aria-label="Planung"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg><span class="label">Planung</span></button>

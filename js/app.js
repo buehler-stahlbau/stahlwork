@@ -547,6 +547,7 @@ const SYNC_ICONS = {
   off: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M11 18h2"/></svg>',
 };
 
+let ringSince = 0, ringTimer = null;
 function updateSyncChip() {
   const chip = $("#syncChip");
   if (!chip) return;
@@ -567,6 +568,17 @@ function updateSyncChip() {
   chip.setAttribute("aria-label", titles[s.kind] || "Synchronisierung");
   const mdot = $("#menuDot");
   if (mdot) mdot.className = "sync-dot " + s.kind;
+  // Ring um das Burger-Symbol: mindestens 1 s sichtbar, damit auch kurze Abgleiche erkennbar sind
+  const mb = $("#menuBtn");
+  if (mb) {
+    clearTimeout(ringTimer);
+    if (s.kind === "syncing") { ringSince = Date.now(); mb.classList.add("syncing"); }
+    else {
+      const rest = Math.max(0, 1000 - (Date.now() - ringSince));
+      const done = () => { mb.classList.remove("syncing"); if (mdot) mdot.className = "sync-dot " + s.kind; };
+      if (rest && mb.classList.contains("syncing")) { if (mdot) mdot.className = "sync-dot syncing"; ringTimer = setTimeout(done, rest); } else done();
+    }
+  }
   const dsync = $("#drawerSync");
   if (dsync) dsync.textContent = titles[s.kind] ? titles[s.kind].replace(/ – klicken.*$/, "") : "Anmeldung, Synchronisierung";
   chip.onclick = () => {
