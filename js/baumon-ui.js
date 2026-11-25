@@ -1267,7 +1267,7 @@ export function openBuehne(b, preset = {}, after) {
     <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === (cur.vermieterId || "") ? "selected" : ""}>${h(v.firma)}</option>`).join("")}</select></div>
     <div class="grid2 tight"><div><label class="field-label">Typ</label><div class="typ-field"><input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="eingeben" autocomplete="off" />
       <button type="button" class="typ-open" aria-label="Typen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list"></div></div></div>
-    <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
+    ${isNew ? `<div><label class="field-label">Anzahl</label><input type="number" min="1" max="20" class="f-n" value="1" title="Jede Bühne wird einzeln angelegt (eigene Zeile, einzeln abmeldbar)" /></div>` : ""}</div></div>
     <div class="grid2"><div class="grid2 tight"><div><label class="field-label">Mietbeginn</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">Mietende</label><input type="date" class="f-bis" value="${h(cur.bis)}" /><div class="muted small-note bis-hint"></div></div></div>
     <div><label class="field-label">Auftrags-Nr. Vermieter</label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" placeholder="optional" /></div></div>
@@ -1311,8 +1311,12 @@ export function openBuehne(b, preset = {}, after) {
     if (!von) { toast("Bitte den Mietbeginn angeben.", "warn"); body.querySelector(".f-von").focus(); return false; }
     if (!bis) { toast("Bitte das Mietende angeben.", "warn"); body.querySelector(".f-bis").focus(); return false; }
     if (bis < von) { toast("Das Mietende liegt vor dem Mietbeginn.", "warn"); return false; }
-    M.put("buehnen", { ...cur, ...s, vermieterId: body.querySelector(".f-v").value || null, typ: body.querySelector(".f-typ").value.trim(),
-      anzahl: Math.max(1, Number(body.querySelector(".f-n").value) || 1), von, bis, auftragsNr: body.querySelector(".f-nr").value.trim(), standort: body.querySelector(".f-ort").value.trim() });
+    const rec = { ...cur, ...s, vermieterId: body.querySelector(".f-v").value || null, typ: body.querySelector(".f-typ").value.trim(),
+      anzahl: 1, von, bis, auftragsNr: body.querySelector(".f-nr").value.trim(), standort: body.querySelector(".f-ort").value.trim() };
+    // mehrere gleiche Bühnen: je Bühne ein eigener Eintrag (eigene Zeile, einzeln abmeldbar)
+    const n = isNew ? Math.max(1, Math.min(20, Number(body.querySelector(".f-n").value) || 1)) : 1;
+    for (let i = 0; i < n; i++) M.put("buehnen", { ...rec, id: i === 0 ? rec.id : null });
+    if (n > 1) toast(`${n} Bühnen angelegt (je eine Zeile).`, "info", 3000);
     changed();
     if (after) after();
   };

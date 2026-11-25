@@ -70,8 +70,8 @@ export function toast(msg, kind = "info", ms = 4500) {
   t.className = "toast " + kind;
   t.textContent = msg;
   t.onclick = () => t.remove();
-  box.appendChild(t);
-  while (box.children.length > 3) box.firstElementChild.remove();
+  // immer nur eine Meldung gleichzeitig: die neue ersetzt die alte
+  box.replaceChildren(t);
   setTimeout(() => t.remove(), ms);
 }
 

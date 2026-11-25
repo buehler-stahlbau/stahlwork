@@ -23,6 +23,24 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /* ---------- Zustand ---------- */
+// Jede Bühne ein eigener Eintrag: ältere Einträge mit Anzahl > 1 aufteilen.
+// Feste Kennungen (<id>_2, <id>_3 …), damit zwei Geräte beim Aufteilen dasselbe Ergebnis erzeugen.
+function splitBuehnen(m) {
+  let changed = false;
+  const now = Date.now();
+  for (const b of Object.values(m.data.buehnen || {})) {
+    const n = Number(b.anzahl) || 1;
+    if (n <= 1) continue;
+    for (let i = 2; i <= n; i++) {
+      const id = `${b.id}_${i}`.slice(0, 64);
+      if (!m.data.buehnen[id] && !m.tomb[id]) m.data.buehnen[id] = { ...b, id, anzahl: 1, updatedAt: now };
+    }
+    m.data.buehnen[b.id] = { ...b, anzahl: 1, updatedAt: now };
+    changed = true;
+  }
+  return changed;
+}
+let splitChecked = null;
 export function mon() {
   const st = S.state;
   if (!st.mon || typeof st.mon !== "object" || Array.isArray(st.mon)) st.mon = {};
@@ -34,6 +52,7 @@ export function mon() {
   if (m.zoom === "tage") m.zoom = "personal";
   if (m.zoom === "wochen") m.zoom = "kompakt";
   if (!["kompakt", "personal", "buehnen"].includes(m.zoom)) m.zoom = "personal";
+  if (splitChecked !== m) { splitChecked = m; if (splitBuehnen(m)) { m.dirty = true; m.rev++; } }
   return m;
 }
 
@@ -419,7 +438,13 @@ export function abmeldeMail(vermieter, buehnen, absender) {
   const anrede = vermieter.ansprechpartner ? `Guten Tag ${vermieter.ansprechpartner},` : "Sehr geehrte Damen und Herren,";
   const sites = [...new Set(buehnen.map((b) => baustelleLabel(b)))];
   const subject = `Abmeldung Mietbühne${buehnen.length > 1 ? "n" : ""} – ${sites.join(", ")}`;
-  const lines = buehnen.map((b) => {
+  const grouped = new Map();
+  for (const b of buehnen) {
+    const k = [b.typ, baustelleLabel(b), b.standort, b.auftragsNr, b.bis].join("|");
+    if (grouped.has(k)) grouped.get(k).anzahl += Number(b.anzahl) || 1;
+    else grouped.set(k, { ...b, anzahl: Number(b.anzahl) || 1 });
+  }
+  const lines = [...grouped.values()].map((b) => {
     const parts = [`- ${buehneText(b)}`, `Baustelle: ${baustelleLabel(b)}${b.standort ? ", " + b.standort : ""}`];
     if (b.auftragsNr) parts.push(`Ihre Auftrags-Nr.: ${b.auftragsNr}`);
     parts.push(`Mietende: ${longDate(b.bis)}`);
@@ -516,6 +541,8 @@ function mergeRemote(m, remote) {
     m.data[kind] = out;
   }
   for (const id of Object.keys(tomb)) if (now - tomb[id] > TOMB_MAX_AGE) delete tomb[id];
+  m.tomb = tomb;
+  if (splitBuehnen(m)) localNewer = true; // ältere Geräte: Anzahl > 1 aufteilen
   const rt = (remote && remote.tomb) || {};
   if (Object.keys(tomb).some((id) => !rt[id])) localNewer = true;
   m.tomb = tomb;
