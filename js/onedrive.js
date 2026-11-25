@@ -117,7 +117,11 @@ async function gfetch(path, { method = "GET", body, headers = {} } = {}) {
     const token = await getToken(force);
     let res;
     try {
-      res = await fetch(url, { method, body, headers: { Authorization: `Bearer ${token}`, ...headers } });
+      // Zeitlimit bis zur Antwort: schlechtes Handynetz soll den Abgleich nicht endlos blockieren
+      const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctl && setTimeout(() => ctl.abort(), body ? 120000 : 30000);
+      try { res = await fetch(url, { method, body, headers: { Authorization: `Bearer ${token}`, ...headers }, signal: ctl ? ctl.signal : undefined }); }
+      finally { if (timer) clearTimeout(timer); }
     } catch (e) {
       if (attempt < 2) { await sleep(1000 * (attempt + 1)); continue; }
       throw new GraphError(0, "Keine Verbindung zu OneDrive");

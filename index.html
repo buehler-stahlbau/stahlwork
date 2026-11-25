@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.18-beta" />
+  <meta name="app-version" content="3.14.19-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -883,6 +883,7 @@
       <div class="drawer-title">Sparte</div>
       <div id="drawerSparten"></div>
       <div class="drawer-sep"></div>
+      <button class="drawer-item" id="drawerSyncNow" type="button"><span class="d-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span><span class="d-text"><b>Jetzt synchronisieren</b><small id="drawerSyncState">mit OneDrive abgleichen</small></span></button>
       <button class="drawer-item" id="drawerSettings" type="button"><span class="d-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="d-text"><b>Einstellungen</b><small id="drawerSync">Anmeldung, Synchronisierung</small></span></button>
       <div class="drawer-foot muted" id="drawerVer"></div>
     </aside>

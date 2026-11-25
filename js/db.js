@@ -70,16 +70,20 @@ export function openDb(force = false) {
   return dbPromise;
 }
 
+// Jeder Zugriff mit Zeitlimit: Safari lässt Vorgänge manchmal einfach hängen –
+// dann nicht endlos warten (z. B. „synchronisiert ewig“), sondern als hängend markieren.
 async function tx(storeName, mode, fn) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const t = db.transaction(storeName, mode);
+    const timer = setTimeout(() => { markDead(true); reject(new Error("Gerätespeicher antwortet nicht")); }, 10000);
+    let t;
+    try { t = db.transaction(storeName, mode); } catch (e) { clearTimeout(timer); dbPromise = null; reject(e); return; }
     const req = fn(t.objectStore(storeName));
     let result;
     if (req) req.onsuccess = () => { result = req.result; };
-    t.oncomplete = () => resolve(result);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
+    t.oncomplete = () => { clearTimeout(timer); resolve(result); };
+    t.onerror = () => { clearTimeout(timer); reject(t.error); };
+    t.onabort = () => { clearTimeout(timer); reject(t.error); };
   });
 }
 
