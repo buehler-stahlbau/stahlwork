@@ -156,6 +156,36 @@ export function importPeople({ rm = [], m = [], maler = [] }) {
   }
   return { neuRm, neuM, neuT, neuMa };
 }
+// Person löschen: aus Trupps, Einsätzen (inkl. Tages-Ausnahmen) und Krank/Urlaub entfernen.
+// Führt sie einen Trupp ohne weitere Mitglieder, wird der Trupp aufgelöst (Einsätze -> „Ohne Trupp“).
+export function personUsage(id) {
+  const ts = list("trupps");
+  const own = ts.filter((t) => t.fuehrerId === id);
+  return {
+    einsaetze: list("einsaetze").filter((e) => (e.monteure || []).includes(id)).length,
+    fuehrt: own.map((t) => truppName(t)),
+    truppWeg: own.filter((t) => !(t.monteure || []).some((m) => m !== id)),
+    trupps: ts.filter((t) => t.fuehrerId !== id && (t.monteure || []).includes(id)).length,
+    abw: list("abwesenheiten").filter((a) => a.monteurId === id).length,
+  };
+}
+export function removePerson(id) {
+  for (const t of list("trupps")) {
+    if (t.fuehrerId !== id && !(t.monteure || []).includes(id)) continue;
+    const rest = (t.monteure || []).filter((m) => m !== id);
+    if (t.fuehrerId === id && !rest.length) {
+      for (const e of list("einsaetze").filter((e) => e.truppId === t.id)) put("einsaetze", { ...e, truppId: null });
+      remove("trupps", t.id);
+    } else put("trupps", { ...t, monteure: rest, fuehrerId: t.fuehrerId === id ? null : t.fuehrerId });
+  }
+  for (const e of list("einsaetze")) {
+    if (!(e.monteure || []).includes(id) && !(e.off && e.off[id])) continue;
+    const off = { ...(e.off || {}) }; delete off[id];
+    put("einsaetze", { ...e, monteure: (e.monteure || []).filter((m) => m !== id), off });
+  }
+  for (const a of list("abwesenheiten").filter((a) => a.monteurId === id)) remove("abwesenheiten", a.id);
+  remove("monteure", id);
+}
 // Kategorie einer Person: "rm" (Richtmeister), "maler" oder "monteur"
 export function kind(p) { return p && p.maler ? "maler" : p && p.rm ? "rm" : "monteur"; }
 export const PERSON_KINDS = { rm: "Richtmeister", monteur: "Monteur", maler: "Maler" };

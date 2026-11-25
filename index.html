@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.19-beta" />
+  <meta name="app-version" content="3.14.20-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -151,8 +151,8 @@
       #searchBtn { display: inline-flex; }
       .tab .cnt { position: absolute; top: -4px; right: -5px; font-size: .68rem; min-width: 18px; line-height: 16px; padding: 0 4px; border: 2px solid #fff; background: var(--brand-gray-700); color: #fff; }
       .tab.active .cnt { background: #fff; color: var(--brand-gray-900); border-color: var(--brand-gray-700); }
-      .sync-chip { display: none; }
-      .sync-dot { display: block; }
+      .sync-chip { width: 40px; height: 40px; margin-left: auto; }
+      .sync-chip .ico { width: 20px; height: 20px; }
       .menu-btn { width: 36px; }
       .sparte-logo { width: 40px; height: 40px; border-radius: 10px; }
       .search-wrap { display: none; }
@@ -170,6 +170,9 @@
     @media (max-width: 350px){
       .tab, #searchBtn { width: 36px; height: 36px; }
       .menu-btn { width: 30px; height: 36px; }
+      .sync-chip { width: 34px; height: 34px; }
+      .sync-chip .ico { width: 18px; height: 18px; }
+      .tabs, .appbar-inner { gap: 2px; }
       .ico { width: 20px; height: 20px; }
       .sparte-logo { width: 32px; height: 32px; border-radius: 8px; }
     }
@@ -179,11 +182,6 @@
     .menu-btn .ico { width: 26px; height: 26px; }
     @media (hover: hover) and (pointer: fine){ .menu-btn:hover { background: var(--brand-gray-100); } }
     .menu-btn .sync-dot { top: 6px; right: 2px; }
-    /* Synchronisierung läuft: blauer Kreis dreht sich um das Burger-Symbol (nur App-Ansicht) */
-    .menu-btn .sync-ring { display: none; position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 3px solid rgba(46,91,138,.15); border-top-color: var(--brand-primary); border-right-color: var(--brand-primary); pointer-events: none; animation: spin .9s linear infinite; }
-    @media (max-width: 760px){ .menu-btn.syncing .sync-ring { display: block; } }
-    @media (max-width: 400px){ .menu-btn .sync-ring { width: 34px; height: 34px; margin: -17px 0 0 -17px; } }
-    @media (prefers-reduced-motion: reduce){ .menu-btn .sync-ring { animation-duration: 2.5s; } }
     #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { display: none; }
     body.sparte-mon #tabMon, body.sparte-mon #tabMonPlan, body.sparte-mon #tabMonBuehnen, body.sparte-mon #tabMonPersonal { display: inline-flex; }
     .tab .cnt.due:not(:empty) { background: var(--brand-red); color: #fff; }
@@ -421,6 +419,10 @@
     @media (hover: hover) and (pointer: fine){ .mon-brow:hover { background: var(--brand-gray-100); } }
     .mon-mrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 14px; min-height: 52px; border-top: 1px solid var(--brand-gray-100); }
     .mon-mrow > .row { gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+    .mon-mrow .tog-btn { width: 92px; justify-content: center; }
+    .mon-mrow .icon-only { width: 36px; padding: 0; justify-content: center; }
+    .mon-mrow .icon-only .ico { width: 18px; height: 18px; }
+    @media (max-width: 600px) { .mon-mrow .tog-btn { width: 84px; } }
     .page-head > .primary { white-space: nowrap; }
     @media (max-width: 600px) { .mon-mrow .lbl { display: none; } .mon-mrow button.small { min-width: 38px; justify-content: center; } }
     .mon-mrow .rm-on { color: var(--fav); }
@@ -643,6 +645,8 @@
       body.sparte-mon #syncChip, body.view-settings #syncChip { margin-left: auto; }
       body.sparte-mon .sparte-logo, body.view-settings .sparte-logo { margin-left: 0; }
     }
+    /* Handy: Sync-Symbol oben rechts direkt neben dem Logo (wie im Browser) */
+    @media (max-width: 760px){ .sparte-logo { margin-left: 0; } }
     .update-bar.auth-bar { white-space: normal; width: min(560px, calc(100vw - 24px)); border-radius: 14px; background: #7a4a00; }
     .auth-expired { background: rgba(180,110,0,.10); border: 1px solid rgba(180,110,0,.35); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
     .auth-expired p { margin: 0 0 8px; }
@@ -850,7 +854,7 @@
 <body>
   <header class="appbar" id="appbar">
     <div class="appbar-inner">
-      <button id="menuBtn" class="menu-btn" type="button" title="Menü" aria-label="Menü" aria-haspopup="dialog" aria-controls="drawer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="sync-ring" aria-hidden="true"></span><span class="sync-dot off" id="menuDot"></span></button>
+      <button id="menuBtn" class="menu-btn" type="button" title="Menü" aria-label="Menü" aria-haspopup="dialog" aria-controls="drawer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="sync-dot off" id="menuDot"></span></button>
       <nav class="tabs" aria-label="Hauptmenü">
         <button id="tabMon" class="tab" type="button" title="Übersicht" aria-label="Übersicht"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span class="label">Übersicht</span></button>
         <button id="tabMonPlan" class="tab" type="button" title="Planung" aria-label="Planung"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg><span class="label">Planung</span></button>

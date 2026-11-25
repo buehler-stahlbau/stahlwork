@@ -38,6 +38,7 @@ const ICO = {
   check: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   lift: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v4M19 3v4M4 3h16M3 7.5h18M6 8l12 7M18 8L6 15"/><rect x="3" y="15" width="18" height="3.5" rx="1" fill="currentColor"/><circle cx="7" cy="20.5" r="1.6"/><circle cx="17" cy="20.5" r="1.6"/></svg>',
   people: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c2.8 0 5 2.2 5 5"/></svg>',
+  trash: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
   edit: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
 };
 
@@ -1273,21 +1274,30 @@ function cardHead(title, btnId, label, ro) {
 }
 function addPeopleDialog() {
   const body = U.el(`<div class="mon-form">
-    <label class="field-label">Richtmeister (ein Name pro Zeile – je Richtmeister wird ein Trupp angelegt)</label><textarea id="rmAdd" rows="3"></textarea>
-    <label class="field-label">Monteure (ein Name pro Zeile)</label><textarea id="mAdd" rows="4"></textarea>
-    <label class="field-label">Maler (ein Name pro Zeile – je Maler eine eigene Zeile in der Planung)</label><textarea id="maAdd" rows="2"></textarea></div>`);
-  modal("Personal hinzufügen", body, [
+    <label class="field-label">Name</label><input type="text" class="f-name" autocomplete="off" />
+    <label class="field-label">Typ</label><div class="seg kind-seg" role="group">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<button type="button" data-k="${k}" class="${k === "monteur" ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="muted kind-hint"></p></div>`);
+  let k = "monteur";
+  const hint = body.querySelector(".kind-hint");
+  const HINTS = { rm: "Bekommt einen eigenen Trupp (Zeile in der Planung).", monteur: "Wird in Trupps und Einsätzen eingeteilt.", maler: "Bekommt eine eigene Zeile in der Planung (unten bei Maler)." };
+  const setK = (v) => { k = v; U.$$("[data-k]", body).forEach((b) => b.classList.toggle("on", b.dataset.k === v)); hint.textContent = HINTS[v]; };
+  U.$$("[data-k]", body).forEach((b) => { b.onclick = () => setK(b.dataset.k); });
+  setK("monteur");
+  const nameEl = body.querySelector(".f-name");
+  const save = () => {
+    const name = nameEl.value.trim();
+    if (!name) { toast("Bitte einen Namen eingeben.", "warn"); nameEl.focus(); return false; }
+    if (M.list("monteure").some((p) => p.name.toLowerCase() === name.toLowerCase())) { toast(`${name} gibt es schon.`, "warn"); nameEl.focus(); return false; }
+    M.importPeople({ rm: k === "rm" ? [name] : [], m: k === "monteur" ? [name] : [], maler: k === "maler" ? [name] : [] });
+    toast(`${name} als ${M.PERSON_KINDS[k]} angelegt.`, "info", 2500);
+    changed();
+  };
+  const dlg = modal("Person hinzufügen", body, [
     { label: "Abbrechen", fn: () => {} },
-    { label: "Hinzufügen", cls: "primary", fn: () => {
-      const split = (v) => v.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
-      const rm = split(body.querySelector("#rmAdd").value), m = split(body.querySelector("#mAdd").value), maler = split(body.querySelector("#maAdd").value);
-      if (!rm.length && !m.length && !maler.length) { toast("Bitte mindestens einen Namen eingeben.", "warn"); return false; }
-      const r = M.importPeople({ rm, m, maler });
-      toast(`${r.neuRm} Richtmeister, ${r.neuM} Monteur(e), ${r.neuMa} Maler angelegt.`, "info", 3500);
-      changed();
-    } },
+    { label: "Hinzufügen", cls: "primary", fn: save },
   ]);
-  setTimeout(() => body.querySelector("#rmAdd").focus(), 50);
+  nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (save() !== false) dlg.close(); } });
+  setTimeout(() => nameEl.focus(), 50);
 }
 
 export function renderMonPersonal(app) {
@@ -1317,7 +1327,7 @@ export function renderMonPersonal(app) {
   // Personen
   const all = M.sortedMonteure(true);
   const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-    ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button></span>`}</div>`;
+    ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small tog-btn" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button><button type="button" class="secondary small icon-only" data-del="${h(m.id)}" title="Löschen" aria-label="${h(m.name)} löschen">${ICO.trash}</button></span>`}</div>`;
   const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
   const pCard = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
   app.appendChild(pCard);
@@ -1325,6 +1335,20 @@ export function renderMonPersonal(app) {
     U.$$("[data-kind]", pCard).forEach((sel) => { sel.onchange = () => changeKind(M.get("monteure", sel.dataset.kind), sel.value, () => { sel.value = M.kind(M.get("monteure", sel.dataset.kind)); }); });
     U.$$("[data-ren]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
     U.$$("[data-tog]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
+    U.$$("[data-del]", pCard).forEach((b) => { b.onclick = () => {
+      const m = M.get("monteure", b.dataset.del);
+      const u = M.personUsage(m.id);
+      const lines = [
+        u.einsaetze ? `• in ${u.einsaetze} Einsatz/Einsätzen eingeplant – wird dort entfernt` : "",
+        u.fuehrt.length ? `• führt Trupp ${u.fuehrt.join(", ")} – ${u.truppWeg.length ? "Trupp wird aufgelöst (Einsätze bleiben unter „Ohne Trupp“)" : "Trupp bleibt ohne Richtmeister"}` : "",
+        u.trupps ? `• Mitglied in ${u.trupps} Trupp(s)` : "",
+        u.abw ? `• ${u.abw} Krank/Urlaub-Eintrag/Einträge werden gelöscht` : "",
+      ].filter(Boolean);
+      if (!confirm(`${m.name} endgültig löschen?${lines.length ? "\n\n" + lines.join("\n") : ""}\n\nTipp: „Inaktiv“ blendet die Person aus und behält alles.`)) return;
+      M.removePerson(m.id);
+      toast(`${m.name} gelöscht.`, "info", 3000);
+      changed();
+    }; });
   }
 }
 

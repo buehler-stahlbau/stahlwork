@@ -562,7 +562,6 @@ const SYNC_ICONS = {
   off: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M11 18h2"/></svg>',
 };
 
-let ringSince = 0, ringTimer = null;
 function updateSyncChip() {
   const chip = $("#syncChip");
   if (!chip) return;
@@ -583,17 +582,6 @@ function updateSyncChip() {
   chip.setAttribute("aria-label", titles[s.kind] || "Synchronisierung");
   const mdot = $("#menuDot");
   if (mdot) mdot.className = "sync-dot " + s.kind;
-  // Ring um das Burger-Symbol: mindestens 1 s sichtbar, damit auch kurze Abgleiche erkennbar sind
-  const mb = $("#menuBtn");
-  if (mb) {
-    clearTimeout(ringTimer);
-    if (s.kind === "syncing") { ringSince = Date.now(); mb.classList.add("syncing"); }
-    else {
-      const rest = Math.max(0, 1000 - (Date.now() - ringSince));
-      const done = () => { mb.classList.remove("syncing"); if (mdot) mdot.className = "sync-dot " + s.kind; };
-      if (rest && mb.classList.contains("syncing")) { if (mdot) mdot.className = "sync-dot syncing"; ringTimer = setTimeout(done, rest); } else done();
-    }
-  }
   const dsn = $("#drawerSyncNow"); if (dsn) dsn.style.display = s.kind === "off" ? "none" : "";
   const dss = $("#drawerSyncState");
   if (dss) dss.textContent = s.kind === "syncing" ? "läuft …" : s.kind === "idle" ? (s.lastSync ? `zuletzt ${new Date(s.lastSync).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr` : "alles synchron") : s.kind === "pending" ? `${s.pending} Änderung(en) warten` : s.kind === "offline" ? "offline" : s.kind === "error" ? "Fehler – nochmal versuchen" : "mit OneDrive abgleichen";
@@ -1984,27 +1972,10 @@ function renderSettings(app) {
   const auto = autoSignature();
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
     <p class="muted">Wird unter E-Mails gesetzt, die Stahlwork vorbereitet (z. B. Bühne abmelden). Outlook fügt bei solchen E-Mails die eigene Signatur meist nicht ein.</p>
-    <p class="muted">${auto ? "<b>Automatisch</b> aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock. Nur ausfüllen, wenn du eine eigene Signatur möchtest." : "Wird nach der Anmeldung automatisch aus deinem Microsoft-Profil erstellt. Hier kannst du eine eigene Signatur eintragen."}</p>
+    <p class="muted">${auto ? "<b>Automatisch</b> aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock. Nur ausfüllen, wenn du eine eigene Signatur möchtest – „Automatische anpassen“ kopiert sie dafür ins Feld." : "Wird nach der Anmeldung automatisch aus deinem Microsoft-Profil erstellt. Hier kannst du eine eigene Signatur eintragen."}</p>
     <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="${h(auto || "Max Mustermann\nMontageleitung\nFriedrich Bühler GmbH & Co. KG\nTel. …").replace(/\n/g, "&#10;")}"></textarea>
-    <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit">Automatische als Vorlage übernehmen</button>` : ""}</div></div>`);
+    <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit" title="Kopiert die automatische Signatur ins Feld, damit du sie anpassen kannst">Automatische anpassen</button>` : ""}</div></div>`);
   app.appendChild(sigCard);
-  // Test: Mail-Berechtigung (für E-Mail-Entwürfe mit Logo-Signatur)
-  if (od.isConfigured() && od.isSignedIn()) {
-    const r = od.mailCheckResult();
-    const adminNeeded = r && !r.ok && /90094|90095|65001|consent|access_denied|admin/i.test((r.code || "") + " " + (r.msg || ""));
-    const res = !r ? "" : r.ok
-      ? `<p class="ok-text"><b>Berechtigung vorhanden.</b> Stahlwork darf E-Mail-Entwürfe anlegen – der Weg mit Logo-Signatur ist möglich.</p>`
-      : `<p class="error-text"><b>${adminNeeded ? "Administratorzustimmung nötig." : "Nicht erteilt."}</b> ${adminNeeded ? "Die IT muss für Stahlwork die delegierte Berechtigung „Mail.ReadWrite“ freigeben." : "Die Anfrage wurde abgebrochen oder abgelehnt."}</p>
-         <p class="muted small-note">Meldung: ${h(r.code || "")} ${h((r.msg || "").split("\n")[0].slice(0, 200))}</p>`;
-    const mc = el(`<div class="card"><h3 class="section-title">Mail-Berechtigung prüfen</h3>
-      <p class="muted">Prüft, ob Stahlwork E-Mail-Entwürfe in deinem Postfach anlegen darf (nötig für Abmelde-E-Mails mit Logo-Signatur). Es wird nichts verschickt oder verändert. Microsoft zeigt ggf. eine Zustimmungsseite – dort entweder „Akzeptieren“ oder, falls „Genehmigung erforderlich“ erscheint, zurück zur App.</p>
-      ${res}<div class="row"><button type="button" class="secondary" id="mailCheck">${r ? "Erneut prüfen" : "Jetzt prüfen"}</button></div></div>`);
-    sigCard.after(mc);
-    $("#mailCheck", mc).onclick = async () => {
-      try { await saveNow(); const ok = await od.checkMailPermission(); if (ok) { toast("Berechtigung vorhanden.", "info", 4000); render(); } }
-      catch (e) { toast("Prüfung nicht möglich: " + (e && e.message || e), "error", 7000); }
-    };
-  }
   const sigEl = $("#mailSig", sigCard);
   sigEl.value = S.state.prefs.mailSignature || "";
   const sigEdit = $("#sigEdit", sigCard);
