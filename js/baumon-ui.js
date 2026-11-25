@@ -1331,7 +1331,7 @@ export function renderMonPersonal(app) {
 
   // Personen
   const all = M.sortedMonteure(true);
-  const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
+  const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}" data-person="${h(m.id)}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
     ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small tog-btn" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button><button type="button" class="secondary small icon-only" data-del="${h(m.id)}" title="Löschen" aria-label="${h(m.name)} löschen">${ICO.trash}</button></span>`}</div>`;
   const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
   const pCard = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
@@ -1443,4 +1443,62 @@ function editTrupp(t) {
   modal(t ? "Trupp" : "Neuer Trupp", body, [
     ...(t ? [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Trupp löschen? Seine Einsätze bleiben als „Ohne Trupp“ erhalten.")) return false; M.remove("trupps", cur.id); changed(); } }] : []),
     { label: "Abbrechen", fn: () => {} }, { label: t ? "Speichern" : "Anlegen", cls: "primary", fn: save }]);
+}
+
+/* ---------- Suche (aus dem Menü) ---------- */
+export function searchMon(words) {
+  const hit = (s) => { const t = String(s || "").toLowerCase(); return words.every((w) => t.includes(w)); };
+  const t = M.today();
+  const names = (ids) => (ids || []).map((id) => (M.get("monteure", id) || {}).name).filter(Boolean).join(" ");
+  const range = (a, b) => `${M.shortDate(a)}–${M.shortDate(b)}`;
+  // aktuelle und kommende zuerst, dann vergangene (neueste zuerst)
+  const byTime = (a, b) => ((a.bis >= t) === (b.bis >= t) ? (a.bis >= t ? a.von.localeCompare(b.von) : b.von.localeCompare(a.von)) : a.bis >= t ? -1 : 1);
+  const out = [];
+  const ein = M.list("einsaetze").filter((e) => hit(`${M.baustelleLabel(e)} ${M.truppName(M.get("trupps", e.truppId))} ${names(e.monteure)} ${e.leih || ""} ${e.kran || ""}`)).sort(byTime);
+  out.push({ title: "Einsätze", items: ein.map((e) => ({ label: M.baustelleLabel(e), sub: `${M.truppName(M.get("trupps", e.truppId))} · ${range(e.von, e.bis)}`, tag: e.bis < t ? "vorbei" : e.von <= t ? "läuft" : "", kind: "einsatz", id: e.id })) });
+  const vn = (b) => (b.vermieterId ? (M.get("vermieter", b.vermieterId) || {}).firma || "" : "Bühler (eigene)");
+  const bue = M.list("buehnen").filter((b) => hit(`${M.baustelleLabel(b)} ${b.typ || ""} ${vn(b)} ${b.auftragsNr || ""} ${b.standort || ""}`)).sort((a, b) => (!!a.abgemeldetAm - !!b.abgemeldetAm) || (a.bis || "").localeCompare(b.bis || ""));
+  out.push({ title: "Bühnen", items: bue.map((b) => ({ label: M.baustelleLabel(b), sub: `${M.buehneText(b)} · ${vn(b)}${b.bis ? " · Mietende " + M.shortDate(b.bis) : ""}`, tag: b.abgemeldetAm ? "abgemeldet" : M.isDue(b, t) ? "abmelden!" : "", kind: "buehne", id: b.id })) });
+  out.push({ title: "Personal", items: M.sortedMonteure(true).filter((m) => hit(m.name)).map((m) => ({ label: m.name, sub: M.PERSON_KINDS[M.kind(m)], tag: m.aktiv === false ? "inaktiv" : "", kind: "person", id: m.id })) });
+  out.push({ title: "Trupps", items: M.sortedTrupps().filter((tr) => hit(`${M.truppName(tr)} ${names(tr.monteure)}`)).map((tr) => ({ label: M.truppName(tr), sub: names((tr.monteure || []).filter((id) => id !== tr.fuehrerId)).split(" ").join(", "), kind: "trupp", id: tr.id })) });
+  out.push({ title: "Bühnenvermieter", items: M.list("vermieter").filter((v) => hit(`${v.firma} ${v.ansprechpartner || ""} ${v.email || ""}`)).map((v) => ({ label: v.firma, sub: [v.ansprechpartner, v.email].filter(Boolean).join(" · "), kind: "vermieter", id: v.id })) });
+  const abw = M.list("abwesenheiten").filter((a) => a.bis >= M.addDays(t, -14) && hit(`${(M.get("monteure", a.monteurId) || {}).name || ""} ${M.ABW_TYPES[a.typ]}`)).sort((a, b) => a.von.localeCompare(b.von));
+  out.push({ title: "Krank / Urlaub", items: abw.map((a) => ({ label: (M.get("monteure", a.monteurId) || {}).name || "?", sub: `${M.ABW_TYPES[a.typ]} · ${range(a.von, a.bis)}`, kind: "abw", id: a.id })) });
+  return out;
+}
+
+export function openSearchHit(kind, id) {
+  const later = (fn) => setTimeout(fn, 60);
+  if (kind === "einsatz") {
+    const e = M.get("einsaetze", id); if (!e) return;
+    // Woche so wählen, dass der Einsatz sichtbar ist
+    const start = M.addDays(M.range().start, weekOffset * 7), end = M.addDays(start, 20);
+    if (e.bis < start || e.von > end) weekOffset = Math.round((M.parseDay(M.mondayOf(e.von)) - M.parseDay(M.range().start)) / (7 * 86400000));
+    U.go({ sparte: "mon", view: "monplan", selectedProjectId: null, selectedDocId: null });
+    later(() => openEinsatz(e));
+  } else if (kind === "buehne") {
+    const b = M.get("buehnen", id); if (!b) return;
+    U.go({ sparte: "mon", view: "monbuehnen", selectedProjectId: null, selectedDocId: null });
+    later(() => openBuehne(b));
+  } else if (kind === "vermieter") {
+    const v = M.get("vermieter", id); if (!v) return;
+    U.go({ sparte: "mon", view: "monbuehnen", selectedProjectId: null, selectedDocId: null });
+    if (editable()) later(() => editVermieter(v));
+  } else if (kind === "trupp") {
+    const tr = M.get("trupps", id); if (!tr) return;
+    U.go({ sparte: "mon", view: "monpersonal", selectedProjectId: null, selectedDocId: null });
+    if (editable()) later(() => editTrupp(tr));
+  } else if (kind === "abw") {
+    const a = M.get("abwesenheiten", id); if (!a) return;
+    U.go({ sparte: "mon", view: "monpersonal", selectedProjectId: null, selectedDocId: null });
+    if (editable()) later(() => openAbw(a));
+  } else if (kind === "person") {
+    U.go({ sparte: "mon", view: "monpersonal", selectedProjectId: null, selectedDocId: null });
+    later(() => {
+      const r = document.querySelector(`.mon-mrow[data-person="${CSS.escape(id)}"]`);
+      if (!r) return;
+      r.scrollIntoView({ block: "center" });
+      r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash");
+    });
+  }
 }

@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -281,6 +281,7 @@ function render() {
 
 function renderInner() {
   pendingRender = false;
+  if (S.state.view !== "archive" || S.state.selectedProjectId) filterText = "";
   const prevView = currentRenderedView;
   currentRenderedView = S.state.view;
   lastRenderedView = prevView;
@@ -349,10 +350,6 @@ function updateHeader() {
   $("#cntArchive").textContent = cnt(st.archivedProjects.length);
   $("#cntMonB").textContent = cnt(dueBuehnen().length); // Bühnen zum Abmelden
 
-  $("#searchBtn").classList.toggle("active", !!filterText.trim());
-  const search = $("#search");
-  search.placeholder = st.view === "archive" ? "Archiv: Nr., Bauherr, Ort, Prüfcode" : "Nr., Bauherr, Ort, Prüfcode";
-  if (search.value !== filterText) search.value = filterText;
   updateSyncChip();
 }
 
@@ -389,6 +386,7 @@ function openDrawer() {
   ds.querySelector(".d-check")?.remove();
   if (st.view === "settings") ds.insertAdjacentHTML("beforeend", CHECK_ICO);
   $("#drawerVer").textContent = "Stahlwork " + APP_VERSION;
+  const gs = $("#gSearch"); if (gs && gs.value) { gs.value = ""; renderSearch(); }
   $("#drawer").hidden = false;
   document.body.classList.add("drawer-open");
   $("#menuBtn").setAttribute("aria-expanded", "true");
@@ -414,6 +412,89 @@ function setupDrawer() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 }
 
+/* ---------- Suche (ganze App) im Menü ----------
+   BauDoc: Bauvorhaben, Dokumentationen, Archiv, PDF-Prüfcode · BauMon: Einsätze, Bühnen, Personal, Trupps, Vermieter, Krank/Urlaub */
+let searchHits = [];
+function buildSearch(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (s) => { const t = String(s || "").toLowerCase(); return words.every((w) => t.includes(w)); };
+  const groups = [];
+  const st = S.state;
+  const pText = (p) => [p.number, p.title, p.client, p.place].filter(Boolean).join(" ");
+  const pLabel = (p) => `${p.number} ${p.client || p.title}`;
+  const pSub = (p) => [p.place, p.client && p.title !== p.client ? p.title : ""].filter(Boolean).join(" · ");
+  const sorted = (a) => a.slice().sort((x, y) => y.number.localeCompare(x.number));
+  groups.push({ title: "Bauvorhaben", items: sorted(st.projects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: p.fav ? "★" : "", act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: null }) })) });
+  const docs = [];
+  for (const p of st.projects) for (const d of p.docs || []) if (hit(`${d.title} ${pText(p)}`) && !hit(pText(p))) docs.push({ p, d });
+  docs.sort((a, b) => (b.d.date || "").localeCompare(a.d.date || ""));
+  groups.push({ title: "Dokumentationen", items: docs.map(({ p, d }) => ({ label: d.title, sub: `${pLabel(p)} · ${formatDateDE(d.date)}`, act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: d.id }) })) });
+  groups.push({ title: "Archiv", items: sorted(st.archivedProjects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: "Archiv", act: () => { go({ sparte: "doc", view: "archive", selectedProjectId: null, selectedDocId: null }); filterText = p.number; render(); } })) });
+  for (const g of searchMon(words)) groups.push({ title: g.title, items: g.items.map((x) => ({ ...x, act: () => openSearchHit(x.kind, x.id) })) });
+  return groups.filter((g) => g.items.length);
+}
+function renderSearch() {
+  const inp = $("#gSearch"), res = $("#drawerResults");
+  const q = inp.value.trim();
+  const on = !!q;
+  $("#drawer").classList.toggle("searching", on);
+  $("#gSearchClear").hidden = !on;
+  res.hidden = !on;
+  $("#drawerMain").hidden = on;
+  $("#drawerBottom").hidden = on;
+  searchHits = [];
+  if (!on) { res.innerHTML = ""; return; }
+  let html = "";
+  // PDF-Prüfcode (z. B. 7F3A-91C2)
+  if (/^[0-9a-f]{4}[\s-]?[0-9a-f]{4}$/i.test(q)) {
+    const r = checkCode(normalizeCode(q));
+    html += `<div class="sr-group"><div class="sr-title">PDF-Prüfcode</div><div class="card sr-code"><div class="check-result ${r.cls}">${r.html}</div></div></div>`;
+  }
+  const groups = q.length >= 2 || /^\d$/.test(q) ? buildSearch(q) : [];
+  const MAX = 8;
+  for (const g of groups) {
+    html += `<div class="sr-group"><div class="sr-title">${h(g.title)} (${g.items.length})</div>`;
+    for (const x of g.items.slice(0, MAX)) {
+      searchHits.push(x);
+      html += `<button type="button" class="sr-item" data-hit="${searchHits.length - 1}"><b>${h(x.label)}${x.tag ? `<span class="sr-tag">${h(x.tag)}</span>` : ""}</b>${x.sub ? `<small>${h(x.sub)}</small>` : ""}</button>`;
+    }
+    if (g.items.length > MAX) html += `<div class="sr-more">+ ${g.items.length - MAX} weitere – Suche genauer eingeben</div>`;
+    html += `</div>`;
+  }
+  if (!html) html = `<div class="sr-empty">${q.length < 2 ? "Weiter tippen …" : `Nichts gefunden für „${h(q)}“.`}</div>`;
+  res.innerHTML = html;
+  res.scrollTop = 0;
+  $$("[data-hit]", res).forEach((b) => { b.onclick = () => openHit(searchHits[Number(b.dataset.hit)]); });
+  $$("[data-open-pid]", res).forEach((b) => { b.onclick = () => openHit({ act: () => go({ sparte: "doc", view: "projects", selectedProjectId: b.dataset.openPid, selectedDocId: b.dataset.openDid }) }); });
+}
+function openHit(x) {
+  if (!x) return;
+  $("#gSearch").value = "";
+  renderSearch();
+  closeDrawer();
+  x.act();
+}
+function setupGlobalSearch() {
+  const inp = $("#gSearch");
+  let t = null;
+  inp.addEventListener("input", () => { clearTimeout(t); t = setTimeout(renderSearch, 120); });
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); clearTimeout(t); renderSearch(); if (searchHits.length) openHit(searchHits[0]); }
+    if (e.key === "Escape" && inp.value) { e.preventDefault(); e.stopPropagation(); inp.value = ""; renderSearch(); }
+  });
+  $("#gSearchClear").onclick = () => { inp.value = ""; renderSearch(); inp.focus(); };
+  // PC: Strg+K (oder /) öffnet die Suche
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") || (document.activeElement || {}).isContentEditable;
+    if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") || (e.key === "/" && !typing)) {
+      if (isLocked()) return;
+      e.preventDefault();
+      if ($("#drawer").hidden) openDrawer();
+      inp.focus(); inp.select();
+    }
+  });
+}
+
 // BauMon (Montage): Bereich in Vorbereitung
 /* ---------- Anmeldung abgelaufen ----------
    Konto ist bekannt, aber Microsoft verlangt eine neue Anmeldung: Hinweis mit Knopf. */
@@ -426,46 +507,6 @@ function updateAuthBar() {
   if (ex === wasExpired) return;
   wasExpired = ex;
   render();
-}
-
-function setupSearch() {
-  const search = $("#search");
-  const bar = $("#appbar");
-  // App-Ansicht: Lupe klappt das Suchfeld auf
-  $("#searchBtn").onclick = () => {
-    bar.classList.add("searching");
-    search.focus();
-  };
-  const closeSearch = () => {
-    bar.classList.remove("searching");
-    if (filterText) { filterText = ""; search.value = ""; render(); }
-    search.blur();
-  };
-  $("#searchClose").onclick = closeSearch;
-  search.addEventListener("blur", () => {
-    // leer verlassen -> wieder zuklappen
-    if (!search.value.trim()) setTimeout(() => { if (document.activeElement !== search) bar.classList.remove("searching"); }, 150);
-  });
-  search.addEventListener("input", () => {
-    filterText = search.value;
-    const st = S.state;
-    if (!filterText.trim()) {
-      if (!st.selectedProjectId && st.view !== "settings") render();
-    } else if (st.view === "settings" || st.view === "map" && searchCode() || st.selectedProjectId) {
-      go({ view: st.view === "settings" || st.view === "map" ? "projects" : st.view, selectedProjectId: null, selectedDocId: null }, { replace: true });
-    } else {
-      render();
-    }
-  });
-  search.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      // Genau ein Treffer -> direkt öffnen
-      const hits = $$("#app .project-item[data-pid]");
-      if (hits.length === 1) hits[0].click();
-      else search.blur();
-    }
-    if (e.key === "Escape") closeSearch();
-  });
 }
 
 /* ---------- Prüfcode über die Suche ----------
@@ -529,7 +570,7 @@ function renderCodeCheck(app) {
   const card = el(`<div class="card code-card"><h3 class="section-title">PDF-Prüfcode</h3><div id="chkResult" class="check-result ${r.cls}">${r.html}</div></div>`);
   $$("[data-open-pid]", card).forEach((b) => {
     b.onclick = () => {
-      filterText = ""; $("#search").value = ""; $("#appbar").classList.remove("searching");
+      filterText = "";
       go({ view: "projects", selectedProjectId: b.dataset.openPid, selectedDocId: b.dataset.openDid });
     };
   });
@@ -646,7 +687,9 @@ function renderProjectList(app, onlyFav) {
   if (isCode && !shown.length) return;
   const list = el(`<div class="card list-card"></div>`);
   if (filterText.trim()) {
-    list.appendChild(el(`<div class="muted list-info">${shown.length} Treffer für „${h(filterText.trim())}“</div>`));
+    const info = el(`<div class="muted list-info">${shown.length} Treffer für „${h(filterText.trim())}“ <button type="button" class="link-btn" id="clearFilter">Alle zeigen</button></div>`);
+    info.querySelector("#clearFilter").onclick = () => { filterText = ""; render(); };
+    list.appendChild(info);
   }
   if (!base.length) {
     list.appendChild(el(onlyFav
@@ -2276,7 +2319,7 @@ function versionMismatch() {
   await checkAccount();
 
   window.__bootStep = "Anzeige aufbauen";
-  setupSearch();
+  setupGlobalSearch();
   setupDrawer();
   initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
