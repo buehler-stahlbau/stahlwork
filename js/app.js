@@ -1972,15 +1972,13 @@ function renderSettings(app) {
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
   const auto = autoSignature();
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
-    <label class="opt-row"><input type="checkbox" id="pcOutlookSig" ${S.state.prefs.pcOutlookSig !== false ? "checked" : ""} /> <span><b>Am PC: Outlook-Signatur verwenden</b> (empfohlen). Die E-Mail öffnet leer mit Empfänger und Betreff, Outlook setzt deine Signatur mit Logo und Schrift ein. Der Text liegt in der Zwischenablage – mit Strg+V einfügen.</span></label>
-    <p class="muted">Am Handy (und am PC, wenn oben ausgeschaltet) setzt Stahlwork die folgende Signatur selbst unter die E-Mail – nur als Text.</p>
+    <p class="muted">Wird unter E-Mails gesetzt, die Stahlwork vorbereitet (z. B. Bühne abmelden). Outlook fügt bei solchen E-Mails die eigene Signatur meist nicht ein.</p>
     <p class="muted">${auto ? "<b>Automatisch</b> aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock. Nur ausfüllen, wenn du eine eigene Signatur möchtest." : "Wird nach der Anmeldung automatisch aus deinem Microsoft-Profil erstellt. Hier kannst du eine eigene Signatur eintragen."}</p>
     <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="${h(auto || "Max Mustermann\nMontageleitung\nFriedrich Bühler GmbH & Co. KG\nTel. …").replace(/\n/g, "&#10;")}"></textarea>
     <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit">Automatische als Vorlage übernehmen</button>` : ""}</div></div>`);
   app.appendChild(sigCard);
   const sigEl = $("#mailSig", sigCard);
   sigEl.value = S.state.prefs.mailSignature || "";
-  $("#pcOutlookSig", sigCard).onchange = (e) => { S.state.prefs.pcOutlookSig = e.target.checked; saveSoon(); };
   const sigEdit = $("#sigEdit", sigCard);
   if (sigEdit) sigEdit.onclick = () => { if (!sigEl.value.trim()) { sigEl.value = auto; sigEl.dispatchEvent(new Event("input")); } sigEl.focus(); };
   sigEl.addEventListener("input", () => {
@@ -2258,7 +2256,7 @@ function versionMismatch() {
   window.__bootStep = "Anzeige aufbauen";
   setupSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, prefs: () => S.state.prefs, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
   sync.onData(() => requestRender());
   onChange((kind) => {
