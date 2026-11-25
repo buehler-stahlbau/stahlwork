@@ -42,8 +42,19 @@ export async function init() {
     cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
   });
   let res = null;
+  const mailCheck = localStorage.getItem("mailCheckPending");
   try {
     res = await pca.handleRedirectPromise();
+    if (mailCheck && res) {
+      localStorage.removeItem("mailCheckPending");
+      const ok = (res.scopes || []).some((s) => /mail\.readwrite/i.test(s));
+      localStorage.setItem("mailCheckResult", JSON.stringify({ ok, code: ok ? "" : "scope_missing", at: Date.now() }));
+    }
+  } catch (e) {
+    // Test der Mail-Berechtigung: Ablehnung (z. B. Administratorzustimmung nötig) merken, App startet normal
+    if (!mailCheck) throw e;
+    localStorage.removeItem("mailCheckPending");
+    localStorage.setItem("mailCheckResult", JSON.stringify({ ok: false, code: (e && e.errorCode) || "", msg: String((e && e.errorMessage) || e || "").slice(0, 400), at: Date.now() }));
   } finally {
     // Anmelde-Antwort (#code=…) sofort aus der Adresse entfernen: beim Neuladen würde
     // sonst der alte, schon verbrauchte Code erneut eingelöst (Fehler AADSTS70008)
@@ -64,6 +75,22 @@ export function login() {
 export function relogin() {
   return pca.loginRedirect({ scopes: CONFIG.scopes, loginHint: account ? account.username : undefined });
 }
+// Test: darf Stahlwork E-Mail-Entwürfe anlegen (Mail.ReadWrite)? Erst still, sonst Microsoft fragen.
+export async function checkMailPermission() {
+  if (!pca || !account) throw new AuthRequired();
+  try {
+    const r = await pca.acquireTokenSilent({ scopes: ["Mail.ReadWrite"], account });
+    if (r && r.accessToken) {
+      localStorage.setItem("mailCheckResult", JSON.stringify({ ok: true, code: "", at: Date.now() }));
+      return true;
+    }
+  } catch {}
+  localStorage.setItem("mailCheckPending", "1");
+  await pca.acquireTokenRedirect({ scopes: ["Mail.ReadWrite"], account, loginHint: account.username });
+  return null;
+}
+export function mailCheckResult() { try { return JSON.parse(localStorage.getItem("mailCheckResult") || "null"); } catch { return null; } }
+
 export function logout() {
   return pca.logoutRedirect({ account });
 }

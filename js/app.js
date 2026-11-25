@@ -1977,6 +1977,23 @@ function renderSettings(app) {
     <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="${h(auto || "Max Mustermann\nMontageleitung\nFriedrich Bühler GmbH & Co. KG\nTel. …").replace(/\n/g, "&#10;")}"></textarea>
     <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit">Automatische als Vorlage übernehmen</button>` : ""}</div></div>`);
   app.appendChild(sigCard);
+  // Test: Mail-Berechtigung (für E-Mail-Entwürfe mit Logo-Signatur)
+  if (od.isConfigured() && od.isSignedIn()) {
+    const r = od.mailCheckResult();
+    const adminNeeded = r && !r.ok && /90094|90095|65001|consent|access_denied|admin/i.test((r.code || "") + " " + (r.msg || ""));
+    const res = !r ? "" : r.ok
+      ? `<p class="ok-text"><b>Berechtigung vorhanden.</b> Stahlwork darf E-Mail-Entwürfe anlegen – der Weg mit Logo-Signatur ist möglich.</p>`
+      : `<p class="error-text"><b>${adminNeeded ? "Administratorzustimmung nötig." : "Nicht erteilt."}</b> ${adminNeeded ? "Die IT muss für Stahlwork die delegierte Berechtigung „Mail.ReadWrite“ freigeben." : "Die Anfrage wurde abgebrochen oder abgelehnt."}</p>
+         <p class="muted small-note">Meldung: ${h(r.code || "")} ${h((r.msg || "").split("\n")[0].slice(0, 200))}</p>`;
+    const mc = el(`<div class="card"><h3 class="section-title">Mail-Berechtigung prüfen</h3>
+      <p class="muted">Prüft, ob Stahlwork E-Mail-Entwürfe in deinem Postfach anlegen darf (nötig für Abmelde-E-Mails mit Logo-Signatur). Es wird nichts verschickt oder verändert. Microsoft zeigt ggf. eine Zustimmungsseite – dort entweder „Akzeptieren“ oder, falls „Genehmigung erforderlich“ erscheint, zurück zur App.</p>
+      ${res}<div class="row"><button type="button" class="secondary" id="mailCheck">${r ? "Erneut prüfen" : "Jetzt prüfen"}</button></div></div>`);
+    sigCard.after(mc);
+    $("#mailCheck", mc).onclick = async () => {
+      try { await saveNow(); const ok = await od.checkMailPermission(); if (ok) { toast("Berechtigung vorhanden.", "info", 4000); render(); } }
+      catch (e) { toast("Prüfung nicht möglich: " + (e && e.message || e), "error", 7000); }
+    };
+  }
   const sigEl = $("#mailSig", sigCard);
   sigEl.value = S.state.prefs.mailSignature || "";
   const sigEdit = $("#sigEdit", sigCard);
