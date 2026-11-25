@@ -1958,23 +1958,36 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
+  // Das Feld zeigt immer die Signatur, die verwendet wird: automatisch (aus dem Microsoft-Profil) oder die selbst geänderte.
   const auto = autoSignature();
+  const prof = S.state.prefs.profile || {};
+  const noPhone = auto && !prof.phone && !prof.mobile && !/\bTel\b/i.test(S.state.prefs.mailSignature || "");
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
-    <p class="muted">Wird unter E-Mails gesetzt, die Stahlwork vorbereitet (z. B. Bühne abmelden). Outlook fügt bei solchen E-Mails die eigene Signatur meist nicht ein.</p>
-    <p class="muted">${auto ? "<b>Automatisch</b> aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock. Nur ausfüllen, wenn du eine eigene Signatur möchtest – „Automatische anpassen“ kopiert sie dafür ins Feld." : "Wird nach der Anmeldung automatisch aus deinem Microsoft-Profil erstellt. Hier kannst du eine eigene Signatur eintragen."}</p>
-    <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="${h(auto || "Max Mustermann\nMontageleitung\nFriedrich Bühler GmbH & Co. KG\nTel. …").replace(/\n/g, "&#10;")}"></textarea>
-    <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit" title="Kopiert die automatische Signatur ins Feld, damit du sie anpassen kannst">Automatische anpassen</button>` : ""}</div></div>`);
+    <p class="muted">Steht unter E-Mails, die Stahlwork vorbereitet (z. B. Bühne abmelden). Sie wird automatisch aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock erstellt. Du kannst sie direkt im Feld ändern.</p>
+    ${noPhone ? `<p class="warn-note">In deinem Microsoft-Profil ist keine Telefonnummer hinterlegt. Trag sie unten im Feld ein (z. B. „Tel. +49 (0) 7453 9398-93 · Fax -33“) – oder die IT ergänzt sie im Profil, dann erscheint sie automatisch.</p>` : ""}
+    <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="Max Mustermann&#10;Montageleitung&#10;Friedrich Bühler GmbH &amp; Co. KG&#10;Tel. …"></textarea>
+    <div class="row"><p class="muted small-note grow" id="sigState"></p><button type="button" class="secondary small" id="sigReset" hidden>Automatische wiederherstellen</button></div></div>`);
   app.appendChild(sigCard);
-  const sigEl = $("#mailSig", sigCard);
-  sigEl.value = S.state.prefs.mailSignature || "";
-  const sigEdit = $("#sigEdit", sigCard);
-  if (sigEdit) sigEdit.onclick = () => { if (!sigEl.value.trim()) { sigEl.value = auto; sigEl.dispatchEvent(new Event("input")); } sigEl.focus(); };
-  sigEl.addEventListener("input", () => {
+  const sigEl = $("#mailSig", sigCard), sigState = $("#sigState", sigCard), sigReset = $("#sigReset", sigCard);
+  const own = () => (S.state.prefs.mailSignature || "").trim();
+  const showState = () => {
+    const o = own();
+    sigState.textContent = !auto ? "Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten."
+      : o ? "Selbst geändert – gilt für dein Konto auf allen Geräten." : "Automatisch – passt sich an, wenn sich dein Microsoft-Profil ändert.";
+    sigReset.hidden = !(auto && o);
+  };
+  sigEl.value = own() || auto;
+  showState();
+  const store = (v) => {
     const pr = S.state.prefs;
-    pr.mailSignature = sigEl.value.slice(0, 2000);
+    // unverändert = automatisch (dann wird nichts Eigenes gespeichert)
+    pr.mailSignature = v.trim() === auto.trim() ? "" : v.slice(0, 2000);
     pr.sigUpdatedAt = Date.now(); pr.rev = (pr.rev || 0) + 1; pr.dirty = true;
     saveSoon();
-  });
+    showState();
+  };
+  sigEl.addEventListener("input", () => store(sigEl.value));
+  sigReset.onclick = () => { sigEl.value = auto; store(auto); };
   app.appendChild(el(`
     <div class="card">
       <h3 class="section-title">Datensicherung</h3>

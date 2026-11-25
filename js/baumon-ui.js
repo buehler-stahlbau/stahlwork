@@ -796,7 +796,7 @@ export function renderMonBuehnen(app) {
         <div class="mon-vhead"><div><b>${h(v ? v.firma : vid ? "Unbekannter Vermieter" : "Bühler (eigene)")}</b>${v && v.ansprechpartner ? ` <span class="muted">· ${h(v.ansprechpartner)}</span>` : ""}</div>
           ${!editable() ? "" : v ? `<button class="primary small" type="button" data-mail="${h(vid)}">${ICO.mail} Abmelden per E-Mail</button>` : `<button class="primary small" type="button" data-done="${h(vid || "")}">${ICO.check} Als abgemeldet markieren</button>`}</div>
         ${list.map((b) => buehneRow(b, true)).join("")}
-        <div class="mon-sent" hidden><span>E-Mail an ${h(v ? v.firma : "")} gesendet?</span><button class="secondary small" type="button" data-done="${h(vid)}">${ICO.check} Als abgemeldet markieren</button></div>
+        <div class="mon-sent" hidden><span>E-Mail an ${h(v ? v.firma : "")} gesendet?</span><span class="row"><button class="secondary small" type="button" data-notsent>Nein</button><button class="primary small" type="button" data-done="${h(vid)}">${ICO.check} Ja, als abgemeldet markieren</button></span></div>
       </div>`);
       card.appendChild(grp);
       const mb = grp.querySelector("[data-mail]");
@@ -806,6 +806,8 @@ export function renderMonBuehnen(app) {
         U.openMail(M.abmeldeMail(v, list, acc && acc.name));
         grp.querySelector(".mon-sent").hidden = false;
       };
+      const ns = grp.querySelector("[data-notsent]");
+      if (ns) ns.onclick = () => { grp.querySelector(".mon-sent").hidden = true; };
       for (const db of grp.querySelectorAll("[data-done]")) db.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: t }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); changed(); };
     }
     app.appendChild(card);
@@ -1252,8 +1254,11 @@ export function openBuehne(b, preset = {}, after) {
         // E-Mail öffnen; die Rückfrage erscheint in der App (kein Systemdialog – der würde in Safari das Öffnen der E-Mail blockieren)
         const acc = U.account();
         U.openMail(M.abmeldeMail(v, [cur], acc && acc.name));
-        bar.innerHTML = `<span>E-Mail an ${h(v.firma)} gesendet?</span><button type="button" class="primary small" data-sent>${ICO.check} Als abgemeldet markieren</button>`;
+        const before = bar.innerHTML;
+        bar.innerHTML = `<span>E-Mail an ${h(v.firma)} gesendet?</span><span class="row"><button type="button" class="secondary small" data-notsent>Nein</button><button type="button" class="primary small" data-sent>${ICO.check} Ja, als abgemeldet markieren</button></span>`;
         bar.querySelector("[data-sent]").onclick = markDone;
+        // Nein: nichts ändern, Knopf „Bühne abmelden“ wieder zeigen
+        bar.querySelector("[data-notsent]").onclick = () => { bar.innerHTML = before; bar.querySelector("[data-abm]").onclick = ab.onclick; };
         return;
       } else if (v) {
         if (!confirm(`Für ${v.firma} ist keine E-Mail-Adresse hinterlegt.\nBühne trotzdem als abgemeldet markieren?`)) return;
