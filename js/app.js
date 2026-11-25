@@ -406,14 +406,6 @@ function setupDrawer() {
   $("#menuBtn").onclick = () => ($("#drawer").hidden ? openDrawer() : closeDrawer());
   $("#sparteLogo").onclick = () => ($("#drawer").hidden ? openDrawer() : closeDrawer());
   $$("#drawer [data-close]").forEach((b) => (b.onclick = closeDrawer));
-  // Abgleich von Hand (Handy: ohne Umweg über die Einstellungen)
-  $("#drawerSyncNow").onclick = () => {
-    closeDrawer();
-    const k = sync.status.kind;
-    if (k === "off") { toast("Synchronisierung ist nicht eingerichtet.", "warn", 4000); return; }
-    if (!navigator.onLine) { toast("Keine Internetverbindung – Abgleich, sobald wieder Netz da ist.", "warn", 5000); return; }
-    sync.run({ full: true });
-  };
   $("#drawerSettings").onclick = () => {
     closeDrawer();
     if (S.state.view === "settings") return;
@@ -582,9 +574,6 @@ function updateSyncChip() {
   chip.setAttribute("aria-label", titles[s.kind] || "Synchronisierung");
   const mdot = $("#menuDot");
   if (mdot) mdot.className = "sync-dot " + s.kind;
-  const dsn = $("#drawerSyncNow"); if (dsn) dsn.style.display = s.kind === "off" ? "none" : "";
-  const dss = $("#drawerSyncState");
-  if (dss) dss.textContent = s.kind === "syncing" ? "läuft …" : s.kind === "idle" ? (s.lastSync ? `zuletzt ${new Date(s.lastSync).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr` : "alles synchron") : s.kind === "pending" ? `${s.pending} Änderung(en) warten` : s.kind === "offline" ? "offline" : s.kind === "error" ? "Fehler – nochmal versuchen" : "mit OneDrive abgleichen";
   const dsync = $("#drawerSync");
   if (dsync) dsync.textContent = titles[s.kind] ? titles[s.kind].replace(/ – klicken.*$/, "") : "Anmeldung, Synchronisierung";
   chip.onclick = () => {
