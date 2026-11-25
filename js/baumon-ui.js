@@ -1213,10 +1213,41 @@ function deleteEinsatz(e) {
   modal("Einsatz löschen", body, [
     { label: "Bühnen löschen", cls: "danger-outline", fn: () => { if (!confirm(`${bs.length} Bühne(n) endgültig löschen?`)) return false; for (const b of bs) M.remove("buehnen", b.id); done(`Einsatz und ${bs.length} Bühne(n) gelöscht.`); } },
     { label: "Abbrechen", fn: () => {} },
-    { label: "Bühnen behalten", fn: () => done("Einsatz gelöscht – Bühnen bleiben (Planung › Bühnen › „Bühnen ohne Einsatz“).") },
-    { label: "Als abgemeldet markieren", cls: "primary", fn: () => { for (const b of bs) M.put("buehnen", { ...b, abgemeldetAm: M.today() }); done(`Einsatz gelöscht – ${bs.length} Bühne(n) als abgemeldet markiert.`); } },
+    { label: "Bühnen trotzdem behalten", fn: () => done("Einsatz gelöscht – Bühnen bleiben (Planung › Bühnen › „Bühnen ohne Einsatz“).") },
+    { label: "Bühnen abmelden", cls: "primary", fn: () => { done("Einsatz gelöscht."); setTimeout(() => abmeldenDialog(bs), 50); } },
   ]);
   return true; // Einsatz-Fenster schließen
+}
+
+// Mehrere Bühnen abmelden – je Vermieter eine E-Mail (wie im Reiter Bühnen), eigene direkt markieren
+function abmeldenDialog(bs) {
+  const groups = new Map();
+  for (const b of bs) { const k = b.vermieterId || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b); }
+  const body = U.el(`<div class="mon-form"></div>`);
+  const draw = () => {
+    body.innerHTML = "";
+    let open = 0;
+    for (const [vid, list0] of groups) {
+      const list = list0.map((b) => M.get("buehnen", b.id)).filter((b) => b && !b.abgemeldetAm);
+      if (!list.length) continue;
+      open++;
+      const v = vid && M.get("vermieter", vid);
+      const grp = U.el(`<div class="mon-vgroup">
+        <div class="mon-vhead"><div><b>${h(v ? v.firma : "Bühler (eigene)")}</b></div>
+          ${v && v.email ? `<button class="primary small" type="button" data-mail>${ICO.mail} Abmelden per E-Mail</button>` : `<button class="primary small" type="button" data-done>${ICO.check} Als abgemeldet markieren</button>`}</div>
+        ${list.map((b) => `<div class="muted">${h(M.buehneText(b))}${b.bis ? " · Mietende " + h(M.shortDate(b.bis)) : ""}</div>`).join("")}
+        ${v && !v.email ? `<p class="muted small-note">Für ${h(v.firma)} ist keine E-Mail-Adresse hinterlegt.</p>` : ""}
+        <div class="mon-sent" hidden><span>E-Mail an ${h(v ? v.firma : "")} gesendet?</span><span class="row"><button class="secondary small" type="button" data-notsent>Nein</button><button class="primary small" type="button" data-done>${ICO.check} Ja, als abgemeldet markieren</button></span></div></div>`);
+      body.appendChild(grp);
+      const mb = grp.querySelector("[data-mail]");
+      if (mb) mb.onclick = () => { U.openMail(M.abmeldeMail(v, list, (U.account() || {}).name)); grp.querySelector(".mon-sent").hidden = false; };
+      const ns = grp.querySelector("[data-notsent]"); if (ns) ns.onclick = () => { grp.querySelector(".mon-sent").hidden = true; };
+      for (const d of grp.querySelectorAll("[data-done]")) d.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: M.today() }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); U.schedule(); U.render(); draw(); };
+    }
+    if (!open) body.innerHTML = `<p>${ICO.check} Alle Bühnen sind abgemeldet.</p>`;
+  };
+  draw();
+  modal("Bühnen abmelden", body, [{ label: "Fertig", cls: "primary", fn: () => {} }]);
 }
 
 const TYPEN = ["Arbeitsbühne", "Scherenbühne", "Gelenkteleskopbühne", "Teleskopbühne", "Raupenbühne", "LKW-Bühne", "Teleskopstapler", "MRT (Manitou)"];
