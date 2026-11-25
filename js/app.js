@@ -22,7 +22,7 @@ import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal } from "./baumon-ui.js";
-import { dueBuehnen } from "./baumon.js";
+import { dueBuehnen, autoSignature } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1970,13 +1970,17 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
+  const auto = autoSignature();
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
     <p class="muted">Wird unter E-Mails gesetzt, die Stahlwork vorbereitet (z. B. Bühne abmelden). Outlook fügt bei solchen E-Mails die eigene Signatur meist nicht ein.</p>
-    <textarea id="mailSig" rows="6" placeholder="Max Mustermann&#10;Montageleitung&#10;Friedrich Bühler GmbH &amp; Co. KG&#10;Tel. …"></textarea>
-    <p class="muted small-note">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.</p></div>`);
+    <p class="muted">${auto ? "<b>Automatisch</b> aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock. Nur ausfüllen, wenn du eine eigene Signatur möchtest." : "Wird nach der Anmeldung automatisch aus deinem Microsoft-Profil erstellt. Hier kannst du eine eigene Signatur eintragen."}</p>
+    <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="${h(auto || "Max Mustermann\nMontageleitung\nFriedrich Bühler GmbH & Co. KG\nTel. …").replace(/\n/g, "&#10;")}"></textarea>
+    <div class="row"><p class="muted small-note grow">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.${auto ? " Leer = automatische Signatur." : ""}</p>${auto ? `<button type="button" class="secondary small" id="sigEdit">Automatische als Vorlage übernehmen</button>` : ""}</div></div>`);
   app.appendChild(sigCard);
   const sigEl = $("#mailSig", sigCard);
   sigEl.value = S.state.prefs.mailSignature || "";
+  const sigEdit = $("#sigEdit", sigCard);
+  if (sigEdit) sigEdit.onclick = () => { if (!sigEl.value.trim()) { sigEl.value = auto; sigEl.dispatchEvent(new Event("input")); } sigEl.focus(); };
   sigEl.addEventListener("input", () => {
     const pr = S.state.prefs;
     pr.mailSignature = sigEl.value.slice(0, 2000);

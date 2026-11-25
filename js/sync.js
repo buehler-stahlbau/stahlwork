@@ -281,6 +281,15 @@ async function syncPrefs(root, dataDir) {
   const acc = od.getAccount();
   if (!acc) return;
   const pr = S.state.prefs;
+  // Microsoft-Profil für die automatische Signatur: höchstens alle 12 Stunden neu holen
+  if (!pr.profileAt || Date.now() - pr.profileAt > 12 * 3600e3 || pr.profileFor !== acc.username) {
+    try {
+      const me = await od.getMyProfile();
+      pr.profile = { name: [me.givenName, me.surname].filter(Boolean).join(" ") || me.displayName || "", job: me.jobTitle || "",
+        phone: (me.businessPhones || [])[0] || "", mobile: me.mobilePhone || "", fax: me.faxNumber || "", mail: me.mail || me.userPrincipalName || "" };
+      pr.profileAt = Date.now(); pr.profileFor = acc.username;
+    } catch (e) { console.warn("Profil", e && e.message); }
+  }
   const folder = await od.ensureFolder(dataDir.id, CONFIG.usersFolder);
   const name = sanitizeName(String(acc.username || acc.homeAccountId || "nutzer").toLowerCase()) + ".json";
   let remote = await od.getJson(folder.id, name);

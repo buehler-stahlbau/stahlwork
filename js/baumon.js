@@ -325,7 +325,34 @@ export function buehneText(b) {
   const n = Number(b.anzahl) > 1 ? `${b.anzahl}x ` : "";
   return `${n}${b.typ || "Bühne"}`;
 }
-export function signature() { return String((S.state.prefs && S.state.prefs.mailSignature) || "").trim(); }
+// Signatur: eigene aus den Einstellungen, sonst automatisch aus dem Microsoft-Profil + Firmenblock
+export const SIG_FIRMA = [
+  "Friedrich Bühler GmbH & Co. KG",
+  "Daimlerstr. 7 + 11 · 72213 Altensteig",
+];
+export const SIG_RECHT = [
+  "Kommanditgesellschaft, Sitz Altensteig, Registergericht Stuttgart HRA 340760",
+  "Komplementär: Bühler GmbH, Sitz Altensteig, Registergericht Stuttgart HRB 340170",
+  "Geschäftsführer: Dipl.-Ing. (FH) Ulrich Bühler, Dipl.-Ing. (FH) Volker Bühler",
+];
+export function autoSignature() {
+  const p = S.state.prefs && S.state.prefs.profile;
+  if (!p || !p.name) return "";
+  // Fax mit gleicher Vorwahl wie Telefon kurz: "Tel. +49 (0) 7453 9398-93 · Fax -33"
+  let fax = p.fax || "";
+  const pre = p.phone.lastIndexOf("-");
+  if (fax && pre > 0 && fax.startsWith(p.phone.slice(0, pre + 1))) fax = fax.slice(pre);
+  const tel = [p.phone ? `Tel. ${p.phone}` : "", fax ? `Fax ${fax}` : ""].filter(Boolean).join(" · ");
+  return [
+    `i. A. ${p.name}`, ...(p.job ? [p.job] : []), "",
+    ...SIG_FIRMA, "",
+    ...(tel ? [tel] : []), ...(p.mobile ? [`Mobil ${p.mobile}`] : []), ...(tel || p.mobile ? [""] : []),
+    ...(p.mail ? [p.mail] : []), "www.buehler-stahlbau.de", "",
+    ...SIG_RECHT,
+  ].join("\n");
+}
+export function ownSignature() { return String((S.state.prefs && S.state.prefs.mailSignature) || "").trim(); }
+export function signature() { return ownSignature() || autoSignature(); }
 export function abmeldeMail(vermieter, buehnen, absender) {
   const anrede = vermieter.ansprechpartner ? `Guten Tag ${vermieter.ansprechpartner},` : "Sehr geehrte Damen und Herren,";
   const sites = [...new Set(buehnen.map((b) => baustelleLabel(b)))];
@@ -340,8 +367,8 @@ export function abmeldeMail(vermieter, buehnen, absender) {
     anrede, "",
     `hiermit melden wir folgende Mietbühne${buehnen.length > 1 ? "n" : ""} ab und bitten um Abholung:`, "",
     ...lines, "",
-    // eigene Signatur (Einstellungen) – sonst Name + Firma
-    ...(signature() ? ["Vielen Dank und freundliche Grüße", "", signature()] : ["Vielen Dank und freundliche Grüße", absender || "", CONFIG.companyName || "Friedrich Bühler GmbH & Co. KG"]),
+    // Signatur: eigene (Einstellungen) oder automatisch aus dem Microsoft-Profil – sonst Name + Firma
+    ...(signature() ? [...(/gr(u|ü)(ß|ss)/i.test(signature().split("\n")[0]) ? [] : ["Mit freundlichen Grüßen", ""]), signature()] : ["Mit freundlichen Grüßen", "", absender ? `i. A. ${absender}` : "", "", ...SIG_FIRMA, "www.buehler-stahlbau.de"]),
   ].join("\n");
   return `mailto:${encodeURIComponent(vermieter.email || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }

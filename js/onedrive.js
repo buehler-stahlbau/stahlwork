@@ -131,6 +131,11 @@ const encPath = (p) => p.split("/").map(encodeURIComponent).join("/");
 const JSON_HDR = { "Content-Type": "application/json" };
 
 /* ---------- Ordner ---------- */
+// Eigenes Microsoft-Profil (für die automatische E-Mail-Signatur)
+export async function getMyProfile() {
+  return gjson("/me?$select=displayName,givenName,surname,jobTitle,businessPhones,mobilePhone,faxNumber,mail,userPrincipalName");
+}
+
 export async function getByPath(path) {
   const res = await gfetch(`${D()}/root:/${encPath(path)}`);
   if (res.ok) return res.json();
