@@ -193,7 +193,7 @@ export function renderMonPlan(app) {
   const siteKey = (e) => e.bvNumber ? "#" + e.bvNumber : (e.baustelle || "").trim().toLowerCase();
   const liftBar = new Map();
   for (const e of einsaetze) {
-    const k = siteKey(e), cur = liftBar.get(k);
+    const k = siteKey(e) + "|" + (e.truppId || ""), cur = liftBar.get(k);
     const end = e.bis > days[20] ? days[20] : e.bis;
     if (!cur || end > cur.end) liftBar.set(k, { id: e.id, end });
   }
@@ -314,7 +314,7 @@ export function renderMonPlan(app) {
       for (const e of lane) {
         const s = Math.max(0, days.indexOf(e.von < days[0] ? days[0] : e.von));
         const en = days.indexOf(e.bis > days[20] ? days[20] : e.bis);
-        const bh = liftBar.get(siteKey(e))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
+        const bh = liftBar.get(siteKey(e) + "|" + (e.truppId || ""))?.id === e.id ? M.buehnenOf(e).filter((b) => !b.abgemeldetAm) : [];
         const dueHere = bh.some((b) => M.isDue(b, t));
         const dbl = M.conflicts(e), abs = M.absenceConflicts(e);
         // Tagesansicht: zweite Zeile mit Besetzung (ohne Richtmeister) und Leiharbeiter/Kran
@@ -686,13 +686,34 @@ function enableDrag(card, g, days) {
     changed();
   };
 
+  // Überlappende Balken: die Kante ist schräg – Anfassen nahe der Schräge = Länge ändern
+  const slantEdge = (bar, x, y) => {
+    if (!editable() || !bar.classList.contains("join")) return null;
+    const r = bar.getBoundingClientRect(), cs = getComputedStyle(bar);
+    const f = Math.min(1, Math.max(0, (y - r.top) / r.height)), w = r.width + 2;
+    const grip = 16;
+    if (bar.classList.contains("join-r")) {
+      const xr = r.right - parseFloat(cs.getPropertyValue("--ovr")) * w * f; // sichtbare rechte Kante in dieser Höhe
+      if (x <= xr && x >= xr - grip && bar.querySelector(".g-h.r")) return "end";
+    }
+    if (bar.classList.contains("join-l")) {
+      const xl = r.left + 3 + parseFloat(cs.getPropertyValue("--ovl")) * w * (1 - f); // sichtbare linke Kante
+      if (x >= xl && x <= xl + grip && bar.querySelector(".g-h.l")) return "start";
+    }
+    return null;
+  };
+  g.addEventListener("pointermove", (ev) => {
+    if (st || ev.pointerType === "touch") return;
+    const bar = ev.target.closest(".g-bar.join");
+    if (bar) bar.style.cursor = slantEdge(bar, ev.clientX, ev.clientY) ? "ew-resize" : "";
+  });
   // Maus/Stift: Zeiger-Ereignisse
   g.addEventListener("pointerdown", (ev) => {
     if (ev.pointerType === "touch") return;
     const bar = ev.target.closest(".g-bar, .g-abw, .g-bue");
     if (!bar || ev.button > 0) return;
     const hnd = ev.target.closest(".g-h");
-    start(bar, hnd ? hnd.dataset.h : "move", ev);
+    start(bar, slantEdge(bar, ev.clientX, ev.clientY) || (hnd ? hnd.dataset.h : "move"), ev);
     try { bar.setPointerCapture(ev.pointerId); } catch {}
   });
   g.addEventListener("pointermove", (ev) => {
@@ -712,7 +733,7 @@ function enableDrag(card, g, days) {
     if (!bar) return;
     const t = ev.touches[0];
     const hnd = ev.target.closest(".g-h");
-    start(bar, hnd ? hnd.dataset.h : "move", { clientX: t.clientX, clientY: t.clientY, pointerId: "touch", pointerType: "touch" });
+    start(bar, slantEdge(bar, t.clientX, t.clientY) || (hnd ? hnd.dataset.h : "move"), { clientX: t.clientX, clientY: t.clientY, pointerId: "touch", pointerType: "touch" });
   }, { passive: true });
   g.addEventListener("touchmove", (ev) => {
     if (!st || !st.touch) return;
@@ -1136,22 +1157,23 @@ const TYPEN = ["Arbeitsbühne", "Scherenbühne", "Gelenkteleskopbühne", "Telesk
 
 export function openBuehne(b, preset = {}, after) {
   const isNew = !b;
-  const cur = b ? { ...b } : { id: null, bvNumber: preset.bvNumber || "", baustelle: preset.baustelle || "", vermieterId: (M.list("vermieter")[0] || {}).id || null,
+  const cur = b ? { ...b } : { id: null, bvNumber: preset.bvNumber || "", baustelle: preset.baustelle || "", vermieterId: (M.list("vermieter").sort((a, c) => a.firma.localeCompare(c.firma, "de"))[0] || {}).id || null,
     typ: "", anzahl: 1, von: preset.von || M.today(), bis: preset.bis || "", abgemeldetAm: "", auftragsNr: "", standort: "", notiz: "" };
   const ro = !editable();
   const body = U.el(`<div class="mon-form"></div>`);
   const site = siteField(cur);
   body.appendChild(site.box);
-  const vs = M.list("vermieter").sort((a, c) => a.firma.localeCompare(c.firma));
+  // Vermieter alphabetisch, „Bühler (eigene)“ an seiner alphabetischen Stelle
+  const vs = [...M.list("vermieter"), { id: "", firma: "Bühler (eigene)" }].sort((a, c) => a.firma.localeCompare(c.firma, "de", { sensitivity: "base" }));
   const typen = [...new Set([...TYPEN, ...M.list("buehnen").map((b) => b.typ).filter(Boolean)])];
   body.appendChild(U.el(`<div><div class="grid2">
-    <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === cur.vermieterId ? "selected" : ""}>${h(v.firma)}</option>`).join("")}<option value="" ${!cur.vermieterId ? "selected" : ""}>Bühler (eigene)</option></select></div>
+    <div><label class="field-label">Vermieter</label><select class="f-v">${vs.map((v) => `<option value="${h(v.id)}" ${v.id === (cur.vermieterId || "") ? "selected" : ""}>${h(v.firma)}</option>`).join("")}</select></div>
     <div class="grid2 tight"><div><label class="field-label">Typ</label><div class="typ-field"><input type="text" class="f-typ" value="${h(cur.typ)}" placeholder="eingeben" autocomplete="off" />
       <button type="button" class="typ-open" aria-label="Typen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list"></div></div></div>
     <div><label class="field-label">Anzahl</label><input type="number" min="1" max="99" class="f-n" value="${h(cur.anzahl)}" /></div></div></div>
     <div class="grid2"><div class="grid2 tight"><div><label class="field-label">Mietbeginn</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">Mietende</label><input type="date" class="f-bis" value="${h(cur.bis)}" /><div class="muted small-note bis-hint"></div></div></div>
-    <div><label class="field-label">Auftrags-Nr. Vermieter <span class="muted">(optional)</span></label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" /></div></div>
+    <div><label class="field-label">Auftrags-Nr. Vermieter</label><input type="text" class="f-nr" value="${h(cur.auftragsNr)}" placeholder="optional" /></div></div>
     <label class="field-label">Standort / Adresse (für den Vermieter)</label><input type="text" class="f-ort" value="${h(cur.standort)}" placeholder="optional" />
 </div>`));
   // Typ: frei eintippen oder aus der Liste (Standard + bisher verwendete) übernehmen
@@ -1320,7 +1342,7 @@ function changeKind(p, k, undo) {
 // Bühnenvermieter (im Reiter "Bühnen" unten)
 function vermieterCard() {
   const ro = !editable();
-  const card = U.el(`<div class="card list-card">${cardHead("Bühnenvermieter", "vermNew", "+ Vermieter", ro)}${M.list("vermieter").sort((a, b) => a.firma.localeCompare(b.firma)).map((v) => `
+  const card = U.el(`<div class="card list-card">${cardHead("Bühnenvermieter", "vermNew", "+ Vermieter", ro)}${M.list("vermieter").sort((a, b) => a.firma.localeCompare(b.firma, "de", { sensitivity: "base" })).map((v) => `
     <button type="button" class="mon-brow" data-vid="${h(v.id)}"><span class="mon-brow-main"><b>${h(v.firma)}</b>${v.ansprechpartner ? " · " + h(v.ansprechpartner) : ""}</span>
     <span class="muted">${h(v.email || "keine E-Mail")}${v.telefon ? " · " + h(v.telefon) : ""}${v.kundenNr ? " · Kd.-Nr. " + h(v.kundenNr) : ""}</span></button>`).join("") || `<p class="muted">Noch keine Vermieter.</p>`}</div>`);
   const vn = card.querySelector("#vermNew"); if (vn) vn.onclick = () => editVermieter(null);

@@ -1969,15 +1969,20 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="page-head"><h1>Einstellungen</h1></div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
-  // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Gerät
+  // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
     <p class="muted">Wird unter E-Mails gesetzt, die Stahlwork vorbereitet (z. B. Bühne abmelden). Outlook fügt bei solchen E-Mails die eigene Signatur meist nicht ein.</p>
     <textarea id="mailSig" rows="6" placeholder="Max Mustermann&#10;Montageleitung&#10;Friedrich Bühler GmbH &amp; Co. KG&#10;Tel. …"></textarea>
-    <p class="muted small-note">Wird automatisch gespeichert (auf diesem Gerät).</p></div>`);
+    <p class="muted small-note">Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten.</p></div>`);
   app.appendChild(sigCard);
   const sigEl = $("#mailSig", sigCard);
   sigEl.value = S.state.prefs.mailSignature || "";
-  sigEl.addEventListener("input", () => { S.state.prefs.mailSignature = sigEl.value.slice(0, 2000); saveSoon(); });
+  sigEl.addEventListener("input", () => {
+    const pr = S.state.prefs;
+    pr.mailSignature = sigEl.value.slice(0, 2000);
+    pr.sigUpdatedAt = Date.now(); pr.rev = (pr.rev || 0) + 1; pr.dirty = true;
+    saveSoon();
+  });
   app.appendChild(el(`
     <div class="card">
       <h3 class="section-title">Datensicherung</h3>

@@ -299,6 +299,10 @@ async function syncPrefs(root, dataDir) {
     if (!(await od.listChildren(legacyDir.id)).length) await od.deleteItem(legacyDir.id);
   }
   const remoteAt = (remote && remote.data && remote.data.favUpdatedAt) || 0;
+  // E-Mail-Signatur: neuere Fassung gewinnt
+  const rd = (remote && remote.data) || {};
+  if ((rd.sigUpdatedAt || 0) > (pr.sigUpdatedAt || 0)) { pr.mailSignature = rd.mailSignature || ""; pr.sigUpdatedAt = rd.sigUpdatedAt; }
+  const sigNewer = (pr.sigUpdatedAt || 0) > (rd.sigUpdatedAt || 0);
 
   if (remote && remoteAt > (pr.favUpdatedAt || 0)) {
     const favs = new Set(remote.data.favorites || []);
@@ -309,9 +313,9 @@ async function syncPrefs(root, dataDir) {
     }
     pr.favUpdatedAt = remoteAt;
     pr.dirty = false;
-    return;
+    if (!sigNewer) return;
   }
-  if (!remote || pr.dirty) {
+  if (!remote || pr.dirty || sigNewer) {
     const rev = pr.rev;
     if (!pr.favUpdatedAt) pr.favUpdatedAt = Date.now();
     await od.putJson(folder.id, name, {
@@ -319,6 +323,8 @@ async function syncPrefs(root, dataDir) {
       user: acc.username || "",
       favorites: allProjects().filter((p) => p.fav).map((p) => p.number).sort(),
       favUpdatedAt: pr.favUpdatedAt,
+      mailSignature: pr.mailSignature || "",
+      sigUpdatedAt: pr.sigUpdatedAt || 0,
     }, null);
     if (pr.rev === rev) pr.dirty = false;
   }
