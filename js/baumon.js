@@ -353,6 +353,19 @@ export function autoSignature() {
 }
 export function ownSignature() { return String((S.state.prefs && S.state.prefs.mailSignature) || "").trim(); }
 export function signature() { return ownSignature() || autoSignature(); }
+// PC: Outlook setzt seine eigene Signatur nur bei einer leeren neuen E-Mail ein.
+// Darum: E-Mail nur mit Empfänger + Betreff öffnen, der Text kommt in die Zwischenablage.
+export function abmeldeMailPC(vermieter, buehnen) {
+  const url = abmeldeMail(vermieter, buehnen, "");
+  const q = new URLSearchParams(url.split("?")[1]);
+  const body = q.get("body") || "";
+  const text = body.split("\n").slice(0, abmeldeTextLines(vermieter, buehnen)).join("\n").replace(/\s+$/, "") + "\n";
+  return { url: url.split("&body=")[0], text };
+}
+function abmeldeTextLines(vermieter, buehnen) {
+  // Anrede, Leerzeile, Einleitung, Leerzeile, je Bühne ihre Zeilen
+  return 4 + buehnen.reduce((n, b) => n + 3 + (b.auftragsNr ? 1 : 0), 0);
+}
 export function abmeldeMail(vermieter, buehnen, absender) {
   const anrede = vermieter.ansprechpartner ? `Guten Tag ${vermieter.ansprechpartner},` : "Sehr geehrte Damen und Herren,";
   const sites = [...new Set(buehnen.map((b) => baustelleLabel(b)))];

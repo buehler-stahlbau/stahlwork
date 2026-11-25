@@ -42,6 +42,22 @@ const ICO = {
 };
 
 const changed = () => { U.schedule(); U.render(); };
+// Abmelde-E-Mail öffnen. PC (Outlook): leere E-Mail mit Empfänger + Betreff, damit Outlook die eigene
+// Signatur (mit Logo, Schrift …) einsetzt; der Text liegt in der Zwischenablage (Strg+V).
+// Handy: fertiger Text inkl. Signatur aus Stahlwork.
+const isPC = () => matchMedia("(hover: hover) and (pointer: fine)").matches && !/iPhone|iPad|Android/i.test(navigator.userAgent);
+async function sendAbmeldeMail(v, list) {
+  const pr = (U.prefs && U.prefs()) || {};
+  if (isPC() && pr.pcOutlookSig !== false) {
+    const { url, text } = M.abmeldeMailPC(v, list);
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { console.warn("Zwischenablage", e); }
+    U.openMail(ok ? url : M.abmeldeMail(v, list, (U.account() || {}).name));
+    if (ok) toast("Text ist kopiert – in Outlook in die leere Zeile über der Signatur klicken und Strg+V drücken.", "info", 12000);
+    return;
+  }
+  U.openMail(M.abmeldeMail(v, list, (U.account() || {}).name));
+}
 // Auswahllisten (BV, Typ, Person): Berühren/Scrollen schließt die Liste nicht, Auswahl per Antippen (click)
 let listTouchAt = 0;
 const listBusy = () => Date.now() - listTouchAt < 1500;
@@ -790,8 +806,7 @@ export function renderMonBuehnen(app) {
       const mb = grp.querySelector("[data-mail]");
       if (mb) mb.onclick = () => {
         if (!v || !v.email) { toast("Für diesen Vermieter ist keine E-Mail-Adresse hinterlegt (Einstellungen › BauMon › Bühnenvermieter).", "warn", 7000); return; }
-        const acc = U.account();
-        U.openMail(M.abmeldeMail(v, list, acc && acc.name));
+        sendAbmeldeMail(v, list);
         grp.querySelector(".mon-sent").hidden = false;
       };
       for (const db of grp.querySelectorAll("[data-done]")) db.onclick = () => { for (const b of list) M.put("buehnen", { ...b, abgemeldetAm: t }); toast(`${list.length} Bühne(n) als abgemeldet markiert.`, "info", 3000); changed(); };
@@ -1238,8 +1253,7 @@ export function openBuehne(b, preset = {}, after) {
       const markDone = () => { M.put("buehnen", { ...cur, abgemeldetAm: M.today() }); changed(); if (after) after(); dlg.close(); };
       if (v && v.email) {
         // E-Mail öffnen; die Rückfrage erscheint in der App (kein Systemdialog – der würde in Safari das Öffnen der E-Mail blockieren)
-        const acc = U.account();
-        U.openMail(M.abmeldeMail(v, [cur], acc && acc.name));
+        sendAbmeldeMail(v, [cur]);
         bar.innerHTML = `<span>E-Mail an ${h(v.firma)} gesendet?</span><button type="button" class="primary small" data-sent>${ICO.check} Als abgemeldet markieren</button>`;
         bar.querySelector("[data-sent]").onclick = markDone;
         return;
