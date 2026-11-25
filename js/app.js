@@ -2166,14 +2166,18 @@ async function storageRescue(err) {
   if (/^Zurücksetzen nicht möglich/.test(msg)) { await offerNewDb(msg); return; } // Zurücksetzen hat nicht geklappt -> neuer Speicher
   // 1. Wahl: nur den gespeicherten App-Stand entfernen (Speicher selbst funktioniert meist,
   //    nur dieser eine Eintrag ist unlesbar). Daten kommen danach aus OneDrive.
-  app.innerHTML = `<div class="card boot-fail"><h3>Gespeicherter Stand nicht lesbar</h3>
-    <p>Safari kann den gespeicherten App-Stand auf diesem Gerät nicht mehr lesen (${h(msg)}).</p>
-    <p class="muted">„Zurücksetzen“ entfernt nur diesen Stand. Danach lädt Stahlwork deine Bauvorhaben nach dem Anmelden aus OneDrive.
-    Was auf diesem Gerät noch nicht hochgeladen war, geht dabei verloren.</p>
-    <div class="row wrap"><button class="primary" type="button" id="resetState">Gespeicherten Stand zurücksetzen</button>
+  app.innerHTML = `<div class="card boot-fail"><h3>Gerätespeicher antwortet nicht</h3>
+    <p>Safari öffnet gerade den Speicher dieser App nicht (${h(msg)}). Das liegt an Safari, nicht an deinen Daten.</p>
+    <p class="muted">Am besten: App ganz schließen (vom unteren Rand hochwischen und Stahlwork wegschieben) und neu öffnen – oder das iPhone neu starten.</p>
+    <p class="muted">Oder sofort weiterarbeiten: „Ohne Gerätespeicher starten“ lädt deine Daten nach dem Anmelden aus OneDrive. Es wird <strong>nichts gelöscht</strong> – der bisherige Stand bleibt auf dem Gerät erhalten.</p>
+    <div class="row wrap"><button class="primary" type="button" id="freshStart">Ohne Gerätespeicher starten</button>
     <button class="secondary" type="button" id="retryDb">Nochmal versuchen</button></div>
+    <details class="muted" style="margin-top:12px"><summary>Weitere Möglichkeit</summary>
+    <p>„Zurücksetzen“ entfernt den gespeicherten Stand. Was noch nicht hochgeladen war, geht dabei verloren.</p>
+    <button class="secondary small" type="button" id="resetState">Gespeicherten Stand zurücksetzen</button></details>
     <p class="muted" id="resetInfo"></p></div>`;
   $("#retryDb").onclick = () => location.replace(location.pathname + location.search);
+  $("#freshStart").onclick = () => { try { localStorage.setItem("stahlwork-fresh", "1"); } catch {} location.replace(location.pathname + location.search); };
   $("#resetState").onclick = async () => {
     const b = $("#resetState"); b.disabled = true; b.textContent = "Wird zurückgesetzt …";
     // Löschen beim nächsten Start, BEVOR gelesen wird (der hängende Lesevorgang dieser Seite würde es blockieren)
@@ -2184,6 +2188,22 @@ async function storageRescue(err) {
     }
     location.replace(location.pathname + location.search);
   };
+}
+
+// Gerätespeicher hängt, App läuft mit der Sicherung: Hinweis + im Hintergrund erneut versuchen
+function storageDegradedNotice() {
+  setTimeout(() => toast("Gerätespeicher gerade nicht erreichbar – deine Daten sind sicher (Sicherung). Fotos ggf. erst nach Neustart der App.", "warn", 9000), 800);
+  let tries = 0;
+  const retry = async () => {
+    tries++;
+    try {
+      await Promise.race([db.openDb(true), new Promise((_, r) => setTimeout(() => r(new Error("keine Antwort")), 8000))]);
+      S.storageDegraded = null;
+      await saveNow(); // Stand wieder in den Gerätespeicher schreiben
+      toast("Gerätespeicher wieder verfügbar.", "info", 3000);
+    } catch { db.markDead(true); if (tries < 6) setTimeout(retry, 20000); }
+  };
+  setTimeout(retry, 15000);
 }
 
 async function offerNewDb(msg) {
@@ -2239,6 +2259,7 @@ function versionMismatch() {
     await storageRescue(e);
     return;
   }
+  if (S.storageDegraded) storageDegradedNotice();
   if (!S.state.drafts || typeof S.state.drafts !== "object") S.state.drafts = {};
   if (!S.state.draftImgs || typeof S.state.draftImgs !== "object") S.state.draftImgs = {};
   drafts = S.state.drafts;

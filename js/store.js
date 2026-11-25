@@ -44,13 +44,32 @@ function emit(kind) {
   listeners.forEach((fn) => { try { fn(kind); } catch (e) { console.error(e); } });
 }
 
-/* ---------- Laden / Speichern ---------- */
+/* ---------- Laden / Speichern ----------
+   Der App-Stand liegt doppelt: im Gerätespeicher (IndexedDB) und als Sicherung im
+   localStorage. Safari öffnet IndexedDB gelegentlich nicht (hängt) – dann startet die App
+   mit der Sicherung, ohne Datenverlust und ohne „Zurücksetzen“. */
+const LS_STATE = "stahlwork-state";
+function lsRead() {
+  try { const t = localStorage.getItem(LS_STATE); return t ? JSON.parse(t) : null; } catch (e) { console.warn("Sicherung nicht lesbar", e); return null; }
+}
+let lsWarned = false;
+function lsWrite(json) {
+  try { localStorage.setItem(LS_STATE, json); return true; }
+  catch (e) {
+    // zu groß / voll: alte Sicherung entfernen, damit sie nicht veraltet gelesen wird
+    try { localStorage.removeItem(LS_STATE); } catch {}
+    if (!lsWarned) { lsWarned = true; console.warn("Sicherung im localStorage nicht möglich", e); }
+    return false;
+  }
+}
 export async function load() {
   let saved = null;
+  const backup = lsRead();
   // "Gespeicherten Stand zurücksetzen" (nach unlesbarem Stand): vor dem Lesen löschen
   let reset = false;
   try { reset = localStorage.getItem("stahlwork-reset-state") === "1"; } catch {}
   if (reset) {
+    try { localStorage.removeItem(LS_STATE); } catch {}
     try {
       await Promise.race([db.kvDelete("state"), new Promise((_, rej) => setTimeout(() => rej(new Error("keine Antwort")), 8000))]);
       try { localStorage.removeItem("stahlwork-reset-state"); } catch {}
@@ -64,11 +83,33 @@ export async function load() {
     saved = await Promise.race([db.kvGet("state"), new Promise((_, rej) => setTimeout(() => rej(new Error("Gerätespeicher antwortet nicht")), 10000))]);
     // seit 3.10.9 als Text gespeichert (robuster in Safari); ältere Stände sind Objekte
     if (typeof saved === "string") saved = JSON.parse(saved);
+    // Wurde zwischenzeitlich ohne Gerätespeicher gestartet: alten Stand dort als Rettungskopie behalten
+    let keep = false; try { keep = localStorage.getItem("stahlwork-idb-keep") === "1"; } catch {}
+    if (keep && saved) {
+      try { await db.kvSet("state_rescue_" + Date.now(), JSON.stringify(saved)); localStorage.removeItem("stahlwork-idb-keep"); } catch (e) { console.warn("Rettungskopie", e); }
+    }
+    // Sicherung ist neuer (z. B. weil der Gerätespeicher zuletzt hing) -> Sicherung nehmen
+    if (backup && (!saved || (backup.savedAt || 0) >= (saved.savedAt || 0))) saved = backup;
   } catch (e) {
     console.warn("Konnte Zustand nicht laden", e);
-    // NICHT mit leerem Zustand weitermachen – sonst würden die Daten auf dem Gerät überschrieben
-    S.loadFailed = true;
-    throw e;
+    let fresh = false; try { fresh = localStorage.getItem("stahlwork-fresh") === "1"; localStorage.removeItem("stahlwork-fresh"); } catch {}
+    if (backup && !reset) {
+      // Gerätespeicher hängt: mit der Sicherung weiterarbeiten (Fotos ggf. erst nach Neustart)
+      saved = backup;
+      S.storageDegraded = (e && e.message) || String(e);
+      db.markDead(true);
+    } else if (fresh) {
+      // „Ohne Gerätespeicher starten“: leer starten, Daten kommen aus OneDrive.
+      // Der alte Stand im Gerätespeicher bleibt unangetastet (später als Rettungskopie gesichert).
+      saved = null;
+      S.storageDegraded = (e && e.message) || String(e);
+      db.markDead(true);
+      try { localStorage.setItem("stahlwork-idb-keep", "1"); } catch {}
+    } else {
+      // NICHT mit leerem Zustand weitermachen – sonst würden die Daten auf dem Gerät überschrieben
+      S.loadFailed = true;
+      throw e;
+    }
   }
 
   if (saved && typeof saved === "object") {
@@ -94,6 +135,8 @@ export async function load() {
     allProjects().forEach(normalizeProject);
     if (migrated) await saveNow();
   }
+  // ohne Gerätespeicher gestartet: Sicherung sofort anlegen (übersteht Neustart/Anmeldung)
+  if (S.storageDegraded) await saveNow();
 }
 
 let saveTimer = null;
@@ -103,13 +146,17 @@ export async function saveNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
   if (S.loadFailed) return false; // Gerätespeicher nicht gelesen -> nichts überschreiben
+  S.state.savedAt = Date.now();
+  const json = JSON.stringify(S.state);
+  const lsOk = lsWrite(json); // Sicherung (synchron, auch wenn der Gerätespeicher hängt)
   try {
     // als Text speichern: Safari kann gespeicherte Objekte in seltenen Fällen nicht mehr lesen
-    await db.kvSet("state", JSON.stringify(S.state));
+    await db.kvSet("state", json);
     saveErrorShown = false;
     return true;
   } catch (e) {
     console.warn("Konnte Zustand nicht speichern", e);
+    if (lsOk) return true; // Sicherung hat geklappt -> nichts verloren
     if (!saveErrorShown) {
       saveErrorShown = true;
       toast("Speichern fehlgeschlagen! Speicher voll oder Privater Modus?", "error", 10000);

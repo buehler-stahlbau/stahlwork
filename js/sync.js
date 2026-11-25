@@ -77,6 +77,8 @@ const FOLDER_RE = /^(\d{5})(?:\s+(.*))?$/;
 const TOMBSTONE_MAX_AGE = 180 * 24 * 3600 * 1000;
 
 /* ---------- Status ---------- */
+// Gerätespeicher hängt (Safari): Warteschlange überspringen, Daten trotzdem abgleichen
+const outboxSafe = () => (db.isDead() ? Promise.resolve([]) : db.outboxAll());
 export const status = { kind: "off", message: "", pending: 0, lastSync: null };
 const statusListeners = new Set();
 const dataListeners = new Set();
@@ -157,7 +159,7 @@ export async function run({ full = false } = {}) {
   const before = snapshot();
   setStatus("syncing");
   try {
-    outboxCount = (await db.outboxAll()).length;
+    outboxCount = (await outboxSafe()).length;
     await syncAll(full);
     status.lastSync = Date.now();
     setStatus(countPending() ? "pending" : "idle");
@@ -200,7 +202,7 @@ async function syncAll(full) {
 
   if (full) await refreshListing(root, dataDir);
   if (full || S.state.prefs.dirty) await syncPrefs(root, dataDir);
-  const outbox = await db.outboxAll();
+  const outbox = await outboxSafe();
   const sel = st.selectedProjectId;
   const targets = allProjects().filter((p) =>
     p.dirty || p.moveTo || p.pendingDeletes.length || hasUnuploaded(p) ||
@@ -224,7 +226,7 @@ async function syncAll(full) {
   if (full || Object.keys(S.state.codeIndexPending || {}).length) await syncCodeIndex(dataDir);
   // BauMon (eigene Datei)
   try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; }
-  outboxCount = (await db.outboxAll()).length;
+  outboxCount = (await outboxSafe()).length;
   if (firstError) throw firstError;
 }
 

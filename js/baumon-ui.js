@@ -341,6 +341,12 @@ export function renderMonPlan(app) {
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – krank/Urlaub (an diesen Tagen nicht eingeteilt): " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
           ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+        // Überlappung: sichtbarer Griff mitten auf der Schräge (Länge ändern)
+        if (editable() && mode.startsWith("join")) {
+          const kn = (side) => `<div class="g-knobs" style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};${pad}"><span class="g-knob ${side}" data-eid="${h(e.id)}" data-h="${side === "r" ? "end" : "start"}" title="Ziehen: ${side === "r" ? "Ende" : "Beginn"} ändern"></span></div>`;
+          if (mode.includes("join-r") && e.bis <= days[20]) g.insertAdjacentHTML("beforeend", kn("r"));
+          if (mode.includes("join-l") && e.von >= days[0]) g.insertAdjacentHTML("beforeend", kn("l"));
+        }
       }
     });
     gridRow += n;
@@ -708,8 +714,11 @@ function enableDrag(card, g, days) {
     if (bar) bar.style.cursor = slantEdge(bar, ev.clientX, ev.clientY) ? "ew-resize" : "";
   });
   // Maus/Stift: Zeiger-Ereignisse
+  const knobBar = (t) => { const k = t.closest && t.closest(".g-knob"); return k ? [g.querySelector(`.g-bar[data-eid="${k.dataset.eid}"]`), k.dataset.h] : null; };
   g.addEventListener("pointerdown", (ev) => {
     if (ev.pointerType === "touch") return;
+    const kb = knobBar(ev.target);
+    if (kb && kb[0] && ev.button === 0) { ev.preventDefault(); start(kb[0], kb[1], ev); try { ev.target.setPointerCapture(ev.pointerId); } catch {} return; }
     const bar = ev.target.closest(".g-bar, .g-abw, .g-bue");
     if (!bar || ev.button > 0) return;
     const hnd = ev.target.closest(".g-h");
@@ -729,6 +738,8 @@ function enableDrag(card, g, days) {
   // Finger: Touch-Ereignisse (kurz halten, dann ziehen; sonst normal wischen/scrollen)
   g.addEventListener("touchstart", (ev) => {
     if (ev.touches.length !== 1) { finish(false); return; }
+    const kb = knobBar(ev.target);
+    if (kb && kb[0]) { const t = ev.touches[0]; start(kb[0], kb[1], { clientX: t.clientX, clientY: t.clientY, pointerId: "touch", pointerType: "touch" }); if (st) { clearTimeout(st.timer); activate(); } return; }
     const bar = ev.target.closest(".g-bar, .g-abw, .g-bue");
     if (!bar) return;
     const t = ev.touches[0];

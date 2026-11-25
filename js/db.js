@@ -27,6 +27,11 @@ export function probeDb(name, ms = 5000) {
 }
 
 let dbPromise = null;
+// Speicher hängt (Safari): weitere Zugriffe sofort ablehnen statt jedes Mal 8 s zu warten.
+// Ein Hintergrund-Versuch (force) prüft später, ob er wieder geht.
+let dead = false;
+export function markDead(v) { dead = v; if (v) dbPromise = null; }
+export const isDead = () => dead;
 
 // Safari: IndexedDB ist direkt nach dem Start manchmal noch nicht bereit und
 // "open" antwortet dann nie. Erst warten, bis indexedDB.databases() antwortet.
@@ -38,7 +43,8 @@ async function idbReady() {
   }
 }
 
-export function openDb() {
+export function openDb(force = false) {
+  if (dead && !force) return Promise.reject(new Error("Gerätespeicher gerade nicht erreichbar"));
   if (dbPromise) return dbPromise;
   dbPromise = new Promise(async (resolve, reject) => {
     try { await idbReady(); } catch {}
@@ -53,6 +59,7 @@ export function openDb() {
     };
     req.onsuccess = () => {
       clearTimeout(timer);
+      dead = false;
       const db = req.result;
       db.onversionchange = () => { db.close(); dbPromise = null; };
       resolve(db);

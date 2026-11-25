@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.14.17-beta" />
+  <meta name="app-version" content="3.14.18-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -334,6 +334,17 @@
     .g-bar.join-l { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, 100% 100%, 3px 100%); --padl: calc(var(--ovl) * 50% + 10px); }
     .g-bar.join-l.join-r { clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, calc(100% - var(--xr)) 100%, 3px 100%); }
     .g-bar.join-r .g-h.r::after, .g-bar.join-l .g-h.l::after { display: none; }
+    /* Griff mitten auf der Schräge überlappender Balken */
+    .g-knobs { position: relative; z-index: 4; pointer-events: none; }
+    .g-knob { position: absolute; width: 12px; height: 18px; margin-top: -9px; border-radius: 6px; background: #fff; border: 1.5px solid rgba(0,0,0,.35); box-shadow: 0 1px 3px rgba(0,0,0,.25); cursor: ew-resize; pointer-events: auto; touch-action: none; }
+    .g-knob::before, .g-knob::after { content: ""; position: absolute; top: 4px; bottom: 4px; width: 1.5px; background: rgba(0,0,0,.4); }
+    .g-knob::before { left: 3px; } .g-knob::after { right: 3px; }
+    /* auf der Schräge: Ende des oberen Balkens im oberen Viertel, Beginn des unteren im unteren Viertel */
+    .g-knob.r { top: 30%; right: calc(var(--ovr) * 30% - 6px); }
+    .g-knob.l { top: 70%; left: calc(var(--ovl) * 30% + 3px - 6px); }
+    .gantt.wochen .g-knob { height: 18px; margin-top: -9px; width: 12px; }
+    .gantt.wochen .g-knob::before, .gantt.wochen .g-knob::after { top: 3px; bottom: 3px; }
+    @media (hover: hover) and (pointer: fine){ .g-knob:hover { border-color: rgba(0,0,0,.6); transform: scale(1.1); } }
     .g-bar { padding-left: max(var(--padl, 8px), var(--follow, 8px)); padding-right: var(--padr, 8px); }
     .g-bar.part.cut-l .g-bg.first, .g-bar.part.cut-r .g-bg.last { border-radius: 0; }
     .g-bg { position: absolute; top: 0; bottom: 0; background: var(--c); z-index: -1; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
