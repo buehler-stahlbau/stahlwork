@@ -43,6 +43,9 @@ const ICO = {
 };
 
 const changed = () => { U.schedule(); U.render(); };
+// Doppelbelegung: Hinweis bleibt, man kann sich aber darüber hinwegsetzen
+const overrideText = (cf) => "Doppelt eingeteilt:\n\n" + M.conflictText(cf) +
+  "\n\nTrotzdem übernehmen?\nDie genannten Personen bleiben an diesen Tagen bei der anderen Baustelle und werden hier nicht eingeplant – die übrigen schon.";
 // Auswahllisten (BV, Typ, Person): Berühren/Scrollen schließt die Liste nicht, Auswahl per Antippen (click)
 let listTouchAt = 0;
 const listBusy = () => Date.now() - listTouchAt < 1500;
@@ -686,7 +689,10 @@ function enableDrag(card, g, days) {
     const ob = M.overbooked(next);
     if (ob) { alert("Nicht möglich:\n\n" + M.overbookedText(next, ob)); return; }
     const cf = M.conflicts(next);
-    if (cf.length) { alert("Nicht möglich – doppelt eingeteilt:\n\n" + M.conflictText(cf)); return; }
+    if (cf.length) {
+      if (!confirm(overrideText(cf))) return;
+      Object.assign(next, M.withoutConflicts(next));
+    }
     M.put("einsaetze", next);
     followBuehnen(e, next);
     toast(`${M.baustelleLabel(next)}: ${M.longDate(next.von)} – ${M.longDate(next.bis)}${next.truppId !== (e.truppId || null) ? " · " + M.truppName(M.get("trupps", next.truppId)) : ""}`, "info", 2500);
@@ -1153,10 +1159,17 @@ export function openEinsatz(e, preset = {}) {
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
     const ob = M.overbooked({ ...cur, von, bis, truppId: truppSel.value || null });
     if (ob) { alert(M.overbookedText({ truppId: truppSel.value }, ob)); return false; }
-    const cf = M.conflicts({ ...cur, von, bis, truppId: truppSel.value || null }, chips.value());
-    if (cf.length) { alert("Doppelt eingeteilt – bitte ändern:\n\n" + M.conflictText(cf)); return false; }
-    M.put("einsaetze", { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(), off: M.cleanOff({ ...cur, von, bis, monteure: chips.value() }),
-      leih: body.querySelector(".f-leih").value.trim(), kran: body.querySelector(".f-kran").value.trim(), notiz: body.querySelector(".f-notiz").value.trim() });
+    let rec = { ...cur, ...s, truppId: truppSel.value || null, von, bis, monteure: chips.value(),
+      leih: body.querySelector(".f-leih").value.trim(), kran: body.querySelector(".f-kran").value.trim(), notiz: body.querySelector(".f-notiz").value.trim() };
+    // neu: Wochenende standardmäßig ausgespart (danach je Tag in der Personal-Ansicht änderbar)
+    if (isNew) rec.off = M.weekendOff(rec);
+    rec.off = M.cleanOff(rec);
+    const cf = M.conflicts(rec);
+    if (cf.length) {
+      if (!confirm(overrideText(cf))) return false;
+      rec = M.withoutConflicts(rec);
+    }
+    M.put("einsaetze", rec);
     changed();
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [

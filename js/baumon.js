@@ -222,6 +222,38 @@ export function conflicts(e, ids = e.monteure) {
   }
   return out;
 }
+// Neuer Einsatz: Sa/So standardmäßig nicht eingeplant (je Tag änderbar). Nur Wochenende -> nichts aussparen.
+export function weekendOff(e) {
+  const we = [];
+  let work = false;
+  for (let d = e.von; d && d <= e.bis; d = addDays(d, 1)) { if (["Sa", "So"].includes(wdName(d))) we.push(d); else work = true; }
+  const off = {};
+  for (const [k, v] of Object.entries(e.off || {})) off[k] = v.slice();
+  if (!work || !we.length) return off;
+  for (const mid of e.monteure || []) off[mid] = [...new Set([...(off[mid] || []), ...we])].sort();
+  return off;
+}
+// Doppelbelegung übergehen: betroffene Personen an den Tagen, an denen sie woanders eingeplant sind,
+// hier nicht einplanen (bleiben bei der anderen Baustelle). Ganz belegt -> aus der Besetzung nehmen.
+export function withoutConflicts(e) {
+  const off = {};
+  for (const [k, v] of Object.entries(e.off || {})) off[k] = v.slice();
+  for (const o of list("einsaetze")) {
+    if (o.id === e.id || o.bis < e.von || o.von > e.bis) continue;
+    if (e.truppId && o.truppId === e.truppId) continue;
+    const from = o.von > e.von ? o.von : e.von, to = o.bis < e.bis ? o.bis : e.bis;
+    for (const mid of e.monteure || []) {
+      for (let d = from; d <= to; d = addDays(d, 1)) {
+        if (present(o, mid, d) && !(off[mid] || []).includes(d)) (off[mid] = off[mid] || []).push(d);
+      }
+    }
+  }
+  let n = 0; for (let d = e.von; d <= e.bis; d = addDays(d, 1)) n++;
+  const monteure = (e.monteure || []).filter((mid) => (off[mid] || []).length < n);
+  const next = { ...e, monteure, off };
+  next.off = cleanOff(next);
+  return next;
+}
 // Ist die Person an diesem Tag auf dem Einsatz? (eingeplant, nicht ausgenommen, nicht krank/Urlaub)
 export function present(e, pid, day) {
   return (e.monteure || []).includes(pid) && day >= e.von && day <= e.bis && !((e.off || {})[pid] || []).includes(day) && !isAbsent(pid, day);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.15.0-beta" />
+  <meta name="app-version" content="3.15.1-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -274,6 +274,8 @@
     .g-trupp b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .g-trupp .muted { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .g-cell { border-bottom: 1px solid var(--brand-gray-200); border-left: 1px solid var(--brand-gray-100); cursor: pointer; }
+    /* Personal/Bühnen-Ansicht: Trupps klar voneinander getrennt (Linie über dem Trupp, nicht zwischen Trupp und seinen Monteuren) */
+    .gantt.det-personal .g-trupp, .gantt.det-personal .g-cell, .gantt.det-buehnen .g-trupp, .gantt.det-buehnen .g-cell { border-top: 2px solid #c9c6c0; border-bottom-color: var(--brand-gray-100); }
     .g-cell.we { background: var(--brand-gray-100); }
     .g-cell.today { background: var(--brand-primary-soft); }
     .g-cell.sel { background: rgba(46,91,138,.22) !important; }
@@ -354,7 +356,7 @@
     .g-bar.join { box-shadow: none; }
     /* Überschneidung: Schräge über die gesamten überschneidenden Tage, schmaler Spalt zwischen den Balken */
     .g-bar.join { --xl: calc(var(--ovl, 0) * (100% + 2px)); --xr: calc(var(--ovr, 0) * (100% + 2px)); }
-    .g-bar.join-r { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - var(--xr)) 100%, 0 100%); }
+    .g-bar.join-r { --padr: calc(var(--ovr) * 50% + 10px); margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - var(--xr)) 100%, 0 100%); }
     .g-bar.join-l { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, 100% 100%, 3px 100%); --padl: calc(var(--ovl) * 50% + 10px); }
     .g-bar.join-l.join-r { clip-path: polygon(calc(var(--xl) + 3px) 0, 100% 0, calc(100% - var(--xr)) 100%, 3px 100%); }
     .g-bar.join-r .g-h.r::after, .g-bar.join-l .g-h.l::after { display: none; }
@@ -667,12 +669,9 @@
     /* Hinweis neue Version */
     .boot-fail { max-width: 460px; margin: 40px auto; }
     /* BauMon/Einstellungen (ohne Suchfeld): Sync-Symbol trotzdem ganz rechts neben dem Logo */
-    @media (min-width: 761px){
-      body.sparte-mon #syncChip, body.view-settings #syncChip { margin-left: auto; }
-      body.sparte-mon .sparte-logo, body.view-settings .sparte-logo { margin-left: 0; }
-    }
-    /* Handy: Sync-Symbol oben rechts direkt neben dem Logo (wie im Browser) */
-    @media (max-width: 760px){ .sparte-logo { margin-left: 0; } }
+    /* Sync-Symbol immer oben rechts direkt neben dem Logo (BauDoc, BauMon, Einstellungen, Handy + PC) */
+    #syncChip { margin-left: auto; }
+    .sparte-logo { margin-left: 0; }
     .update-bar.auth-bar { white-space: normal; width: min(560px, calc(100vw - 24px)); border-radius: 14px; background: #7a4a00; }
     .auth-expired { background: rgba(180,110,0,.10); border: 1px solid rgba(180,110,0,.35); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
     .auth-expired p { margin: 0 0 8px; }
