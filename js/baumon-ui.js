@@ -191,7 +191,13 @@ export function renderMonPlan(app) {
 
   const trupps = M.sortedTrupps();
   const einsaetze = M.list("einsaetze").filter((e) => e.bis >= days[0] && e.von <= days[20]);
-  assignColors(einsaetze);
+  // Bühnen, deren BV im Zeitraum keinen Einsatz hat (z. B. Einsatz gelöscht oder verschoben): eigene Zeilen in der Bühnen-Ansicht
+  const orphans = M.list("buehnen").filter((b) => {
+    const von = b.von || b.bis, bis = b.abgemeldetAm || b.bis;
+    if (!von || !bis || bis < days[0] || von > days[20]) return false;
+    return !einsaetze.some((e) => M.sameSite(b, e));
+  }).sort((a, b) => (a.bis || "").localeCompare(b.bis || "") || M.baustelleLabel(a).localeCompare(M.baustelleLabel(b)));
+  assignColors([...einsaetze, ...orphans]);
   // Bühnen-Symbol nur einmal je BV: am Balken, der im dargestellten Zeitraum am weitesten rechts endet
   // (geht das BV über den Zeitraum hinaus, also am letzten dargestellten Tag)
   const siteKey = (e) => e.bvNumber ? "#" + e.bvNumber : (e.baustelle || "").trim().toLowerCase();
@@ -209,13 +215,14 @@ export function renderMonPlan(app) {
   if (malerRows.length) rows.push({ sep: "Maler" }, ...malerRows);
   const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[20] && M.get("monteure", a.monteurId));
   const abwPeople = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((a, b) => a.name.localeCompare(b.name, "de"));
+  if (zoom === "buehnen" && orphans.length) rows.push({ sep: "Bühnen ohne Einsatz" }, ...orphans.map((b) => ({ orphan: b })));
   if (abwPeople.length || editable()) {
     rows.push({ sep: "Krank / Urlaub", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
   }
   // Detail je Trupp: Personal (eine Zeile je Person) oder Bühnen (eine Zeile je Bühne)
   for (const r of rows) {
     r.subs = [];
-    if (r.sep || r.abw || zoom === "kompakt") continue;
+    if (r.sep || r.abw || r.orphan || zoom === "kompakt") continue;
     if (zoom === "personal") {
       const ids = [];
       const addId = (id) => { if (id && !ids.includes(id) && M.get("monteure", id)) ids.push(id); };
@@ -259,6 +266,14 @@ export function renderMonPlan(app) {
   card.querySelector("#wkNext").onclick = () => { weekOffset++; U.render(); };
   const now = card.querySelector("#wkNow"); if (now) now.onclick = () => { weekOffset = 0; U.render(); };
   const g = card.querySelector(".gantt");
+  // Bühnen-Balken (Mietbeginn bis Mietende bzw. Abmeldung)
+  function bueBar(b, gridRow, color) {
+    const due = M.isDue(b, t);
+    const von = b.von || b.bis || days[0], bis = b.abgemeldetAm || b.bis || days[20];
+    if (bis < days[0] || von > days[20]) return "";
+    const s0 = Math.max(0, days.indexOf(von < days[0] ? days[0] : von)), e0 = days.indexOf(bis > days[20] ? days[20] : bis);
+    return `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${color}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${due ? '<span class="bue-dot" title="abmelden!"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))} · ${b.abgemeldetAm ? "abgemeldet " + h(M.shortDate(b.abgemeldetAm)) : "bis " + (b.bis ? h(M.shortDate(b.bis)) : "?")}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`;
+  }
   // Kopf: Wochen + Tage
   let head = `<div class="g-corner">Trupp</div>`;
   for (let w = 0; w < 3; w++) {
@@ -274,11 +289,19 @@ export function renderMonPlan(app) {
   g.insertAdjacentHTML("beforeend", head);
 
   // Zeilenhöhen: Trupp-Zeilen fest, Trennzeile (Maler) schmal
-  g.style.gridTemplateRows = "auto auto " + rows.map((r) => (r.sep ? "30px" : ["var(--rowh)", ...(r.subs || []).map(() => "var(--subh)")].join(" "))).join(" ");
+  g.style.gridTemplateRows = "auto auto " + rows.map((r) => (r.sep ? "30px" : r.orphan ? "44px" : ["var(--rowh)", ...(r.subs || []).map(() => "var(--subh)")].join(" "))).join(" ");
   let gridRow = 3;
   for (const r of rows) {
     if (r.sep) {
       g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}${r.add ? ` <button type="button" class="g-sep-add" id="abwAdd">+ Krank / Urlaub</button>` : ""}</span></div>`);
+      gridRow++;
+      continue;
+    }
+    if (r.orphan) {
+      const b = r.orphan;
+      g.insertAdjacentHTML("beforeend", `<div class="g-trupp g-orow" style="grid-row:${gridRow}" title="${h(M.baustelleLabel(b))} · ${h(M.buehneText(b))}"><b>${h(M.baustelleLabel(b))}</b><span class="g-osub">${h(M.buehneText(b))}</span></div>`);
+      days.forEach((d, i) => g.insertAdjacentHTML("beforeend", `<div class="g-pc ${["Sa", "So"].includes(M.wdName(d)) ? "we" : ""} ${M.holiday(d) ? "hol" : ""} ${d === t ? "today" : ""}" style="grid-column:${2 + i};grid-row:${gridRow}"></div>`));
+      g.insertAdjacentHTML("beforeend", bueBar(b, gridRow, siteColor(b)));
       gridRow++;
       continue;
     }
@@ -378,14 +401,9 @@ export function renderMonPlan(app) {
         });
       } else {
         const b = sub.lift;
-        const due = M.isDue(b, t);
         g.insertAdjacentHTML("beforeend", `<div class="g-subl" style="grid-row:${gridRow}" title="${h(M.buehneText(b))} · ${h(vermieterName(b.vermieterId))}">${h(M.buehneText(b))}</div>`);
         days.forEach((d, i) => g.insertAdjacentHTML("beforeend", `<div class="g-pc ${bgCls(d)}" style="grid-column:${2 + i};grid-row:${gridRow}"></div>`));
-        const von = b.von || b.bis || days[0], bis = b.abgemeldetAm || b.bis || days[20];
-        if (bis >= days[0] && von <= days[20]) {
-          const s0 = Math.max(0, days.indexOf(von < days[0] ? days[0] : von)), e0 = days.indexOf(bis > days[20] ? days[20] : bis);
-          g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${siteColor(sub.e)}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${due ? '<span class="bue-dot" title="abmelden!"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))} · ${b.abgemeldetAm ? "abgemeldet " + h(M.shortDate(b.abgemeldetAm)) : "bis " + (b.bis ? h(M.shortDate(b.bis)) : "?")}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
-        }
+        g.insertAdjacentHTML("beforeend", bueBar(b, gridRow, siteColor(sub.e)));
       }
       gridRow++;
     }
@@ -1173,11 +1191,32 @@ export function openEinsatz(e, preset = {}) {
     changed();
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
-    ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Diesen Einsatz löschen?")) return false; M.remove("einsaetze", cur.id); changed(); } }]),
+    ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => deleteEinsatz(cur) }]),
     { label: "Abbrechen", fn: () => {} },
     { label: isNew ? "Anlegen" : "Speichern", cls: "primary", fn: save },
   ];
   modal(isNew ? "Neuer Einsatz" : "Einsatz", body, actions);
+}
+
+// Einsatz löschen. Letzter Einsatz eines BV, auf dem noch Bühnen stehen -> fragen, was mit den Bühnen passiert.
+function deleteEinsatz(e) {
+  const others = M.list("einsaetze").some((o) => o.id !== e.id && M.sameSite(o, e));
+  const bs = others ? [] : M.buehnenOf(e).filter((b) => !b.abgemeldetAm);
+  if (!bs.length) {
+    if (!confirm("Diesen Einsatz löschen?")) return false;
+    M.remove("einsaetze", e.id); changed(); return;
+  }
+  const body = U.el(`<div class="mon-form"><p>Auf <b>${h(M.baustelleLabel(e))}</b> ${bs.length === 1 ? "steht noch eine Bühne" : `stehen noch ${bs.length} Bühnen`}, und es gibt danach keinen Einsatz mehr für dieses BV:</p>
+    <ul class="mon-list">${bs.map((b) => `<li>${h(M.buehneText(b))} · ${h(vermieterName(b.vermieterId))}${b.bis ? ` <span class="muted">Mietende ${h(M.shortDate(b.bis))}</span>` : ""}</li>`).join("")}</ul>
+    <p class="muted">Was soll mit ${bs.length === 1 ? "der Bühne" : "den Bühnen"} passieren? Der Einsatz wird in jedem Fall gelöscht.</p></div>`);
+  const done = (msg) => { M.remove("einsaetze", e.id); toast(msg, "info", 3500); changed(); };
+  modal("Einsatz löschen", body, [
+    { label: "Bühnen löschen", cls: "danger-outline", fn: () => { if (!confirm(`${bs.length} Bühne(n) endgültig löschen?`)) return false; for (const b of bs) M.remove("buehnen", b.id); done(`Einsatz und ${bs.length} Bühne(n) gelöscht.`); } },
+    { label: "Abbrechen", fn: () => {} },
+    { label: "Bühnen behalten", fn: () => done("Einsatz gelöscht – Bühnen bleiben (Planung › Bühnen › „Bühnen ohne Einsatz“).") },
+    { label: "Als abgemeldet markieren", cls: "primary", fn: () => { for (const b of bs) M.put("buehnen", { ...b, abgemeldetAm: M.today() }); done(`Einsatz gelöscht – ${bs.length} Bühne(n) als abgemeldet markiert.`); } },
+  ]);
+  return true; // Einsatz-Fenster schließen
 }
 
 const TYPEN = ["Arbeitsbühne", "Scherenbühne", "Gelenkteleskopbühne", "Teleskopbühne", "Raupenbühne", "LKW-Bühne", "Teleskopstapler", "MRT (Manitou)"];
