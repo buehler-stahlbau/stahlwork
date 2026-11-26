@@ -204,6 +204,35 @@ export async function getAppFolder() {
   return (await getByPath(CONFIG.appFolder)) || createFolder(null, CONFIG.appFolder, "fail");
 }
 
+/* ---------- Merkzettel im EIGENEN OneDrive: welche gemeinsame Ablage nutze ich? ----------
+   Damit jede weitere Installation (Home-Bildschirm-App am iPhone hat einen eigenen Speicher,
+   neues Gerät, anderer Browser) die gemeinsame Ablage nach der Anmeldung von selbst findet. */
+const POINTER = () => `${CONFIG.appFolder}/gemeinsame-ablage.json`;
+export async function readAblagePointer() {
+  const res = await gfetch(`${CONFIG.driveBase}/root:/${encPath(POINTER())}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await toError(res);
+  const item = await res.json();
+  const url = item["@microsoft.graph.downloadUrl"];
+  const c = url ? await fetch(url, { cache: "no-store" }) : await gfetch(`${CONFIG.driveBase}/items/${iid(item.id)}/content`);
+  if (!c.ok) return null;
+  const j = await c.json();
+  return j && j.driveId && j.itemId ? { driveId: String(j.driveId), itemId: String(j.itemId), owner: String(j.owner || "") } : null;
+}
+export async function writeAblagePointer(a) {
+  const res = await gfetch(`${CONFIG.driveBase}/root:/${encPath(POINTER())}:/content`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ format: "stahlwork-ablage", driveId: a.driveId, itemId: a.itemId, owner: a.owner || "", at: new Date().toISOString() }, null, 1),
+  });
+  if (!res.ok) throw await toError(res);
+}
+export async function deleteAblagePointer() {
+  const res = await gfetch(`${CONFIG.driveBase}/root:/${encPath(POINTER())}`);
+  if (!res.ok) return;
+  const item = await res.json();
+  await gfetch(`${CONFIG.driveBase}/items/${iid(item.id)}`, { method: "DELETE" });
+}
+
 /* ---------- Freigabe des Hauptordners (nur der Besitzer der Ablage) ---------- */
 export async function shareAppFolder(email) {
   const app = await getAppFolder();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.17.6-beta" />
+  <meta name="app-version" content="3.17.7-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -226,6 +226,8 @@
     .rights-card .r-row input[type=checkbox] { width: 20px; height: 20px; }
     .rights-card .r-add input[type=email] { min-width: 0; width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--brand-gray-300, #c9c6c0); border-radius: 8px; font: inherit; font-size: .95rem; background: #fff; }
     .rights-card .r-invite { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--brand-gray-100); }
+    .rights-card .r-join { margin-top: 14px; } .rights-card .r-join summary { cursor: pointer; color: var(--brand-gray-700); font-weight: 600; font-size: .9rem; }
+    .rights-card .r-join .row { gap: 8px; } .rights-card .r-join input { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--brand-gray-300, #c9c6c0); border-radius: 8px; font: inherit; }
     .rights-card .icon-only { width: 36px; padding: 0; justify-content: center; } .rights-card .icon-only .ico { width: 18px; height: 18px; }
     /* Suche (ganze App) im Menü */
     .drawer-searchrow { display: flex; align-items: center; gap: 8px; margin: 0 2px 12px; }

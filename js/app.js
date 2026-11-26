@@ -267,29 +267,54 @@ function renderAccessPage(app, kind) {
 }
 async function leaveAblage() {
   if (!confirm("Gemeinsame Ablage verlassen?\n\nStahlwork nutzt danach wieder dein eigenes OneDrive. Die Daten auf diesem Gerät werden dafür neu geladen.")) return;
+  try { await od.deleteAblagePointer(); } catch (e) { console.warn("Merkzettel", e); }
   od.setAblage(null);
+  try { localStorage.setItem("stahlwork-ablage-check", String(Date.now())); } catch {}
   await resetLocal();
   location.replace(location.pathname);
 }
-// Einladungslink …?ablage=<driveId>~<itemId>~<Name>: gemeinsame Ablage übernehmen
-async function checkAblageLink() {
-  const q = new URLSearchParams(location.search);
-  const v = q.get("ablage");
-  if (!v) return false;
-  const [driveId, itemId, owner] = v.split("~");
-  try { history.replaceState(history.state, "", location.pathname); } catch {}
+// Einladung (Link …?ablage=<driveId>~<itemId>~<Name>) annehmen – aus dem Link oder von Hand eingefügt
+async function joinAblage(v, { fromLink = false } = {}) {
+  const [driveId, itemId, owner] = String(v || "").split("~").map((x) => decodeURIComponent(x || ""));
   const cur = od.getAblage();
-  if (!driveId || !itemId || (cur && cur.driveId === driveId && cur.itemId === itemId)) return false;
+  if (!driveId || !itemId) { if (!fromLink) toast("Das ist kein gültiger Einladungslink.", "warn"); return false; }
+  if (cur && cur.driveId === driveId && cur.itemId === itemId) { if (!fromLink) toast("Diese gemeinsame Ablage nutzt du bereits.", "info"); return false; }
   // eigener Einladungslink (Besitzer öffnet ihn selbst): nichts umstellen
   if (!cur && od.isSignedIn()) {
     let own = false;
     try { const app = await od.getByPath(CONFIG.appFolder); own = !!app && app.id === itemId && (!app.parentReference || !app.parentReference.driveId || app.parentReference.driveId === driveId); } catch {}
     if (own) { toast("Das ist dein eigener Ordner – den Link brauchen nur die eingeladenen Kollegen.", "info", 7000); return false; }
   }
-  if (!confirm(`Gemeinsame Ablage von ${owner || "einem Kollegen"} verwenden?\n\nStahlwork arbeitet dann mit diesen Daten. Was auf diesem Gerät noch nicht hochgeladen ist, wird verworfen (dein eigenes OneDrive bleibt unverändert).`)) return false;
-  od.setAblage({ driveId, itemId, owner: owner || "" });
+  if (!confirm(`Gemeinsame Ablage von ${owner || "einem Kollegen"} verwenden?\n\nStahlwork arbeitet dann mit diesen Daten – auf allen deinen Geräten. Was auf diesem Gerät noch nicht hochgeladen ist, wird verworfen (dein eigenes OneDrive bleibt unverändert).`)) return false;
+  const ab = { driveId, itemId, owner: owner || "" };
+  // im eigenen OneDrive merken -> Home-Bildschirm-App, andere Geräte finden die Ablage von selbst
+  if (od.isSignedIn()) { try { await od.writeAblagePointer(ab); } catch (e) { console.warn("Merkzettel", e); } }
+  od.setAblage(ab);
   await resetLocal();
   if (od.isSignedIn()) { await od.relogin(); return true; } // Zustimmung zur zusätzlichen Berechtigung einholen
+  if (!fromLink) location.replace(location.pathname);
+  return true;
+}
+async function checkAblageLink() {
+  const q = new URLSearchParams(location.search);
+  const v = q.get("ablage");
+  if (!v) return false;
+  try { history.replaceState(history.state, "", location.pathname); } catch {}
+  return joinAblage(v.split("~").map(encodeURIComponent).join("~"), { fromLink: true });
+}
+// Start ohne gemeinsame Ablage: steht im eigenen OneDrive ein Merkzettel? (höchstens alle 12 Stunden prüfen)
+async function checkAblagePointer() {
+  if (!od.isConfigured() || !od.isSignedIn() || od.getAblage() || !navigator.onLine) return false;
+  let last = 0; try { last = Number(localStorage.getItem("stahlwork-ablage-check") || 0); } catch {}
+  if (Date.now() - last < 12 * 3600e3) return false;
+  try { localStorage.setItem("stahlwork-ablage-check", String(Date.now())); } catch {}
+  let p = null;
+  try { p = await Promise.race([od.readAblagePointer(), new Promise((r) => setTimeout(() => r(null), 6000))]); } catch (e) { console.warn("Merkzettel", e); }
+  if (!p) return false;
+  od.setAblage(p);
+  await resetLocal();
+  toast(`Gemeinsame Ablage von ${p.owner || "einem Kollegen"} wird geladen …`, "info", 4000);
+  location.replace(location.pathname);
   return true;
 }
 
@@ -2086,7 +2111,10 @@ function renderRightsCard(app) {
       <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span>
       <span><button type="button" class="primary small" id="rAdd">+</button></span></div>
     ${!ab ? `<div class="r-invite"><p class="muted">Einladen: Person oben eintragen, dann diesen Link schicken. Sie öffnet ihn einmal und meldet sich an.</p>
-      <button type="button" class="secondary" id="rLink">Einladungslink kopieren</button></div>` : ""}
+      <button type="button" class="secondary" id="rLink">Einladungslink kopieren</button></div>
+      <details class="r-join"><summary>Einladung von einem Kollegen erhalten?</summary>
+        <p class="muted">Einladungslink hier einfügen – z. B. in der App auf dem Home-Bildschirm, wenn sich der Link dort nicht öffnen lässt.</p>
+        <div class="row"><input type="url" id="rJoin" placeholder="https://…?ablage=…" autocomplete="off"><button type="button" class="primary small" id="rJoinBtn">Beitreten</button></div></details>` : ""}
     ${st.rightsDirty ? `<p class="muted small-note">Änderungen werden beim nächsten Abgleich gespeichert.</p>` : ""}</div>`);
   app.appendChild(card);
   const save = (users2) => { st.rightsData = { ...data, users: users2 }; st.rightsDirty = true; saveSoon(); sync.schedule(500); render(); };
@@ -2129,6 +2157,8 @@ function renderRightsCard(app) {
     }
     save({ ...(data.users || {}), [mail]: { doc, mon } });
   };
+  const jb = $("#rJoinBtn", card);
+  if (jb) jb.onclick = () => { const t = $("#rJoin", card).value.trim(); const m = t.match(/[?&]ablage=([^&#\s]+)/); joinAblage(m ? m[1] : t); };
   const lk = $("#rLink", card);
   if (lk) lk.onclick = async () => {
     try {
@@ -2491,6 +2521,7 @@ function versionMismatch() {
   }
   window.__bootStep = "Konto prüfen";
   if (await checkAblageLink()) return; // Weiterleitung zur Anmeldung (Zustimmung)
+  if (await checkAblagePointer()) return; // gemeinsame Ablage aus dem eigenen OneDrive übernommen -> neu laden
   await checkAccount();
 
   window.__bootStep = "Anzeige aufbauen";
