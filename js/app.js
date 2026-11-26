@@ -19,7 +19,6 @@ import { contentCode, sigValid, validSignatures, normalizeCode, isSafeSig } from
 import { searchPlaces, geoValid, loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from "./geo.js";
 import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
-import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
@@ -2237,17 +2236,6 @@ function renderSettings(app) {
   sigReset.onclick = () => { sigEl.value = auto; store(auto); };
   app.appendChild(el(`
     <div class="card">
-      <h3 class="section-title">Datensicherung</h3>
-      <p class="muted">Speichert alle Bauvorhaben und alle Fotos, die auf diesem Gerät liegen, in eine Datei.</p>
-      <div class="row wrap">
-        <button class="secondary" id="bkExport" type="button">Sicherung speichern</button>
-        <label class="file-btn">Sicherung laden
-          <input id="bkImport" type="file" accept="application/json,.json" />
-        </label>
-      </div>
-    </div>`));
-  app.appendChild(el(`
-    <div class="card">
       <h3 class="section-title">Speicher auf diesem Gerät</h3>
       <p class="muted" id="storageInfo">wird ermittelt …</p>
     </div>`));
@@ -2281,29 +2269,6 @@ function renderSettings(app) {
     render();
   };
 
-
-  $("#bkExport").onclick = async () => {
-    try {
-      const r = await exportBackup((m) => setBusy(m));
-      if (r.online) toast(`${r.online} Foto(s) liegen nur in OneDrive und sind nur als Vorschau bzw. gar nicht enthalten.`, "warn", 8000);
-    } catch (e) {
-      toast("Sicherung fehlgeschlagen: " + e.message, "error", 8000);
-    } finally { setBusy(null); }
-  };
-  $("#bkImport").addEventListener("change", async (ev) => {
-    const f = ev.target.files && ev.target.files[0];
-    ev.target.value = "";
-    if (!f) return;
-    if (!confirm("Sicherung laden?\n\nAlle Bauvorhaben auf diesem Gerät werden durch den Inhalt der Sicherung ersetzt.")) return;
-    try {
-      const r = await importBackup(f, (m) => setBusy(m));
-      toast(`Sicherung geladen: ${r.projects} Bauvorhaben, ${r.images} Fotos.`, "info", 6000);
-      go({ view: "projects", selectedProjectId: null, selectedDocId: null }, { replace: true });
-      sync.schedule(1000, { full: true });
-    } catch (e) {
-      toast("Laden fehlgeschlagen: " + e.message, "error", 8000);
-    } finally { setBusy(null); }
-  });
 
   (async () => {
     const info = $("#storageInfo");
