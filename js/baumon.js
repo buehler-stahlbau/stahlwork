@@ -15,7 +15,7 @@ import { CONFIG } from "./config.js";
 import { S, saveSoon } from "./store.js";
 import { newId } from "./util.js";
 
-export const KINDS = ["vermieter", "monteure", "trupps", "einsaetze", "buehnen", "abwesenheiten"];
+export const KINDS = ["vermieter", "monteure", "trupps", "einsaetze", "buehnen", "abwesenheiten", "farben"];
 const FILE = "baumon.json";
 const DUE_FILE = "abmelden.json";
 const TOMB_MAX_AGE = 180 * 24 * 3600 * 1000;
@@ -207,6 +207,54 @@ export function removePerson(id) {
   for (const a of list("abwesenheiten").filter((a) => a.monteurId === id)) remove("abwesenheiten", a.id);
   remove("monteure", id);
 }
+/* ---------- Feste Farbe je BV ----------
+   Ein BV bekommt beim ersten Erscheinen in der Planung eine Farbe, die dann dauerhaft bleibt
+   (App, PDF, alle Geräte – wird mit den BauMon-Daten abgeglichen). Gewählt wird die Farbe,
+   die bei den aktuell laufenden/kommenden BV am wenigsten vorkommt. */
+export const PALETTE = [
+  "#2e5b8a", "#5b7f3a", "#a07a14", "#6a4c8c", "#2e7f7a", "#8c3f52", "#c0622f", "#5f5e59", "#4a90b8", "#b0567d", "#7d8c2e", "#3d3d6b",
+  "#8a5a2e", "#2f6b4f", "#7a3b8f", "#1f7a8c", "#9c4a1a", "#4f6d2a", "#b5476a", "#3f5fa8", "#7b6b2a", "#5a3e6e", "#2a8a5c", "#6b7a8f",
+];
+const colorKey = (x) => (x.bvNumber ? "#" + x.bvNumber : "n:" + (x.baustelle || "").trim().toLowerCase());
+function hashStr(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; return h; }
+const colorId = (key) => (key.startsWith("#") ? "f" + key.slice(1) : "fn" + hashStr(key).toString(36));
+export function colorOf(x) {
+  const key = colorKey(x);
+  const r = get("farben", colorId(key));
+  return PALETTE[(r ? r.farbe : hashStr(key)) % PALETTE.length];
+}
+export function ensureColors(items) {
+  if (!canEdit()) return false;
+  const first = new Map();
+  for (const x of items) {
+    const k = colorKey(x);
+    if (get("farben", colorId(k))) continue;
+    const v = x.von || x.bis || "";
+    if (!first.has(k) || v < first.get(k)) first.set(k, v);
+  }
+  if (!first.size) return false;
+  // Farben der laufenden/kommenden BV (letzte 4 Wochen bis Zukunft) zählen
+  const from = addDays(today(), -28);
+  const active = new Set([...list("einsaetze").filter((e) => e.bis >= from), ...list("buehnen").filter((b) => !b.abgemeldetAm && (b.bis || "") >= from)].map(colorKey));
+  const use = new Array(PALETTE.length).fill(0);
+  for (const k of active) { const r = get("farben", colorId(k)); if (r) use[r.farbe % PALETTE.length]++; }
+  const keys = [...first.keys()].sort((a, b) => first.get(a).localeCompare(first.get(b)) || a.localeCompare(b));
+  for (const k of keys) {
+    let best = 0;
+    for (let i = 1; i < use.length; i++) if (use[i] < use[best]) best = i;
+    put("farben", { id: colorId(k), key: k, farbe: best });
+    use[best]++;
+  }
+  return true;
+}
+// Farbe eines BV bewusst ändern (nächste freie Farbe)
+export function nextColor(x) {
+  const key = colorKey(x), id = colorId(key);
+  const r = get("farben", id);
+  const cur = r ? r.farbe : hashStr(key) % PALETTE.length;
+  put("farben", { id, key, farbe: (cur + 1) % PALETTE.length });
+}
+
 // Kategorie einer Person: "rm" (Richtmeister), "maler" oder "monteur"
 export function kind(p) { return p && p.maler ? "maler" : p && p.rm ? "rm" : "monteur"; }
 export const PERSON_KINDS = { rm: "Richtmeister", monteur: "Monteur", maler: "Maler" };
@@ -510,6 +558,7 @@ function cleanRecord(kind, r) {
       baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), off: offMap(r.off), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
     case "abwesenheiten": return { ...base, monteurId: ID_RE.test(String(r.monteurId || "")) ? r.monteurId : null,
       typ: r.typ === "krank" ? "krank" : "urlaub", von: day(r.von), bis: day(r.bis), notiz: s(r.notiz, 500) };
+    case "farben": return { ...base, key: s(r.key, 160), farbe: Number.isInteger(r.farbe) && r.farbe >= 0 && r.farbe < 64 ? r.farbe : 0 };
     case "buehnen": return { ...base, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "", baustelle: s(r.baustelle), standort: s(r.standort),
       vermieterId: ID_RE.test(String(r.vermieterId || "")) ? r.vermieterId : null, typ: s(r.typ), anzahl: Math.max(1, Math.min(99, Number(r.anzahl) || 1)),
       von: day(r.von), bis: day(r.bis), abgemeldetAm: day(r.abgemeldetAm), auftragsNr: s(r.auftragsNr), notiz: s(r.notiz, 1000) };

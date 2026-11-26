@@ -74,26 +74,10 @@ const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Oster
   "1. Weihnachtstag": "1. Weihn.", "2. Weihnachtstag": "2. Weihn.", "Karfreitag": "Karfr." };
 const editable = () => M.canEdit();
 
-/* ---------- Farben je Baustelle (ruhige Töne) ---------- */
-// gut unterscheidbare Töne; je Ansicht bekommt jedes BV eine eigene Farbe (keine Doppelungen)
-const PALETTE = ["#2e5b8a", "#5b7f3a", "#a07a14", "#6a4c8c", "#2e7f7a", "#8c3f52", "#c0622f", "#5f5e59", "#4a90b8", "#b0567d", "#7d8c2e", "#3d3d6b", "#8a5a2e", "#2f6b4f"];
+/* ---------- Farben je Baustelle: fest je BV (siehe baumon.js) ---------- */
 const siteKeyOf = (x) => x.bvNumber || (x.baustelle || "").trim().toLowerCase();
-let colorMap = new Map();
-// Farben für die BV einer Ansicht vergeben: nach Beginn sortiert, jede Farbe nur einmal
-export function assignColors(list) {
-  const first = new Map();
-  for (const e of list) { const k = siteKeyOf(e); if (!first.has(k) || (e.von || "") < first.get(k)) first.set(k, e.von || ""); }
-  const keys = [...first.keys()].sort((a, b) => first.get(a).localeCompare(first.get(b)) || a.localeCompare(b));
-  colorMap = new Map(keys.map((k, i) => [k, PALETTE[i % PALETTE.length]]));
-  return colorMap;
-}
-function siteColor(x) {
-  const key = siteKeyOf(x);
-  if (colorMap.has(key)) return colorMap.get(key);
-  let n = 0;
-  for (let i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) >>> 0;
-  return PALETTE[n % PALETTE.length];
-}
+export function assignColors(list) { M.ensureColors(list); }
+function siteColor(x) { return M.colorOf(x); }
 
 /* =========================================================
    Übersicht
@@ -607,8 +591,8 @@ function openPlanPdf() {
         U.busy("PDF wird erstellt …");
         try {
           const pEnd = M.addDays(from.value, n * 7 - 1);
-          const pmap = new Map(assignColors(M.list("einsaetze").filter((e) => e.bis >= from.value && e.von <= pEnd)));
-          const { blob, filename } = await buildPlanPdf({ colorOf: (x) => pmap.get(siteKeyOf(x)) || siteColor(x), start: from.value, weeks: n });
+          assignColors(M.list("einsaetze").filter((e) => e.bis >= from.value && e.von <= pEnd));
+          const { blob, filename } = await buildPlanPdf({ colorOf: (x) => M.colorOf(x), start: from.value, weeks: n });
           U.busy(null);
           U.openPdf(blob, filename, "Montageplanung");
         } catch (e) {
