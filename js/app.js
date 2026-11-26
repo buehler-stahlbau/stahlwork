@@ -2065,21 +2065,6 @@ window.addEventListener("beforeinstallprompt", (e) => {
   if (S.state.view === "settings") requestRender();
 });
 
-function installHtml() {
-  if (isStandalone()) return `<p>✓ Läuft als App.</p>`;
-  if (deferredInstall) return `
-    <p class="muted">Stahlwork installieren: eigenes Symbol auf dem Startbildschirm, Vollbild, schneller Start.</p>
-    <button class="primary" id="installBtn" type="button">App installieren</button>`;
-  if (isIOS) return `
-    <p class="muted">So wird Stahlwork auf dem iPhone/iPad installiert:</p>
-    <ol class="steps">
-      <li>Diese Seite in <strong>Safari</strong> öffnen</li>
-      <li>Unten auf <strong>Teilen</strong> tippen (Quadrat mit Pfeil nach oben)</li>
-      <li><strong>„Zum Home-Bildschirm“</strong> wählen</li>
-    </ol>
-    <p class="muted">Wichtig: Als App bleiben die Daten auf dem Gerät dauerhaft gespeichert.</p>`;
-  return `<p class="muted">Im Browser-Menü <strong>„App installieren“</strong> bzw. <strong>„Zum Startbildschirm hinzufügen“</strong> wählen. Im Browser am PC funktioniert Stahlwork auch ohne Installation.</p>`;
-}
 
 /* ---------- Einstellungen: Benutzer und Rechte (nur Verwalter) ---------- */
 function renderRightsCard(app) {
@@ -2201,7 +2186,6 @@ function renderSettings(app) {
   app.appendChild(el(`<div class="page-head"><h1>Einstellungen</h1></div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
   if (od.isConfigured() && od.isSignedIn()) renderRightsCard(app);
-  app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
   // Das Feld zeigt immer die Signatur, die verwendet wird: automatisch (aus dem Microsoft-Profil) oder die selbst geänderte.
   const auto = autoSignature();
@@ -2209,18 +2193,24 @@ function renderSettings(app) {
   const prof = S.state.prefs.profile || {};
   const noPhone = auto && !prof.phone && !prof.mobile && !/\bTel\b/i.test(S.state.prefs.mailSignature || "");
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
+    <div class="row"><p class="muted small-note grow" id="sigShort"></p><button type="button" class="secondary small" id="sigToggle">Anzeigen und bearbeiten</button></div>
+    <div class="sig-body" hidden>
     <p class="muted">Steht unter E-Mails, die BauMon vorbereitet (Bühne abmelden). Sie wird automatisch aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock erstellt. Du kannst sie direkt im Feld ändern.</p>
     ${noPhone ? `<p class="warn-note">In deinem Microsoft-Profil ist keine Telefonnummer hinterlegt. Trag sie unten im Feld ein (z. B. „Tel. +49 (0) 7453 9398-93 · Fax -33“) – oder die IT ergänzt sie im Profil, dann erscheint sie automatisch.</p>` : ""}
     <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="Max Mustermann&#10;Montageleitung&#10;Friedrich Bühler GmbH &amp; Co. KG&#10;Tel. …"></textarea>
-    <div class="row"><p class="muted small-note grow" id="sigState"></p><button type="button" class="secondary small" id="sigReset" hidden>Automatische wiederherstellen</button></div></div>`);
+    <div class="row"><p class="muted small-note grow" id="sigState"></p><button type="button" class="secondary small" id="sigReset" hidden>Automatische wiederherstellen</button></div></div></div>`);
   if (showSig) app.appendChild(sigCard);
   const sigEl = $("#mailSig", sigCard), sigState = $("#sigState", sigCard), sigReset = $("#sigReset", sigCard);
+  // erst auf Knopfdruck anzeigen/bearbeiten
+  const sigBody = $(".sig-body", sigCard), sigToggle = $("#sigToggle", sigCard), sigShort = $("#sigShort", sigCard);
+  sigToggle.onclick = () => { sigBody.hidden = !sigBody.hidden; sigToggle.textContent = sigBody.hidden ? "Anzeigen und bearbeiten" : "Schließen"; if (!sigBody.hidden) sigEl.focus(); };
   const own = () => (S.state.prefs.mailSignature || "").trim();
   const showState = () => {
     const o = own();
     sigState.textContent = !auto ? "Wird automatisch gespeichert und gilt für dein Konto auf allen Geräten."
       : o ? "Selbst geändert – gilt für dein Konto auf allen Geräten." : "Automatisch – passt sich an, wenn sich dein Microsoft-Profil ändert.";
     sigReset.hidden = !(auto && o);
+    sigShort.textContent = (o ? "Selbst geändert" : auto ? "Automatisch aus deinem Microsoft-Profil" : "Noch keine Signatur") + (noPhone ? " · Telefonnummer fehlt" : "");
   };
   sigEl.value = own() || auto;
   showState();
@@ -2261,12 +2251,6 @@ function renderSettings(app) {
   const logoutBtn = $("#logout");
   if (logoutBtn) logoutBtn.onclick = () => {
     if (confirm("Abmelden?\n\nDie Daten bleiben auf diesem Gerät gespeichert, sind aber erst nach erneuter Anmeldung wieder zugänglich.")) od.logout();
-  };
-  const installBtn = $("#installBtn");
-  if (installBtn) installBtn.onclick = async () => {
-    try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch {}
-    deferredInstall = null;
-    render();
   };
 
 
