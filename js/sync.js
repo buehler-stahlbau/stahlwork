@@ -238,14 +238,16 @@ async function syncAll(full) {
   await syncRights();
   const rights = st.rights || {};
   let firstError = null;
-  if (rights.doc) firstError = await syncBauDoc(full);
+  // Bauvorhaben-Liste (Nummer, Bauherr, Ort, Kartenposition) ist die gemeinsame Grundlage aller Module;
+  // die Inhalte von BauDoc (Dokus, Fotos, PDFs, Favoriten) nur mit BauDoc-Recht
+  if (rights.doc || rights.mon) firstError = await syncBauDoc(full, !!rights.doc);
   // BauMon (eigene Datei)
   if (rights.mon) { try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; } }
   outboxCount = (await outboxSafe()).length;
   if (firstError) throw firstError;
 }
 
-async function syncBauDoc(full) {
+async function syncBauDoc(full, withContent = true) {
   const st = S.state;
   const root = await od.getRootFolder();
   st.remote.rootId = root.id;
@@ -259,10 +261,12 @@ async function syncBauDoc(full) {
   }
 
   if (full) await refreshListing(root, dataDir);
+  // persönliche Einstellungen (Signatur, Microsoft-Profil, Favoriten) für jedes Modul
   if (full || S.state.prefs.dirty) await syncPrefs(root, dataDir);
-  const outbox = await outboxSafe();
+  const outbox = withContent ? await outboxSafe() : [];
   const sel = st.selectedProjectId;
-  const targets = allProjects().filter((p) =>
+  // ohne BauDoc-Recht: nur neue/geänderte BV (z. B. aus BauMon angelegt) – keine Dokus/Fotos laden
+  const targets = !withContent ? allProjects().filter((p) => p.dirty || p.moveTo) : allProjects().filter((p) =>
     p.dirty || p.moveTo || p.pendingDeletes.length || hasUnuploaded(p) ||
     outbox.some((o) => o.projectId === p.id) ||
     p.id === sel || // geöffnetes Bauvorhaben immer aktuell halten (1 kleine Abfrage)
@@ -281,7 +285,7 @@ async function syncBauDoc(full) {
     }
   }
   if (full || S.state.mapDirty || (S.state.mapRemove || []).length) await syncMapIndex(dataDir);
-  if (full || Object.keys(S.state.codeIndexPending || {}).length) await syncCodeIndex(dataDir);
+  if (withContent && (full || Object.keys(S.state.codeIndexPending || {}).length)) await syncCodeIndex(dataDir);
   return firstError;
 }
 

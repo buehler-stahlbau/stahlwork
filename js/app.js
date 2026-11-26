@@ -450,7 +450,6 @@ function openDrawer() {
     };
   });
   $("#drawerMap").classList.toggle("active", st.view === "map");
-  $("#drawerMap").hidden = !(currentRights() || {}).doc;
   const ds = $("#drawerSettings");
   ds.classList.toggle("active", st.view === "settings");
   ds.querySelector(".d-check")?.remove();
@@ -2488,6 +2487,7 @@ function versionMismatch() {
   try { history.replaceState(navState(), ""); } catch {}
   render();
   window.__appReady = true; // Startwächter (boot.js) Bescheid geben
+  if (navigator.webdriver) window.__quickCreateBV = quickCreateBV; // nur für automatische Tests
   try { checkImportLink(); } catch (e) { console.warn("Import", e); }
   await sync.updateOutboxCount();
   cleanupOrphanImages();
