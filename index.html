@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.17.4-beta" />
+  <meta name="app-version" content="3.17.5-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -772,9 +772,12 @@
     .map-pop .arch-tag { font-size: .7rem; color: var(--brand-gray-500); border: 1px solid var(--brand-gray-200); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
     .map-head { flex-wrap: wrap; }
     /* drei gleich breite Schalter */
-    .map-filter { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
+    /* Filterknöpfe: alle gleich breit (PC: ausgeschrieben, Handy: Kurzform) */
+    .map-filter { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; max-width: 100%; }
+    .map-filter .map-chip { min-width: 0; }
+    @media (min-width: 901px){ .map-filter { grid-auto-columns: 168px; } }
     .map-chip .sm { display: none; }
-    @media (max-width: 600px){ .map-chip .lg { display: none; } .map-chip .sm { display: inline; } .map-filter { flex-wrap: nowrap; } }
+    @media (max-width: 900px){ .map-chip .lg { display: none; } .map-chip .sm { display: inline; } .map-filter { grid-auto-columns: 64px; } }
     .map-filter .map-chip { justify-content: center; padding: 0 8px; white-space: nowrap; }
     .map-chip .map-dot { flex: 0 0 auto; }
     @media (max-width: 400px){ .map-filter .map-chip { font-size: .78rem; gap: 4px; padding: 0 4px; } .map-chip .map-dot { width: 9px; height: 9px; } }
