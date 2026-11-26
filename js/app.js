@@ -2063,7 +2063,7 @@ function renderRightsCard(app) {
       <span><input type="checkbox" data-k="doc" ${u.doc ? "checked" : ""} aria-label="BauDoc"></span>
       <span><input type="checkbox" data-k="mon" ${u.mon ? "checked" : ""} aria-label="BauMon"></span>
       <span><button type="button" class="secondary small icon-only" data-del title="Entfernen" aria-label="${h(mail)} entfernen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div>`).join("")}
-    <div class="r-row r-add"><input type="email" id="rMail" placeholder="vorname.nachname@…" autocomplete="off">
+    <div class="r-row r-add"><input type="email" id="rMail" placeholder="${h((CONFIG.orgDomains || [])[0] ? "name@" + CONFIG.orgDomains[0] : "vorname.nachname@…")}" autocomplete="off">
       <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span>
       <span><button type="button" class="primary small" id="rAdd">+</button></span></div>
     ${!ab ? `<div class="r-invite"><p class="muted">Einladen: Person oben eintragen, dann diesen Link schicken. Sie öffnet ihn einmal und meldet sich an.</p>
@@ -2083,6 +2083,8 @@ function renderRightsCard(app) {
   $("#rAdd", card).onclick = async () => {
     const mail = $("#rMail", card).value.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(mail)) { toast("Bitte eine gültige E-Mail-Adresse (Anmeldename) eingeben.", "warn"); return; }
+    const doms = (CONFIG.orgDomains || []).map((d) => String(d).toLowerCase());
+    if (doms.length && !doms.includes(mail.split("@")[1])) { toast(`Nur Firmenadressen möglich (@${doms.join(", @")}).`, "warn", 6000); return; }
     if (mail === me || (data.users || {})[mail]) { toast("Diese Person steht schon in der Liste.", "warn"); return; }
     const doc = $("#rDoc", card).checked, mon = $("#rMon", card).checked;
     if (!doc && !mon) { toast("Bitte mindestens BauDoc oder BauMon anhaken.", "warn"); return; }

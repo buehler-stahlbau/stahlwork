@@ -26,6 +26,8 @@ export const CONFIG = {
   // Leer = alle (Testphase). Später: 1. und 2. Montageleiter eintragen.
   monEditors: [],
   companyName: "Friedrich Bühler GmbH & Co. KG",
+  // Benutzer und Rechte: nur Adressen dieser Firma eintragbar
+  orgDomains: ["buehler-stahlbau.de"],
 };
 
 // Sparten der App (später je Nutzer freischaltbar)
@@ -34,4 +36,4 @@ export const SPARTEN = [
   { id: "mon", name: "BauMon", desc: "Montage", icon: "sparte-baumon.svg" },
 ];
 
-export const APP_VERSION = "3.16.6-beta";
+export const APP_VERSION = "3.16.7-beta";
