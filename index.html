@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.16.1-beta" />
+  <meta name="app-version" content="3.16.2-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -462,13 +462,13 @@
     .mon-mrow .tog-btn { width: 92px; justify-content: center; }
     .mon-mrow .icon-only { width: 36px; padding: 0; justify-content: center; }
     .mon-mrow .icon-only .ico { width: 18px; height: 18px; }
-    /* Handy: Name in eigener Zeile (voll lesbar), Bedienelemente darunter */
+    .mon-mrow .icon-only.m-more { display: none; }
+    /* Handy: kompakt – Name (voll lesbar) + Knopf „⋯“ mit Typ, Umbenennen, Inaktiv, Löschen */
     @media (max-width: 600px) {
-      .mon-mrow { flex-wrap: wrap; gap: 6px 8px; padding: 10px 14px; }
-      .mon-mrow > span:first-child { flex: 1 1 100%; white-space: normal; overflow: visible; font-weight: 600; }
-      .mon-mrow > .row { flex: 1 1 100%; }
-      .mon-mrow .kind-sel { flex: 1 1 auto; width: auto; min-width: 0; }
-      .mon-mrow .tog-btn { width: 84px; }
+      .mon-mrow { min-height: 46px; padding: 6px 10px 6px 14px; gap: 8px; }
+      .mon-mrow > span:first-child { flex: 1 1 auto; white-space: normal; overflow: visible; }
+      .mon-mrow > .row { display: none; }
+      .mon-mrow .icon-only.m-more { display: inline-flex; align-items: center; }
     }
     .page-head > .primary { white-space: nowrap; }
     @media (max-width: 600px) { .mon-mrow .lbl { display: none; } .mon-mrow button.small { min-width: 38px; justify-content: center; } }

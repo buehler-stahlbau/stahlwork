@@ -1419,7 +1419,7 @@ export function renderMonPersonal(app) {
   // Personen
   const all = M.sortedMonteure(true);
   const row = (m) => `<div class="mon-mrow ${m.aktiv === false ? "off" : ""}" data-person="${h(m.id)}"><span>${h(m.name)}${m.aktiv === false ? ' <span class="muted">(inaktiv)</span>' : ""}</span>
-    ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small tog-btn" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button><button type="button" class="secondary small icon-only" data-del="${h(m.id)}" title="Löschen" aria-label="${h(m.name)} löschen">${ICO.trash}</button></span>`}</div>`;
+    ${ro ? "" : `<span class="row"><select class="kind-sel" data-kind="${h(m.id)}" aria-label="Kategorie">${Object.entries(M.PERSON_KINDS).map(([k, l]) => `<option value="${k}" ${M.kind(m) === k ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" class="secondary small" data-ren="${h(m.id)}" title="Umbenennen" aria-label="Umbenennen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></svg><span class="lbl">Umbenennen</span></button><button type="button" class="secondary small tog-btn" data-tog="${h(m.id)}">${m.aktiv === false ? "Aktivieren" : "Inaktiv"}</button><button type="button" class="secondary small icon-only" data-del="${h(m.id)}" title="Löschen" aria-label="${h(m.name)} löschen">${ICO.trash}</button></span><button type="button" class="secondary small icon-only m-more" data-more="${h(m.id)}" aria-label="Aktionen für ${h(m.name)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button>`}</div>`;
   const grp = (k, title) => { const xs = all.filter((m) => M.kind(m) === k); return `<div class="card list-card"><h3 class="section-title">${title} (${xs.length})</h3>${xs.map(row).join("") || `<p class="muted">Noch keine ${title}.</p>`}</div>`; };
   const pCard = U.el(`<div>${grp("rm", "Richtmeister")}${grp("monteur", "Monteure")}${grp("maler", "Maler")}</div>`);
   app.appendChild(pCard);
@@ -1427,6 +1427,26 @@ export function renderMonPersonal(app) {
     U.$$("[data-kind]", pCard).forEach((sel) => { sel.onchange = () => changeKind(M.get("monteure", sel.dataset.kind), sel.value, () => { sel.value = M.kind(M.get("monteure", sel.dataset.kind)); }); });
     U.$$("[data-ren]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.ren); const nn = prompt("Name", m.name); if (nn && nn.trim()) { M.put("monteure", { ...m, name: nn.trim() }); changed(); } }; });
     U.$$("[data-tog]", pCard).forEach((b) => { b.onclick = () => { const m = M.get("monteure", b.dataset.tog); M.put("monteure", { ...m, aktiv: m.aktiv === false }); changed(); }; });
+    // Handy: eine Zeile je Person, Aktionen im Menü „⋯“ (lösen dieselben Knöpfe/Auswahl aus)
+    U.$$("[data-more]", pCard).forEach((b) => { b.onclick = () => {
+      const row = b.closest(".mon-mrow"), m = M.get("monteure", b.dataset.more);
+      document.querySelector(".quick-menu")?.remove();
+      const k = M.kind(m);
+      const menu = U.el(`<div class="quick-menu" role="menu"><div class="qm-head">${h(m.name)}</div>
+        ${Object.entries(M.PERSON_KINDS).map(([kk, l]) => `<button type="button" data-k="${kk}">${kk === k ? "✓ " : "\u2003"}${l}</button>`).join("")}
+        <button type="button" data-a="ren">Umbenennen …</button>
+        <button type="button" data-a="tog">${m.aktiv === false ? "Aktivieren" : "Inaktiv setzen"}</button>
+        <button type="button" data-a="del" class="qm-danger">Löschen …</button></div>`);
+      document.body.appendChild(menu);
+      const rb = b.getBoundingClientRect(), mr = menu.getBoundingClientRect();
+      menu.style.left = `${Math.max(8, Math.min(rb.right - mr.width, innerWidth - mr.width - 8))}px`;
+      menu.style.top = `${rb.bottom + 4 + mr.height > innerHeight ? Math.max(8, rb.top - mr.height - 4) : rb.bottom + 4}px`;
+      const close = () => { menu.remove(); document.removeEventListener("pointerdown", out, true); };
+      const out = (ev) => { if (!menu.contains(ev.target) && ev.target !== b) close(); };
+      setTimeout(() => document.addEventListener("pointerdown", out, true), 0);
+      U.$$("[data-k]", menu).forEach((x) => { x.onclick = () => { close(); const sel = row.querySelector(".kind-sel"); if (x.dataset.k === k) return; sel.value = x.dataset.k; sel.dispatchEvent(new Event("change")); }; });
+      U.$$("[data-a]", menu).forEach((x) => { x.onclick = () => { close(); row.querySelector(`[data-${x.dataset.a}]`).click(); }; });
+    }; });
     U.$$("[data-del]", pCard).forEach((b) => { b.onclick = () => {
       const m = M.get("monteure", b.dataset.del);
       const u = M.personUsage(m.id);
