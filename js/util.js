@@ -32,12 +32,17 @@ export function isoDay(d = new Date()) {
 }
 
 // Eindeutige, lesbare ID – wird auch als Dateiname der Bilder verwendet
-// z. B. 20261118-143512-a3f91c
-let idCounter = 0;
+// z. B. 20261118-143512-04701a3f9 (Datum-Uhrzeit-Millisekunden, Zähler, Zufall).
+// Alphabetisch sortiert = Reihenfolge der Entstehung, auch bei mehreren IDs in derselben Sekunde
+// (wichtig: Einträge werden auf allen Geräten nach der ID sortiert).
+let idMs = 0, idSeq = 0;
 export function newId() {
   const d = new Date();
-  const rnd = (Math.floor(Math.random() * 0xffffff) ^ (idCounter++ & 0xffff)).toString(16).padStart(6, "0");
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${rnd}`;
+  const ms = d.getTime();
+  idSeq = ms <= idMs ? idSeq + 1 : 0;
+  idMs = Math.max(ms, idMs);
+  const rnd = Math.floor(Math.random() * 0x10000).toString(16).padStart(4, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, "0")}${(idSeq & 0xff).toString(16).padStart(2, "0")}${rnd}`;
 }
 
 // Gültiger Datei-/Ordnername für OneDrive

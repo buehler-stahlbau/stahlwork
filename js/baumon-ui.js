@@ -1574,8 +1574,37 @@ export function searchMon(words) {
   return out;
 }
 
+// Karte: BauMon-Stand eines BV (laufender, sonst nächster, sonst letzter Einsatz)
+export function monInfo(bvNumber) {
+  if (!bvNumber) return null;
+  const t = M.today();
+  const es = M.list("einsaetze").filter((e) => e.bvNumber === bvNumber);
+  if (!es.length) return null;
+  const run = es.filter((e) => e.von <= t && e.bis >= t);
+  const next = es.filter((e) => e.von > t).sort((a, b) => a.von.localeCompare(b.von));
+  const past = es.filter((e) => e.bis < t).sort((a, b) => b.bis.localeCompare(a.bis));
+  const e = run[0] || next[0] || past[0];
+  const tr = M.truppName(M.get("trupps", e.truppId));
+  const when = `${M.shortDate(e.von)}–${M.shortDate(e.bis)}`;
+  return { id: e.id, text: `${run.length ? "Montage läuft" : next.length ? "Montage geplant" : "Montage war"} · ${tr} · ${when}` };
+}
+
 export function openSearchHit(kind, id) {
   const later = (fn) => setTimeout(fn, 60);
+  if (kind === "einsatzZeigen") {
+    // Planung in der passenden Woche öffnen und den Einsatz kurz hervorheben
+    const e = M.get("einsaetze", id); if (!e) return;
+    const start = M.addDays(M.range().start, weekOffset * 7), end = M.addDays(start, 20);
+    if (e.bis < start || e.von > end) weekOffset = Math.round((M.parseDay(M.mondayOf(e.von)) - M.parseDay(M.range().start)) / (7 * 86400000));
+    U.go({ sparte: "mon", view: "monplan", selectedProjectId: null, selectedDocId: null });
+    later(() => {
+      const b = document.querySelector(`.g-bar[data-eid="${CSS.escape(id)}"]`);
+      if (!b) return;
+      b.scrollIntoView({ block: "center", inline: "center" });
+      b.classList.remove("flash-bar"); void b.offsetWidth; b.classList.add("flash-bar");
+    });
+    return;
+  }
   if (kind === "einsatz") {
     const e = M.get("einsaetze", id); if (!e) return;
     // Woche so wählen, dass der Einsatz sichtbar ist

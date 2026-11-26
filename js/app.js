@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -354,11 +354,12 @@ function renderInner() {
   }
   // Sparte ohne Recht -> auf die erlaubte wechseln
   if (S.state.sparte === "mon" && !rights.mon) { S.state.sparte = "doc"; if (MON_VIEWS_UI.includes(S.state.view)) S.state.view = "projects"; }
-  if (S.state.sparte === "doc" && !rights.doc) { S.state.sparte = "mon"; if (!MON_VIEWS_UI.includes(S.state.view) && S.state.view !== "settings") S.state.view = "mon"; }
+  if (S.state.sparte === "doc" && !rights.doc) { S.state.sparte = "mon"; if (!MON_VIEWS_UI.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "mon"; }
   updateHeader();
   const st = S.state;
 
   if (st.view === "settings") renderSettings(app);
+  else if (st.view === "map") renderMap(app); // Karte gehört zu keiner Sparte (BauDoc + BauMon)
   else if (st.sparte === "mon") {
     if (st.view === "monplan") renderMonPlan(app);
     else if (st.view === "monbuehnen") renderMonBuehnen(app);
@@ -384,14 +385,13 @@ function updateHeader() {
   const tabs = {
     tabProjects: "projects",
     tabFav: "favorites",
-    tabMap: "map",
     tabArchive: "archive",
     tabMon: "mon",
     tabMonPlan: "monplan",
     tabMonBuehnen: "monbuehnen",
     tabMonPersonal: "monpersonal",
   };
-  const inSettings = st.view === "settings";
+  const inSettings = st.view === "settings" || st.view === "map"; // spartenübergreifend: Stahlwork-Logo
   document.body.classList.toggle("sparte-mon", st.sparte === "mon");
   document.body.classList.toggle("view-settings", inSettings); // Einstellungen gehören zu keiner Sparte
   // oben rechts: Logo der aktuellen Sparte, in den Einstellungen das Stahlwork-Logo
@@ -432,7 +432,7 @@ function openDrawer() {
   const st = S.state;
   const rr = currentRights() || {};
   $("#drawerSparten").innerHTML = SPARTEN.map((sp) => {
-    const on = st.sparte === sp.id && st.view !== "settings";
+    const on = st.sparte === sp.id && !["settings", "map"].includes(st.view);
     const allowed = !!rr[sp.id];
     return `<button type="button" class="drawer-item ${on ? "active" : ""} ${allowed ? "" : "disabled"}" data-sparte="${sp.id}" aria-current="${on ? "true" : "false"}" ${allowed ? "" : 'aria-disabled="true"'}>
       <span class="d-ico${sp.icon ? " img" : ""}">${sp.icon ? `<img src="${h(sp.icon)}" alt="">` : SPARTE_ICONS[sp.id] || ""}</span>
@@ -445,10 +445,12 @@ function openDrawer() {
       const sp = b.dataset.sparte;
       if (!(currentRights() || {})[sp]) { toast("Für diese Sparte hast du keine Berechtigung.", "warn", 3500); return; }
       closeDrawer();
-      if (sp === st.sparte && st.view !== "settings") { window.scrollTo(0, 0); return; }
+      if (sp === st.sparte && !["settings", "map"].includes(st.view)) { window.scrollTo(0, 0); return; }
       go({ sparte: sp, view: sp === "mon" ? "mon" : "projects", selectedProjectId: null, selectedDocId: null });
     };
   });
+  $("#drawerMap").classList.toggle("active", st.view === "map");
+  $("#drawerMap").hidden = !(currentRights() || {}).doc;
   const ds = $("#drawerSettings");
   ds.classList.toggle("active", st.view === "settings");
   ds.querySelector(".d-check")?.remove();
@@ -472,6 +474,11 @@ function setupDrawer() {
   $("#menuBtn").onclick = () => ($("#drawer").hidden ? openDrawer() : closeDrawer());
   $("#sparteLogo").onclick = () => ($("#drawer").hidden ? openDrawer() : closeDrawer());
   $$("#drawer [data-close]").forEach((b) => (b.onclick = closeDrawer));
+  $("#drawerMap").onclick = () => {
+    closeDrawer();
+    if (S.state.view === "map") return;
+    go({ view: "map", selectedProjectId: null, selectedDocId: null });
+  };
   $("#drawerSettings").onclick = () => {
     closeDrawer();
     if (S.state.view === "settings") return;
@@ -1071,6 +1078,7 @@ function renderMap(app) {
   }
   if (!stay) mapView = null;
   const st = S.state;
+  const rr = currentRights() || {};
   // Welche Arten werden angezeigt? (wird gemerkt)
   if (!st.mapFilter || typeof st.mapFilter !== "object") st.mapFilter = { fav: true, other: true, archive: false };
   const f = st.mapFilter;
@@ -1149,20 +1157,24 @@ function renderMap(app) {
       const sorted = [...g.fav.sort(byNum), ...g.other.sort(byNum), ...g.archive.sort(byNum)];
       m.bindPopup(`<div class="map-pop"><h4>${h(g.place)} · ${total} BV</h4>${sorted.map((p) => {
         const arch = st.archivedProjects.includes(p);
-        return `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">${p.fav && !arch ? '<span class="star">★</span>' : ""}<span class="bv-num">${h(p.number)}</span> ${h(p.client || p.title)}${arch ? ' <span class="arch-tag">Archiv</span>' : ""}</button>`;
+        const mon = rr.mon ? monInfo(p.number) : null;
+        return `<div class="mp-row"><div class="mp-name">${p.fav && !arch ? '<span class="star">★</span>' : ""}<span class="bv-num">${h(p.number)}</span> ${h(p.client || p.title)}${arch ? ' <span class="arch-tag">Archiv</span>' : ""}</div>
+          ${mon ? `<div class="mp-sub">${h(mon.text)}</div>` : ""}
+          <div class="mp-acts">${rr.doc ? `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">BauDoc</button>` : ""}${mon ? `<button type="button" data-mon="${h(mon.id)}">BauMon</button>` : ""}</div></div>`;
       }).join("")}</div>`);
     }
     map.addLayer(clusters);
     map.on("popupopen", (e) => {
+      $$("[data-mon]", e.popup.getElement()).forEach((b) => { b.onclick = () => openSearchHit("einsatzZeigen", b.dataset.mon); });
       $$("[data-pid]", e.popup.getElement()).forEach((b) => {
         b.onclick = () => {
           if (b.dataset.arch) {
             // archiviertes BV: im Archiv zeigen
             const ap = S.state.archivedProjects.find((x) => x.id === b.dataset.pid);
             filterText = ap ? ap.number : "";
-            go({ view: "archive", selectedProjectId: null, selectedDocId: null });
+            go({ sparte: "doc", view: "archive", selectedProjectId: null, selectedDocId: null });
           } else {
-            go({ view: "projects", selectedProjectId: b.dataset.pid, selectedDocId: null });
+            go({ sparte: "doc", view: "projects", selectedProjectId: b.dataset.pid, selectedDocId: null });
           }
         };
       });
