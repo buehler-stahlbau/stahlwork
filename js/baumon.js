@@ -142,10 +142,42 @@ function resolveAbsences(m) {
   }
   return changed;
 }
+// Eine Person ist an einem Tag nur in EINEM Trupp: der zuletzt geänderte Einsatz gilt,
+// beim älteren ist sie an diesen Tagen nicht eingeplant (ganz belegt -> aus der Besetzung)
+function resolveDoubleBookings(m) {
+  const D = m.data;
+  const absent = (pid, d) => Object.values(D.abwesenheiten).some((a) => a.monteurId === pid && a.von <= d && a.bis >= d);
+  const list = Object.values(D.einsaetze).filter((e) => e.von && e.bis && (e.monteure || []).length)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || a.id.localeCompare(b.id));
+  const busy = new Map(); // "pid|tag" -> truppId (bzw. Einsatz-ID ohne Trupp)
+  let changed = false;
+  for (const e of list) {
+    const group = e.truppId || "e:" + e.id;
+    const off = {};
+    for (const [k, v] of Object.entries(e.off || {})) off[k] = v.slice();
+    let touched = false;
+    for (const pid of e.monteure) {
+      for (let d = e.von; d <= e.bis; d = addDays(d, 1)) {
+        if ((off[pid] || []).includes(d) || absent(pid, d)) continue;
+        const k = pid + "|" + d, g = busy.get(k);
+        if (g === undefined) busy.set(k, group);
+        else if (g !== group) { (off[pid] = off[pid] || []).push(d); touched = true; }
+      }
+    }
+    if (!touched) continue;
+    let n = 0; for (let d = e.von; d <= e.bis; d = addDays(d, 1)) n++;
+    const monteure = e.monteure.filter((pid) => (off[pid] || []).length < n);
+    for (const k of Object.keys(off)) { if (!monteure.includes(k)) delete off[k]; else off[k].sort(); }
+    D.einsaetze[e.id] = { ...e, monteure, off }; // Zeitstempel bleibt (Reihenfolge „neueste gilt“ stabil)
+    changed = true;
+  }
+  return changed;
+}
 function resolveConflicts(m) {
   const a = mergeDupPeople(m);
   const b = resolveAbsences(m);
-  return a || b;
+  const c = resolveDoubleBookings(m);
+  return a || b || c;
 }
 let splitChecked = null;
 export function mon() {
