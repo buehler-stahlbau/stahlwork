@@ -362,7 +362,7 @@ export function toggleDay(e, pid, day) {
   const tr = get("trupps", e.truppId);
   if (tr && isMalerTrupp(tr) && pid !== tr.fuehrerId) return "Maler-Trupps bestehen nur aus dem Maler.";
   const a = absentRec(pid, day);
-  if (a) return `${p.name} ist an diesem Tag ${ABW_TYPES[a.typ] === "Krank" ? "krank" : "im Urlaub"}.`;
+  if (a) return `${p.name} ist an diesem Tag ${ABW_SATZ[a.typ] || "abwesend"}.`;
   for (const o of list("einsaetze")) {
     if (o.id === e.id || (e.truppId && o.truppId === e.truppId)) continue;
     if (present(o, pid, day)) return `${p.name} ist an diesem Tag schon bei ${baustelleLabel(o)} (${truppName(get("trupps", o.truppId))}).`;
@@ -397,7 +397,9 @@ export function overbookedText(e, d) {
 }
 
 // Krank / Urlaub
-export const ABW_TYPES = { urlaub: "Urlaub", krank: "Krank" };
+export const ABW_TYPES = { urlaub: "Urlaub", krank: "Krank", ausgleich: "Ausgleich" }; // Ausgleich = Überstundenabbau
+export const ABW_SHORT = { urlaub: "U", krank: "K", ausgleich: "A" };
+const ABW_SATZ = { urlaub: "im Urlaub", krank: "krank", ausgleich: "im Ausgleich (Überstundenabbau)" };
 export function absences(monteurId, von, bis) {
   return list("abwesenheiten").filter((a) => a.monteurId === monteurId && a.von && a.bis && a.von <= bis && a.bis >= von);
 }
@@ -557,7 +559,7 @@ function cleanRecord(kind, r) {
     case "einsaetze": return { ...base, truppId: ID_RE.test(String(r.truppId || "")) ? r.truppId : null, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "",
       baustelle: s(r.baustelle), von: day(r.von), bis: day(r.bis), monteure: ids(r.monteure), off: offMap(r.off), leih: s(r.leih, 500), kran: s(r.kran), notiz: s(r.notiz, 2000) };
     case "abwesenheiten": return { ...base, monteurId: ID_RE.test(String(r.monteurId || "")) ? r.monteurId : null,
-      typ: r.typ === "krank" ? "krank" : "urlaub", von: day(r.von), bis: day(r.bis), notiz: s(r.notiz, 500) };
+      typ: ["krank", "ausgleich"].includes(r.typ) ? r.typ : "urlaub", von: day(r.von), bis: day(r.bis), notiz: s(r.notiz, 500) };
     case "farben": return { ...base, key: s(r.key, 160), farbe: Number.isInteger(r.farbe) && r.farbe >= 0 && r.farbe < 64 ? r.farbe : 0 };
     case "buehnen": return { ...base, bvNumber: /^\d{5}$/.test(r.bvNumber || "") ? r.bvNumber : "", baustelle: s(r.baustelle), standort: s(r.standort),
       vermieterId: ID_RE.test(String(r.vermieterId || "")) ? r.vermieterId : null, typ: s(r.typ), anzahl: Math.max(1, Math.min(99, Number(r.anzahl) || 1)),

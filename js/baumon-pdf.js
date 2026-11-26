@@ -25,7 +25,7 @@ function crewText(e, from, to) {
     for (const d of miss) { const r = runs[runs.length - 1]; if (r && M.addDays(r.to, 1) === d) r.to = d; else runs.push({ from: d, to: d }); }
     const txt = runs.map((r) => (r.from === r.to ? M.shortDate(r.from) : (r.from.slice(0, 7) === r.to.slice(0, 7) ? `${Number(r.from.slice(8))}.–${M.shortDate(r.to)}` : `${M.shortDate(r.from)}–${M.shortDate(r.to)}`))).join(", ");
     const a = M.absentRec(id, miss[0]);
-    return `${p.name} (nicht ${txt}${a ? " – " + (a.typ === "krank" ? "krank" : "Urlaub") : ""})`;
+    return `${p.name} (nicht ${txt}${a ? " – " + ({ krank: "krank", urlaub: "Urlaub", ausgleich: "Ausgleich" }[a.typ] || "abwesend") : ""})`;
   }).filter(Boolean).join(", ");
 }
 
@@ -132,7 +132,7 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     if (malerRows.length) rows.push({ sep: "MALER" }, ...malerRows);
     const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[last] && M.get("monteure", a.monteurId));
     const abwP = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((x, z) => x.name.localeCompare(z.name, "de"));
-    if (abwP.length) rows.push({ sep: "KRANK / URLAUB" }, ...abwP.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
+    if (abwP.length) rows.push({ sep: "ABWESENHEIT" }, ...abwP.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
     for (const r of rows) {
       if (r.abw) {
         const rh = LANE + 6;

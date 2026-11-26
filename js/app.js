@@ -443,7 +443,7 @@ function openDrawer() {
   $$("#drawerSparten [data-sparte]").forEach((b) => {
     b.onclick = () => {
       const sp = b.dataset.sparte;
-      if (!(currentRights() || {})[sp]) { toast("Für diese Sparte hast du keine Berechtigung.", "warn", 3500); return; }
+      if (!(currentRights() || {})[sp]) { toast("Für dieses Modul hast du keine Berechtigung.", "warn", 3500); return; }
       closeDrawer();
       if (sp === st.sparte && !["settings", "map"].includes(st.view)) { window.scrollTo(0, 0); return; }
       go({ sparte: sp, view: sp === "mon" ? "mon" : "projects", selectedProjectId: null, selectedDocId: null });

@@ -116,7 +116,7 @@ export function renderMonStart(app) {
   // Heute krank / im Urlaub
   const abwHeute = M.absentOn(t).sort((a, b) => (M.get("monteure", a.monteurId).name).localeCompare(M.get("monteure", b.monteurId).name, "de"));
   if (abwHeute.length) {
-    const ac = U.el(`<div class="card"><h3 class="section-title">Heute krank / im Urlaub</h3><div class="mon-abw-list">${abwHeute.map((a) => `<button type="button" class="mon-abw-chip ${a.typ}" data-aid="${h(a.id)}"><b>${h(M.get("monteure", a.monteurId).name)}</b> · ${M.ABW_TYPES[a.typ]} bis ${h(M.wdName(a.bis))} ${h(M.shortDate(a.bis))}</button>`).join("")}</div></div>`);
+    const ac = U.el(`<div class="card"><h3 class="section-title">Heute abwesend</h3><div class="mon-abw-list">${abwHeute.map((a) => `<button type="button" class="mon-abw-chip ${a.typ}" data-aid="${h(a.id)}"><b>${h(M.get("monteure", a.monteurId).name)}</b> · ${M.ABW_TYPES[a.typ]} bis ${h(M.wdName(a.bis))} ${h(M.shortDate(a.bis))}</button>`).join("")}</div></div>`);
     U.$$("[data-aid]", ac).forEach((b) => { b.onclick = () => openAbw(M.get("abwesenheiten", b.dataset.aid)); });
     app.appendChild(ac);
   }
@@ -215,8 +215,8 @@ export function renderMonPlan(app) {
   const abwIn = M.list("abwesenheiten").filter((a) => a.monteurId && a.bis >= days[0] && a.von <= days[20] && M.get("monteure", a.monteurId));
   const abwPeople = [...new Set(abwIn.map((a) => a.monteurId))].map((id) => M.get("monteure", id)).sort((a, b) => a.name.localeCompare(b.name, "de"));
   if (zoom === "buehnen" && orphans.length) rows.push({ sep: "Bühnen ohne Einsatz" }, ...orphans.map((b) => ({ orphan: b })));
-  if (abwPeople.length || editable()) {
-    rows.push({ sep: "Krank / Urlaub", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
+  if ((abwPeople.length || editable()) && zoom !== "buehnen") {
+    rows.push({ sep: "Abwesenheit", add: editable() }, ...abwPeople.map((p) => ({ abw: p, list: abwIn.filter((a) => a.monteurId === p.id) })));
   }
   // Detail je Trupp: Personal (eine Zeile je Person) oder Bühnen (eine Zeile je Bühne)
   for (const r of rows) {
@@ -292,7 +292,7 @@ export function renderMonPlan(app) {
   let gridRow = 3;
   for (const r of rows) {
     if (r.sep) {
-      g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}${r.add ? ` <button type="button" class="g-sep-add" id="abwAdd">+ Krank / Urlaub</button>` : ""}</span></div>`);
+      g.insertAdjacentHTML("beforeend", `<div class="g-sep" style="grid-row:${gridRow}"><span>${h(r.sep)}${r.add ? ` <button type="button" class="g-sep-add" id="abwAdd">+ Abwesenheit</button>` : ""}</span></div>`);
       gridRow++;
       continue;
     }
@@ -365,7 +365,7 @@ export function renderMonPlan(app) {
           }
         }
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
-          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – krank/Urlaub (an diesen Tagen nicht eingeteilt): " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
+          style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – abwesend (an diesen Tagen nicht eingeteilt): " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
           ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}<span class="g-num3">${h(e.bvNumber ? e.bvNumber.slice(-3) : (e.baustelle || "?").slice(0, 3))}</span></span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span><span class="g-ldot ${dueHere ? "due" : ""}"></span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
         // Überlappung: sichtbarer Griff mitten auf der Schräge (Länge ändern)
         if (editable() && mode.startsWith("join")) {
@@ -385,7 +385,7 @@ export function renderMonPlan(app) {
           const es = r.list.filter((e) => e.von <= d && e.bis >= d);
           const a = M.absentRec(p.id, d);
           let inner = "";
-          if (a) inner = `<span class="g-pd abs" title="${h(p.name)}: ${M.ABW_TYPES[a.typ]}">${a.typ === "krank" ? "K" : "U"}</span>`;
+          if (a) inner = `<span class="g-pd abs" title="${h(p.name)}: ${M.ABW_TYPES[a.typ]}">${M.ABW_SHORT[a.typ] || "?"}</span>`;
           else if (es.length) {
             inner = es.map((e) => {
               const on = M.present(e, p.id, d);
@@ -1010,7 +1010,8 @@ function quickMenu(x, y, pid, day, card) {
       <button type="button" data-q="del" class="qm-danger">${M.ABW_TYPES[a.typ]} löschen</button>`
     : `<button type="button" data-q="krank">Krank – dieser Tag</button>
       <button type="button" data-q="urlaub">Urlaub – dieser Tag</button>
-      <button type="button" data-q="range">Krank / Urlaub mit Zeitraum …</button>`}</div>`);
+      <button type="button" data-q="ausgleich">Ausgleich (Überstunden) – dieser Tag</button>
+      <button type="button" data-q="range">Abwesenheit mit Zeitraum …</button>`}</div>`);
   document.body.appendChild(menu);
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - r.width - 8))}px`;
@@ -1046,7 +1047,7 @@ export function openAbw(a, preset = {}) {
     <label class="field-label">Person</label><div class="typ-field p-field"><input type="text" class="f-pname" value="${h((M.get("monteure", cur.monteurId) || {}).name || "")}" placeholder="Name eingeben oder wählen" autocomplete="off" />
       <button type="button" class="typ-open" aria-label="Personen anzeigen" tabindex="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="place-list typ-list p-list"></div>
       <input type="hidden" class="f-p" value="${h(cur.monteurId || "")}" /></div>
-    <label class="field-label">Art</label><div class="seg abw-seg" role="group">${Object.entries(M.ABW_TYPES).map(([k, l]) => `<button type="button" data-typ="${k}" class="${cur.typ === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <label class="field-label">Art</label><div class="seg abw-seg" role="group">${Object.entries(M.ABW_TYPES).map(([k, l]) => `<button type="button" data-typ="${k}" class="${cur.typ === k ? "on" : ""}" ${k === "ausgleich" ? 'title="Überstundenabbau"' : ""}>${l}</button>`).join("")}</div>
     <div class="grid2 tight"><div><label class="field-label">von</label><input type="date" class="f-von" value="${h(cur.von)}" /></div>
     <div><label class="field-label">bis</label><input type="date" class="f-bis" value="${h(cur.bis)}" /></div></div>
     <label class="field-label">Notiz</label><input type="text" class="f-notiz" value="${h(cur.notiz)}" placeholder="optional" /></div>`);
@@ -1098,7 +1099,7 @@ export function openAbw(a, preset = {}) {
     } }] : []),
     { label: isNew ? "Eintragen" : "Speichern", cls: "primary", fn: save },
   ];
-  modal(isNew ? "Krank / Urlaub eintragen" : "Krank / Urlaub", body, actions);
+  modal(isNew ? "Abwesenheit eintragen" : "Abwesenheit", body, actions);
 }
 
 export function openEinsatz(e, preset = {}) {
@@ -1400,7 +1401,7 @@ export function renderMonPersonal(app) {
 
   // Krank / Urlaub: laufende und kommende (plus die letzten 14 Tage)
   const abw = M.list("abwesenheiten").filter((a) => a.bis >= M.addDays(t, -14) && M.get("monteure", a.monteurId)).sort((a, b) => a.von.localeCompare(b.von));
-  const abwCard = U.el(`<div class="card list-card">${cardHead("Krank / Urlaub", "abwNew", "+ Krank / Urlaub", ro)}
+  const abwCard = U.el(`<div class="card list-card">${cardHead("Abwesenheit", "abwNew", "+ Abwesenheit", ro)}
     ${abw.map((a) => `<button type="button" class="mon-brow ${a.von <= t && a.bis >= t ? "now" : ""}" data-aid="${h(a.id)}"><span class="mon-brow-main"><b>${h(M.get("monteure", a.monteurId).name)}</b> · <span class="abw-tag ${a.typ}">${M.ABW_TYPES[a.typ]}</span></span>
       <span class="muted">${h(M.wdName(a.von))} ${h(M.shortDate(a.von))} – ${h(M.wdName(a.bis))} ${h(M.shortDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}${a.bis < t ? " · vorbei" : ""}</span></button>`).join("") || `<p class="muted">Niemand krank oder im Urlaub eingetragen.</p>`}</div>`);
   app.appendChild(abwCard);
@@ -1454,7 +1455,7 @@ export function renderMonPersonal(app) {
         u.einsaetze ? `• in ${u.einsaetze} Einsatz/Einsätzen eingeplant – wird dort entfernt` : "",
         u.fuehrt.length ? `• führt Trupp ${u.fuehrt.join(", ")} – ${u.truppWeg.length ? "Trupp wird aufgelöst (Einsätze bleiben unter „Ohne Trupp“)" : "Trupp bleibt ohne Richtmeister"}` : "",
         u.trupps ? `• Mitglied in ${u.trupps} Trupp(s)` : "",
-        u.abw ? `• ${u.abw} Krank/Urlaub-Eintrag/Einträge werden gelöscht` : "",
+        u.abw ? `• ${u.abw} Abwesenheit(en) werden gelöscht` : "",
       ].filter(Boolean);
       if (!confirm(`${m.name} endgültig löschen?${lines.length ? "\n\n" + lines.join("\n") : ""}\n\nTipp: „Inaktiv“ blendet die Person aus und behält alles.`)) return;
       M.removePerson(m.id);
@@ -1570,7 +1571,7 @@ export function searchMon(words) {
   out.push({ title: "Trupps", items: M.sortedTrupps().filter((tr) => hit(`${M.truppName(tr)} ${names(tr.monteure)}`)).map((tr) => ({ label: M.truppName(tr), sub: names((tr.monteure || []).filter((id) => id !== tr.fuehrerId)).split(" ").join(", "), kind: "trupp", id: tr.id })) });
   out.push({ title: "Bühnenvermieter", items: M.list("vermieter").filter((v) => hit(`${v.firma} ${v.ansprechpartner || ""} ${v.email || ""}`)).map((v) => ({ label: v.firma, sub: [v.ansprechpartner, v.email].filter(Boolean).join(" · "), kind: "vermieter", id: v.id })) });
   const abw = M.list("abwesenheiten").filter((a) => a.bis >= M.addDays(t, -14) && hit(`${(M.get("monteure", a.monteurId) || {}).name || ""} ${M.ABW_TYPES[a.typ]}`)).sort((a, b) => a.von.localeCompare(b.von));
-  out.push({ title: "Krank / Urlaub", items: abw.map((a) => ({ label: (M.get("monteure", a.monteurId) || {}).name || "?", sub: `${M.ABW_TYPES[a.typ]} · ${range(a.von, a.bis)}`, kind: "abw", id: a.id })) });
+  out.push({ title: "Abwesenheit", items: abw.map((a) => ({ label: (M.get("monteure", a.monteurId) || {}).name || "?", sub: `${M.ABW_TYPES[a.typ]} · ${range(a.von, a.bis)}`, kind: "abw", id: a.id })) });
   return out;
 }
 
