@@ -13,6 +13,21 @@ const SMALL_UPLOAD_MAX = 4 * 1024 * 1024 - 1;
 let pca = null;
 let account = null;
 
+/* Gemeinsame Ablage: Ordner „Stahlwork“ im OneDrive eines anderen Kontos (freigegeben).
+   Ohne Eintrag = eigenes OneDrive. Später z. B. das OneDrive der Info-Adresse. */
+let ablage = null;
+try { ablage = JSON.parse(localStorage.getItem("stahlwork-ablage") || "null"); } catch { ablage = null; }
+if (ablage && !(ablage.driveId && ablage.itemId)) ablage = null;
+export function getAblage() { return ablage; }
+export function setAblage(a) {
+  ablage = a && a.driveId && a.itemId ? { driveId: String(a.driveId), itemId: String(a.itemId), owner: String(a.owner || "").slice(0, 120) } : null;
+  try { ablage ? localStorage.setItem("stahlwork-ablage", JSON.stringify(ablage)) : localStorage.removeItem("stahlwork-ablage"); } catch {}
+}
+// Fremdes OneDrive braucht zusätzlich Files.ReadWrite.All (nur dann anfragen – das eigene OneDrive geht ohne)
+const scopes = () => (ablage ? [...CONFIG.scopes, "Files.ReadWrite.All"] : CONFIG.scopes);
+let authError = null; // z. B. Administratorzustimmung nötig
+export function getAuthError() { return authError; }
+
 export class GraphError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -45,6 +60,10 @@ export async function init() {
   try { localStorage.removeItem("mailCheckPending"); localStorage.removeItem("mailCheckResult"); } catch {}
   try {
     res = await pca.handleRedirectPromise();
+  } catch (e) {
+    // Zustimmung verweigert / Administrator nötig: App startet trotzdem und zeigt einen Hinweis
+    authError = { code: (e && e.errorCode) || "", msg: String((e && e.errorMessage) || e || "").slice(0, 400) };
+    console.warn("Anmeldung", e);
   } finally {
     // Anmelde-Antwort (#code=…) sofort aus der Adresse entfernen: beim Neuladen würde
     // sonst der alte, schon verbrauchte Code erneut eingelöst (Fehler AADSTS70008)
@@ -58,12 +77,12 @@ export async function init() {
 }
 
 export function login() {
-  return pca.loginRedirect({ scopes: CONFIG.scopes, prompt: "select_account" });
+  return pca.loginRedirect({ scopes: scopes(), prompt: "select_account" });
 }
 // Anmeldung abgelaufen (z. B. iPhone nach einiger Zeit): mit demselben Konto neu anmelden,
 // meist ohne Passwort, weil Microsoft die Sitzung noch kennt
 export function relogin() {
-  return pca.loginRedirect({ scopes: CONFIG.scopes, loginHint: account ? account.username : undefined });
+  return pca.loginRedirect({ scopes: scopes(), loginHint: account ? account.username : undefined });
 }
 export function logout() {
   return pca.logoutRedirect({ account });
@@ -72,7 +91,7 @@ export function logout() {
 async function getToken(forceRefresh = false) {
   if (!pca || !account) throw new AuthRequired();
   try {
-    const r = await pca.acquireTokenSilent({ scopes: CONFIG.scopes, account, forceRefresh });
+    const r = await pca.acquireTokenSilent({ scopes: scopes(), account, forceRefresh });
     return r.accessToken;
   } catch (e) {
     if (
@@ -123,7 +142,7 @@ async function gjson(path, opts) {
   return res.status === 204 ? null : res.json();
 }
 
-const D = () => CONFIG.driveBase;
+const D = () => (ablage ? `/drives/${iid(ablage.driveId)}` : CONFIG.driveBase);
 
 // OneDrive-Kennungen kommen teils aus Datendateien -> nur gültige Zeichen zulassen
 function iid(id) {
@@ -176,13 +195,45 @@ export async function ensureFolder(parentId, name) {
 
 // Hauptordner der App (darin je Sparte ein Ordner)
 export async function getAppFolder() {
+  if (ablage) {
+    const res = await gfetch(`${D()}/items/${iid(ablage.itemId)}`);
+    if (res.ok) return res.json();
+    if (res.status === 403 || res.status === 404) throw new GraphError(res.status, "Kein Zugriff auf die gemeinsame Ablage – Freigabe fehlt oder wurde entfernt");
+    throw await toError(res);
+  }
   return (await getByPath(CONFIG.appFolder)) || createFolder(null, CONFIG.appFolder, "fail");
+}
+
+/* ---------- Freigabe des Hauptordners (nur der Besitzer der Ablage) ---------- */
+export async function shareAppFolder(email) {
+  const app = await getAppFolder();
+  return gjson(`${D()}/items/${iid(app.id)}/invite`, {
+    method: "POST", headers: JSON_HDR,
+    body: JSON.stringify({ recipients: [{ email }], requireSignIn: true, sendInvitation: false, roles: ["write"] }),
+  });
+}
+export async function unshareAppFolder(email) {
+  const app = await getAppFolder();
+  const j = await gjson(`${D()}/items/${iid(app.id)}/permissions`);
+  const want = String(email).toLowerCase();
+  let n = 0;
+  for (const p of j.value || []) {
+    if ((p.roles || []).includes("owner")) continue;
+    const users = [p.grantedToV2 && p.grantedToV2.user, p.grantedTo && p.grantedTo.user, ...(p.grantedToIdentitiesV2 || []).map((x) => x.user), ...(p.grantedToIdentities || []).map((x) => x.user)].filter(Boolean);
+    if (users.some((u) => String(u.email || u.userPrincipalName || "").toLowerCase() === want)) {
+      const res = await gfetch(`${D()}/items/${iid(app.id)}/permissions/${iid(p.id)}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) throw await toError(res);
+      n++;
+    }
+  }
+  return n;
 }
 
 // Ordner der Sparte BauDoc: <Hauptordner>/BauDoc
 // Ältere Ablage (BauDoc direkt in OneDrive oder unter einem früheren Hauptordner)
 // wird als Ganzes verschoben – alle Verknüpfungen (IDs) bleiben dabei gültig.
 export async function getRootFolder() {
+  if (ablage) { const a = await getAppFolder(); return ensureFolder(a.id, CONFIG.rootFolder); }
   const app = CONFIG.appFolder;
   const path = `${app}/${CONFIG.rootFolder}`;
   const cur = await getByPath(path);

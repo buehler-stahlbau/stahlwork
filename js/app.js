@@ -241,6 +241,52 @@ function isLocked() {
 
 let loginError = "";
 
+/* ---------- Gemeinsame Ablage: Rechte ----------
+   Eigenes OneDrive = alles. Gemeinsame Ablage = Rechte aus rechte.json (beim Abgleich geladen). */
+function currentRights() {
+  if (!od.isConfigured() || !od.getAblage()) return { doc: true, mon: true, admin: true, owner: true };
+  return S.state.rights || null;
+}
+function renderAccessPage(app, kind) {
+  const ab = od.getAblage() || {};
+  const ae = od.getAuthError();
+  const owner = ab.owner ? h(ab.owner) : "dem Verwalter";
+  const consent = ae && /consent|admin|90094|65001|access_denied/i.test(ae.code + " " + ae.msg);
+  const html = consent
+    ? `<h3>Freigabe durch die IT nötig</h3><p>Für die gemeinsame Ablage braucht Stahlwork die Berechtigung „Files.ReadWrite.All“. Diese muss ein Administrator einmal für die Firma erteilen.</p><p class="muted small-note">${h(ae.code)} ${h(ae.msg.split("\n")[0].slice(0, 160))}</p>`
+    : kind === "checking"
+      ? `<h3>Zugriff wird geprüft …</h3><p class="muted">Stahlwork lädt die gemeinsame Ablage von ${owner}.${navigator.onLine ? "" : " Dafür wird einmal eine Internetverbindung benötigt."}</p>`
+      : `<h3>Kein Zugriff</h3><p>Du bist für die gemeinsame Ablage von ${owner} (noch) nicht freigeschaltet.</p><p class="muted">Bitte an ${owner} wenden. Nach der Freischaltung hier „Erneut prüfen“ tippen.</p>`;
+  const card = el(`<div class="card boot-fail">${html}
+    <div class="row wrap">${consent ? `<button class="primary" type="button" id="accRelogin">Erneut anmelden</button>` : `<button class="primary" type="button" id="accRetry">Erneut prüfen</button>`}
+    <button class="secondary" type="button" id="accLeave">Gemeinsame Ablage verlassen</button></div></div>`);
+  app.appendChild(card);
+  const rr = $("#accRetry", card); if (rr) rr.onclick = () => sync.run({ full: true });
+  const rl = $("#accRelogin", card); if (rl) rl.onclick = () => od.relogin();
+  $("#accLeave", card).onclick = leaveAblage;
+}
+async function leaveAblage() {
+  if (!confirm("Gemeinsame Ablage verlassen?\n\nStahlwork nutzt danach wieder dein eigenes OneDrive. Die Daten auf diesem Gerät werden dafür neu geladen.")) return;
+  od.setAblage(null);
+  await resetLocal();
+  location.replace(location.pathname);
+}
+// Einladungslink …?ablage=<driveId>~<itemId>~<Name>: gemeinsame Ablage übernehmen
+async function checkAblageLink() {
+  const q = new URLSearchParams(location.search);
+  const v = q.get("ablage");
+  if (!v) return false;
+  const [driveId, itemId, owner] = v.split("~");
+  try { history.replaceState(history.state, "", location.pathname); } catch {}
+  const cur = od.getAblage();
+  if (!driveId || !itemId || (cur && cur.driveId === driveId && cur.itemId === itemId)) return false;
+  if (!confirm(`Gemeinsame Ablage von ${owner || "einem Kollegen"} verwenden?\n\nStahlwork arbeitet dann mit diesen Daten. Was auf diesem Gerät noch nicht hochgeladen ist, wird verworfen (dein eigenes OneDrive bleibt unverändert).`)) return false;
+  od.setAblage({ driveId, itemId, owner: owner || "" });
+  await resetLocal();
+  if (od.isSignedIn()) { await od.relogin(); return true; } // Zustimmung zur zusätzlichen Berechtigung einholen
+  return true;
+}
+
 function renderLogin(app) {
   const offline = !navigator.onLine;
   const expired = authExpired();
@@ -279,6 +325,7 @@ function render() {
   }
 }
 
+const MON_VIEWS_UI = ["mon", "monplan", "monbuehnen", "monpersonal"];
 function renderInner() {
   pendingRender = false;
   if (S.state.view !== "archive" || S.state.selectedProjectId) filterText = "";
@@ -289,7 +336,19 @@ function renderInner() {
   document.body.classList.toggle("locked", locked);
   const app = $("#app");
   app.innerHTML = "";
+  // gemeinsame Ablage, aber Microsoft verweigert die nötige Berechtigung -> klarer Hinweis statt Anmeldeschleife
+  if (od.isConfigured() && od.getAblage() && od.getAuthError() && od.getAccount()) { document.body.classList.add("locked"); renderAccessPage(app, "none"); return; }
   if (locked) { renderLogin(app); return; }
+  // gemeinsame Ablage: erst Zugriff prüfen
+  const rights = currentRights();
+  if (!rights || (!rights.doc && !rights.mon) || (od.getAblage() && od.getAuthError())) {
+    document.body.classList.add("locked");
+    renderAccessPage(app, !rights && !od.getAuthError() ? "checking" : "none");
+    return;
+  }
+  // Sparte ohne Recht -> auf die erlaubte wechseln
+  if (S.state.sparte === "mon" && !rights.mon) { S.state.sparte = "doc"; if (MON_VIEWS_UI.includes(S.state.view)) S.state.view = "projects"; }
+  if (S.state.sparte === "doc" && !rights.doc) { S.state.sparte = "mon"; if (!MON_VIEWS_UI.includes(S.state.view) && S.state.view !== "settings") S.state.view = "mon"; }
   updateHeader();
   const st = S.state;
 
@@ -365,17 +424,20 @@ const CHECK_ICO = '<svg class="ico d-check" viewBox="0 0 24 24" aria-hidden="tru
 
 function openDrawer() {
   const st = S.state;
+  const rr = currentRights() || {};
   $("#drawerSparten").innerHTML = SPARTEN.map((sp) => {
     const on = st.sparte === sp.id && st.view !== "settings";
-    return `<button type="button" class="drawer-item ${on ? "active" : ""}" data-sparte="${sp.id}" aria-current="${on ? "true" : "false"}">
+    const allowed = !!rr[sp.id];
+    return `<button type="button" class="drawer-item ${on ? "active" : ""} ${allowed ? "" : "disabled"}" data-sparte="${sp.id}" aria-current="${on ? "true" : "false"}" ${allowed ? "" : 'aria-disabled="true"'}>
       <span class="d-ico${sp.icon ? " img" : ""}">${sp.icon ? `<img src="${h(sp.icon)}" alt="">` : SPARTE_ICONS[sp.id] || ""}</span>
-      <span class="d-text"><b>${h(sp.name)}</b><small>${h(sp.desc)}</small></span>
+      <span class="d-text"><b>${h(sp.name)}</b><small>${allowed ? h(sp.desc) : "keine Berechtigung"}</small></span>
       ${on ? CHECK_ICO : ""}
     </button>`;
   }).join("");
   $$("#drawerSparten [data-sparte]").forEach((b) => {
     b.onclick = () => {
       const sp = b.dataset.sparte;
+      if (!(currentRights() || {})[sp]) { toast("Für diese Sparte hast du keine Berechtigung.", "warn", 3500); return; }
       closeDrawer();
       if (sp === st.sparte && st.view !== "settings") { window.scrollTo(0, 0); return; }
       go({ sparte: sp, view: sp === "mon" ? "mon" : "projects", selectedProjectId: null, selectedDocId: null });
@@ -420,17 +482,18 @@ function buildSearch(q) {
   const hit = (s) => { const t = String(s || "").toLowerCase(); return words.every((w) => t.includes(w)); };
   const groups = [];
   const st = S.state;
+  const rr = currentRights() || {};
   const pText = (p) => [p.number, p.title, p.client, p.place].filter(Boolean).join(" ");
   const pLabel = (p) => `${p.number} ${p.client || p.title}`;
   const pSub = (p) => [p.place, p.client && p.title !== p.client ? p.title : ""].filter(Boolean).join(" · ");
   const sorted = (a) => a.slice().sort((x, y) => y.number.localeCompare(x.number));
-  groups.push({ title: "Bauvorhaben", items: sorted(st.projects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: p.fav ? "★" : "", act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: null }) })) });
+  if (rr.doc) groups.push({ title: "Bauvorhaben", items: sorted(st.projects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: p.fav ? "★" : "", act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: null }) })) });
   const docs = [];
   for (const p of st.projects) for (const d of p.docs || []) if (hit(`${d.title} ${pText(p)}`) && !hit(pText(p))) docs.push({ p, d });
   docs.sort((a, b) => (b.d.date || "").localeCompare(a.d.date || ""));
-  groups.push({ title: "Dokumentationen", items: docs.map(({ p, d }) => ({ label: d.title, sub: `${pLabel(p)} · ${formatDateDE(d.date)}`, act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: d.id }) })) });
-  groups.push({ title: "Archiv", items: sorted(st.archivedProjects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: "Archiv", act: () => { go({ sparte: "doc", view: "archive", selectedProjectId: null, selectedDocId: null }); filterText = p.number; render(); } })) });
-  for (const g of searchMon(words)) groups.push({ title: g.title, items: g.items.map((x) => ({ ...x, act: () => openSearchHit(x.kind, x.id) })) });
+  if (rr.doc) groups.push({ title: "Dokumentationen", items: docs.map(({ p, d }) => ({ label: d.title, sub: `${pLabel(p)} · ${formatDateDE(d.date)}`, act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: d.id }) })) });
+  if (rr.doc) groups.push({ title: "Archiv", items: sorted(st.archivedProjects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: "Archiv", act: () => { go({ sparte: "doc", view: "archive", selectedProjectId: null, selectedDocId: null }); filterText = p.number; render(); } })) });
+  if (rr.mon) for (const g of searchMon(words)) groups.push({ title: g.title, items: g.items.map((x) => ({ ...x, act: () => openSearchHit(x.kind, x.id) })) });
   return groups.filter((g) => g.items.length);
 }
 function renderSearch() {
@@ -1968,6 +2031,73 @@ function installHtml() {
   return `<p class="muted">Im Browser-Menü <strong>„App installieren“</strong> bzw. <strong>„Zum Startbildschirm hinzufügen“</strong> wählen. Im Browser am PC funktioniert Stahlwork auch ohne Installation.</p>`;
 }
 
+/* ---------- Einstellungen: Benutzer und Rechte (nur Verwalter) ---------- */
+function renderRightsCard(app) {
+  const r = currentRights() || {};
+  const ab = od.getAblage();
+  if (ab && !r.admin) {
+    const c = el(`<div class="card"><h3 class="section-title">Gemeinsame Ablage</h3>
+      <p>Du arbeitest in der gemeinsamen Ablage von <b>${h(ab.owner || "Kollege")}</b>.</p>
+      <p class="muted">Deine Rechte: ${[r.doc ? "BauDoc" : "", r.mon ? "BauMon" : ""].filter(Boolean).join(", ") || "keine"}</p>
+      <button class="secondary" type="button" id="leaveAb">Gemeinsame Ablage verlassen</button></div>`);
+    app.appendChild(c);
+    $("#leaveAb", c).onclick = leaveAblage;
+    return;
+  }
+  if (!r.admin) return;
+  const st = S.state;
+  const data = st.rightsData || { format: "stahlwork-rechte", version: 1, admins: [], users: {} };
+  const users = Object.entries(data.users || {}).sort((a, b) => a[0].localeCompare(b[0]));
+  const me = String((od.getAccount() || {}).username || "").toLowerCase();
+  const card = el(`<div class="card rights-card"><h3 class="section-title">Benutzer und Rechte</h3>
+    <p class="muted">${ab ? `Gemeinsame Ablage von ${h(ab.owner || "")}.` : "Die Daten liegen in deinem OneDrive (Ordner Stahlwork). Hier legst du fest, wer sie mit Stahlwork nutzen darf."} Wer hier nicht steht, hat keinen Zugriff.</p>
+    <div class="r-row r-head"><span>Anmeldename (E-Mail)</span><span>BauDoc</span><span>BauMon</span><span></span></div>
+    <div class="r-row r-me"><span>${h(me)} <span class="p-badge">${ab ? "Verwalter" : "Besitzer"}</span></span><span>✓</span><span>✓</span><span></span></div>
+    ${users.map(([mail, u]) => `<div class="r-row" data-mail="${h(mail)}"><span>${h(mail)}</span>
+      <span><input type="checkbox" data-k="doc" ${u.doc ? "checked" : ""} aria-label="BauDoc"></span>
+      <span><input type="checkbox" data-k="mon" ${u.mon ? "checked" : ""} aria-label="BauMon"></span>
+      <span><button type="button" class="secondary small icon-only" data-del title="Entfernen" aria-label="${h(mail)} entfernen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div>`).join("")}
+    <div class="r-row r-add"><input type="email" id="rMail" placeholder="vorname.nachname@…" autocomplete="off">
+      <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span>
+      <span><button type="button" class="primary small" id="rAdd">+</button></span></div>
+    ${!ab ? `<div class="r-invite"><p class="muted">Einladen: Person oben eintragen, dann diesen Link schicken. Sie öffnet ihn einmal und meldet sich an.</p>
+      <button type="button" class="secondary" id="rLink">Einladungslink kopieren</button></div>` : ""}
+    ${st.rightsDirty ? `<p class="muted small-note">Änderungen werden beim nächsten Abgleich gespeichert.</p>` : ""}</div>`);
+  app.appendChild(card);
+  const save = (users2) => { st.rightsData = { ...data, users: users2 }; st.rightsDirty = true; saveSoon(); sync.schedule(500); render(); };
+  for (const row of $$(".r-row[data-mail]", card)) {
+    const mail = row.dataset.mail;
+    for (const cb of $$("input[data-k]", row)) cb.onchange = () => { const u2 = { ...data.users }; u2[mail] = { ...u2[mail], [cb.dataset.k]: cb.checked }; save(u2); };
+    $("[data-del]", row).onclick = async () => {
+      if (!confirm(`${mail} entfernen?\n\nDie Person hat danach keinen Zugriff mehr auf Stahlwork-Daten.`)) return;
+      if (!ab) { try { await sync.unshare(mail); } catch (e) { toast("OneDrive-Freigabe konnte nicht entfernt werden: " + (e.message || e) + " – bitte im OneDrive prüfen.", "warn", 9000); } }
+      const u2 = { ...data.users }; delete u2[mail]; save(u2);
+    };
+  }
+  $("#rAdd", card).onclick = async () => {
+    const mail = $("#rMail", card).value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(mail)) { toast("Bitte eine gültige E-Mail-Adresse (Anmeldename) eingeben.", "warn"); return; }
+    if (mail === me || (data.users || {})[mail]) { toast("Diese Person steht schon in der Liste.", "warn"); return; }
+    const doc = $("#rDoc", card).checked, mon = $("#rMon", card).checked;
+    if (!doc && !mon) { toast("Bitte mindestens BauDoc oder BauMon anhaken.", "warn"); return; }
+    if (!ab) {
+      // Ordner Stahlwork in deinem OneDrive für die Person freigeben (Bearbeiten)
+      try { await sync.share(mail); toast(`${mail}: Ordner Stahlwork freigegeben. Jetzt den Einladungslink schicken.`, "info", 6000); }
+      catch (e) { toast("Freigabe im OneDrive nicht möglich: " + (e.message || e) + " – bitte den Ordner Stahlwork selbst für die Person freigeben (Bearbeiten).", "warn", 10000); }
+    }
+    save({ ...(data.users || {}), [mail]: { doc, mon } });
+  };
+  const lk = $("#rLink", card);
+  if (lk) lk.onclick = async () => {
+    try {
+      const info = await sync.inviteInfo();
+      const url = `${od.redirectUri()}?ablage=${encodeURIComponent(info.driveId)}~${encodeURIComponent(info.itemId)}~${encodeURIComponent((od.getAccount() || {}).name || "")}`;
+      try { await navigator.clipboard.writeText(url); toast("Einladungslink kopiert – per E-Mail oder Teams schicken.", "info", 5000); }
+      catch { prompt("Einladungslink (kopieren):", url); }
+    } catch (e) { toast("Link nicht möglich: " + (e.message || e), "error", 7000); }
+  };
+}
+
 function renderSettings(app) {
   const s = sync.status;
   let odHtml;
@@ -1986,7 +2116,7 @@ function renderSettings(app) {
       <p>Angemeldet als <strong>${h(acc.name || acc.username)}</strong><br><span class="muted">${h(acc.username || "")}</span></p>
       ${s.kind === "signedout" ? `<div class="auth-expired"><p><strong>Anmeldung abgelaufen.</strong> Es wird gerade nicht synchronisiert – deine Änderungen bleiben auf dem Gerät und werden nach dem Anmelden hochgeladen.</p>
         <button class="primary" id="relogin" type="button">Neu anmelden</button></div>` : ""}
-      <p class="muted">Ablage: OneDrive › ${h(CONFIG.appFolder)}<br>
+      <p class="muted">Ablage: ${od.getAblage() ? `gemeinsame Ablage von ${h(od.getAblage().owner || "Kollege")} › ${h(CONFIG.appFolder)}` : `dein OneDrive › ${h(CONFIG.appFolder)}`}<br>
         Zuletzt synchronisiert: ${s.lastSync ? formatDateTimeDE(s.lastSync) : "–"}<br>
         Ausstehend: ${s.pending}${s.kind === "error" ? `<br><span class="error-text">Fehler: ${h(s.message)}</span>` : ""}</p>
       <div class="row wrap">
@@ -1999,6 +2129,7 @@ function renderSettings(app) {
 
   app.appendChild(el(`<div class="page-head"><h1>Einstellungen</h1></div>`));
   app.appendChild(el(`<div class="card"><h3 class="section-title">Konto &amp; OneDrive</h3>${odHtml}</div>`));
+  if (od.isConfigured() && od.isSignedIn()) renderRightsCard(app);
   app.appendChild(el(`<div class="card"><h3 class="section-title">App</h3>${installHtml()}</div>`));
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
   // Das Feld zeigt immer die Signatur, die verwendet wird: automatisch (aus dem Microsoft-Profil) oder die selbst geänderte.
@@ -2316,13 +2447,19 @@ function versionMismatch() {
     toast(loginError, "error", 10000);
   }
   window.__bootStep = "Konto prüfen";
+  if (await checkAblageLink()) return; // Weiterleitung zur Anmeldung (Zustimmung)
   await checkAccount();
 
   window.__bootStep = "Anzeige aufbauen";
   setupGlobalSearch();
   setupDrawer();
   initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
-  sync.onStatus(() => { updateSyncChip(); updateAuthBar(); });
+  let rightsKey = JSON.stringify(S.state.rights);
+  sync.onStatus(() => {
+    updateSyncChip(); updateAuthBar();
+    const k = JSON.stringify(S.state.rights);
+    if (k !== rightsKey) { rightsKey = k; render(); }
+  });
   sync.onData(() => requestRender());
   onChange((kind) => {
     if (kind === "data") { sync.refreshStatus(); sync.schedule(4000); }

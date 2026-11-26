@@ -92,7 +92,7 @@ function hasUnuploaded(p) {
 }
 
 function countPending() {
-  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0) + (S.state.mon && S.state.mon.dirty ? 1 : 0);
+  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0) + (S.state.mon && S.state.mon.dirty ? 1 : 0) + (S.state.rightsDirty ? 1 : 0);
   for (const p of allProjects()) {
     if (p.dirty || p.moveTo) n++;
     n += (p.pendingDeletes || []).length;
@@ -187,7 +187,65 @@ export async function loadProject() {
 }
 
 /* ---------- Ablauf ---------- */
+/* ---------- Benutzer und Rechte (Datei rechte.json im Hauptordner der Ablage) ----------
+   Besitzer der Ablage (eigenes OneDrive) darf alles und verwaltet die Rechte.
+   Andere: Eintrag in rechte.json { users: { "<anmeldename>": { doc, mon } }, admins: [...] } */
+const RIGHTS_FILE = "rechte.json";
+export function rightsFor(data, me, owner) {
+  if (owner) return { doc: true, mon: true, admin: true, owner: true };
+  const d = data || {};
+  const admin = (d.admins || []).map((x) => String(x).toLowerCase()).includes(me);
+  const u = (d.users || {})[me] || null;
+  return { doc: admin || !!(u && u.doc), mon: admin || !!(u && u.mon), admin, owner: false };
+}
+async function syncRights() {
+  const st = S.state;
+  const me = String((od.getAccount() || {}).username || "").toLowerCase();
+  const owner = !od.getAblage();
+  let app;
+  try { app = await od.getAppFolder(); }
+  catch (e) {
+    if (e && (e.status === 403 || e.status === 404) && !owner) { st.rights = { doc: false, mon: false, admin: false, owner: false, noShare: true }; return; }
+    throw e;
+  }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const f = await od.getJson(app.id, RIGHTS_FILE);
+    let data = (f && f.data && f.data.format === "stahlwork-rechte") ? f.data : { format: "stahlwork-rechte", version: 1, admins: [], users: {} };
+    const r0 = rightsFor(data, me, owner);
+    if (st.rightsDirty && st.rightsData && r0.admin) {
+      const res = await od.putJson(app.id, RIGHTS_FILE, { ...st.rightsData, format: "stahlwork-rechte", version: 1, changedAt: Date.now(), changedBy: me }, f ? f.eTag : null);
+      if (res.conflict) continue;
+      data = st.rightsData;
+      st.rightsDirty = false;
+    } else if (owner && !f) {
+      await od.putJson(app.id, RIGHTS_FILE, data, null); // Rechte-Datei anlegen
+    }
+    st.rightsData = data;
+    st.rights = rightsFor(data, me, owner);
+    return;
+  }
+}
+
+export async function share(mail) { return od.shareAppFolder(mail); }
+export async function unshare(mail) { return od.unshareAppFolder(mail); }
+export async function inviteInfo() {
+  const app = await od.getAppFolder();
+  return { driveId: app.parentReference && app.parentReference.driveId, itemId: app.id };
+}
+
 async function syncAll(full) {
+  const st = S.state;
+  await syncRights();
+  const rights = st.rights || {};
+  let firstError = null;
+  if (rights.doc) firstError = await syncBauDoc(full);
+  // BauMon (eigene Datei)
+  if (rights.mon) { try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; } }
+  outboxCount = (await outboxSafe()).length;
+  if (firstError) throw firstError;
+}
+
+async function syncBauDoc(full) {
   const st = S.state;
   const root = await od.getRootFolder();
   st.remote.rootId = root.id;
@@ -224,10 +282,7 @@ async function syncAll(full) {
   }
   if (full || S.state.mapDirty || (S.state.mapRemove || []).length) await syncMapIndex(dataDir);
   if (full || Object.keys(S.state.codeIndexPending || {}).length) await syncCodeIndex(dataDir);
-  // BauMon (eigene Datei)
-  try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; }
-  outboxCount = (await outboxSafe()).length;
-  if (firstError) throw firstError;
+  return firstError;
 }
 
 /* Kartenpositionen aller BV in einer kleinen Datei, damit auch nicht geladene

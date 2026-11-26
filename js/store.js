@@ -32,6 +32,9 @@ function defaultState() {
     prefs: { favUpdatedAt: 0, rev: 0, dirty: false }, // Favoriten je Nutzer
     accountId: null,
     sparte: "doc", // "doc" = BauDoc, "mon" = BauMon
+    rights: null,      // eigene Rechte in der gemeinsamen Ablage { doc, mon, admin }
+    rightsData: null,  // Rechte-Datei (für Verwalter)
+    rightsDirty: false,
   };
 }
 

@@ -58,6 +58,8 @@ export function mon() {
 
 // Bearbeiten: später nur die Montageleiter (Liste in config.js), bis dahin alle
 export function canEdit() {
+  // gemeinsame Ablage: Recht „BauMon“ aus der Rechte-Verwaltung
+  if (od.getAblage && od.getAblage()) return !!(S.state.rights && S.state.rights.mon);
   const list = (CONFIG.monEditors || []).map((x) => String(x).toLowerCase());
   if (!list.length) return true;
   const acc = od.getAccount && od.getAccount();

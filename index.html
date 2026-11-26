@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.15.4-beta" />
+  <meta name="app-version" content="3.16.0-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -216,6 +216,17 @@
     .drawer-sep { height: 1px; background: var(--brand-gray-200); margin: 10px 4px; }
     .drawer-foot { padding: 12px 8px 0; font-size: .78rem; }
     .drawer-bottom { margin-top: auto; }
+    .drawer-item.disabled { opacity: .45; cursor: not-allowed; }
+    .drawer-item.disabled .d-ico { filter: grayscale(1); }
+    /* Benutzer und Rechte */
+    .rights-card .r-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 44px; align-items: center; gap: 6px; padding: 8px 0; border-top: 1px solid var(--brand-gray-100); }
+    .rights-card .r-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rights-card .r-row > span:not(:first-child) { text-align: center; }
+    .rights-card .r-head { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--brand-gray-500); border-top: 0; }
+    .rights-card .r-row input[type=checkbox] { width: 20px; height: 20px; }
+    .rights-card .r-add input[type=email] { min-width: 0; width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--brand-gray-300, #c9c6c0); border-radius: 8px; font: inherit; font-size: .95rem; background: #fff; }
+    .rights-card .r-invite { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--brand-gray-100); }
+    .rights-card .icon-only { width: 36px; padding: 0; justify-content: center; } .rights-card .icon-only .ico { width: 18px; height: 18px; }
     /* Suche (ganze App) im Menü */
     .drawer-search { display: flex; align-items: center; gap: 8px; margin: 0 2px 12px; padding: 0 6px 0 12px; height: 44px; border: 1px solid var(--brand-gray-200); border-radius: 12px; background: var(--brand-gray-50, #f7f7f5); color: var(--brand-gray-500); cursor: text; }
     .drawer-search:focus-within { border-color: var(--brand-gray-500); background: #fff; }
