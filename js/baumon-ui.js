@@ -870,7 +870,7 @@ function linkRange(root) {
   sync();
 }
 
-function modal(title, body, actions) {
+export function modal(title, body, actions) {
   const wrap = U.el(`<div class="mon-modal" role="dialog" aria-modal="true" aria-label="${h(title)}">
     <div class="mon-modal-card"><div class="mon-modal-head"><h3>${h(title)}</h3><button type="button" class="icon-btn" data-x aria-label="Schließen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="mon-modal-body"></div><div class="mon-modal-foot"></div></div></div>`);

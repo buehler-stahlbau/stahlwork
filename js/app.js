@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -2080,9 +2080,8 @@ function renderRightsCard(app) {
     <div class="r-row r-head"><span>Anmeldename (E-Mail)</span><span>BauDoc</span><span>BauMon</span><span></span></div>
     <div class="r-row r-me"><span>${h(me)} <span class="p-badge">${ab ? "Verwalter" : "Besitzer"}</span></span><span>✓</span><span>✓</span><span></span></div>
     ${users.map(([mail, u]) => `<div class="r-row" data-mail="${h(mail)}"><span>${h(mail)}</span>
-      <span><input type="checkbox" data-k="doc" ${u.doc ? "checked" : ""} aria-label="BauDoc"></span>
-      <span><input type="checkbox" data-k="mon" ${u.mon ? "checked" : ""} aria-label="BauMon"></span>
-      <span><button type="button" class="secondary small icon-only" data-del title="Entfernen" aria-label="${h(mail)} entfernen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div>`).join("")}
+      <span>${u.doc ? "✓" : ""}</span><span>${u.mon ? "✓" : ""}</span>
+      <span><button type="button" class="secondary small icon-only" data-edit title="Bearbeiten" aria-label="${h(mail)} bearbeiten"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button></span></div>`).join("")}
     <div class="r-row r-add"><input type="email" id="rMail" placeholder="${h((CONFIG.orgDomains || [])[0] ? "name@" + CONFIG.orgDomains[0] : "vorname.nachname@…")}" autocomplete="off">
       <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span>
       <span><button type="button" class="primary small" id="rAdd">+</button></span></div>
@@ -2093,11 +2092,26 @@ function renderRightsCard(app) {
   const save = (users2) => { st.rightsData = { ...data, users: users2 }; st.rightsDirty = true; saveSoon(); sync.schedule(500); render(); };
   for (const row of $$(".r-row[data-mail]", card)) {
     const mail = row.dataset.mail;
-    for (const cb of $$("input[data-k]", row)) cb.onchange = () => { const u2 = { ...data.users }; u2[mail] = { ...u2[mail], [cb.dataset.k]: cb.checked }; save(u2); };
-    $("[data-del]", row).onclick = async () => {
-      if (!confirm(`${mail} entfernen?\n\nDie Person hat danach keinen Zugriff mehr auf Stahlwork-Daten.`)) return;
+    const remove = async () => {
+      if (!confirm(`${mail} entfernen?\n\nDie Person hat danach keinen Zugriff mehr auf Stahlwork-Daten.`)) return false;
       if (!ab) { try { await sync.unshare(mail); } catch (e) { toast("OneDrive-Freigabe konnte nicht entfernt werden: " + (e.message || e) + " – bitte im OneDrive prüfen.", "warn", 9000); } }
       const u2 = { ...data.users }; delete u2[mail]; save(u2);
+    };
+    // Bearbeiten in einem eigenen Fenster (kein versehentliches Umschalten in der Liste)
+    $("[data-edit]", row).onclick = () => {
+      const u = (data.users || {})[mail] || {};
+      const body = el(`<div class="mon-form"><p><b>${h(mail)}</b></p>
+        <label class="opt-row"><input type="checkbox" class="e-doc" ${u.doc ? "checked" : ""}> <span>BauDoc</span></label>
+        <label class="opt-row"><input type="checkbox" class="e-mon" ${u.mon ? "checked" : ""}> <span>BauMon</span></label></div>`);
+      monModal("Rechte bearbeiten", body, [
+        { label: "Entfernen", cls: "danger-outline", fn: () => { remove(); } },
+        { label: "Abbrechen", fn: () => {} },
+        { label: "Speichern", cls: "primary", fn: () => {
+          const doc = $(".e-doc", body).checked, mon = $(".e-mon", body).checked;
+          if (!doc && !mon) { toast("Mindestens BauDoc oder BauMon – sonst „Entfernen“.", "warn"); return false; }
+          save({ ...data.users, [mail]: { ...u, doc, mon } });
+        } },
+      ]);
     };
   }
   $("#rAdd", card).onclick = async () => {
@@ -2162,14 +2176,15 @@ function renderSettings(app) {
   // E-Mail-Signatur für Mails aus der App (z. B. Bühnen abmelden) – je Konto, auf allen Geräten
   // Das Feld zeigt immer die Signatur, die verwendet wird: automatisch (aus dem Microsoft-Profil) oder die selbst geänderte.
   const auto = autoSignature();
+  const showSig = !!(currentRights() || {}).mon; // nur BauMon schreibt E-Mails (Bühnen abmelden)
   const prof = S.state.prefs.profile || {};
   const noPhone = auto && !prof.phone && !prof.mobile && !/\bTel\b/i.test(S.state.prefs.mailSignature || "");
   const sigCard = el(`<div class="card"><h3 class="section-title">E-Mail-Signatur</h3>
-    <p class="muted">Steht unter E-Mails, die Stahlwork vorbereitet (z. B. Bühne abmelden). Sie wird automatisch aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock erstellt. Du kannst sie direkt im Feld ändern.</p>
+    <p class="muted">Steht unter E-Mails, die BauMon vorbereitet (Bühne abmelden). Sie wird automatisch aus deinem Microsoft-Profil (Name, Telefon, E-Mail) und dem Bühler-Firmenblock erstellt. Du kannst sie direkt im Feld ändern.</p>
     ${noPhone ? `<p class="warn-note">In deinem Microsoft-Profil ist keine Telefonnummer hinterlegt. Trag sie unten im Feld ein (z. B. „Tel. +49 (0) 7453 9398-93 · Fax -33“) – oder die IT ergänzt sie im Profil, dann erscheint sie automatisch.</p>` : ""}
     <textarea id="mailSig" rows="${auto ? 14 : 6}" placeholder="Max Mustermann&#10;Montageleitung&#10;Friedrich Bühler GmbH &amp; Co. KG&#10;Tel. …"></textarea>
     <div class="row"><p class="muted small-note grow" id="sigState"></p><button type="button" class="secondary small" id="sigReset" hidden>Automatische wiederherstellen</button></div></div>`);
-  app.appendChild(sigCard);
+  if (showSig) app.appendChild(sigCard);
   const sigEl = $("#mailSig", sigCard), sigState = $("#sigState", sigCard), sigReset = $("#sigReset", sigCard);
   const own = () => (S.state.prefs.mailSignature || "").trim();
   const showState = () => {
