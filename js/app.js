@@ -280,6 +280,12 @@ async function checkAblageLink() {
   try { history.replaceState(history.state, "", location.pathname); } catch {}
   const cur = od.getAblage();
   if (!driveId || !itemId || (cur && cur.driveId === driveId && cur.itemId === itemId)) return false;
+  // eigener Einladungslink (Besitzer öffnet ihn selbst): nichts umstellen
+  if (!cur && od.isSignedIn()) {
+    let own = false;
+    try { const app = await od.getByPath(CONFIG.appFolder); own = !!app && app.id === itemId && (!app.parentReference || !app.parentReference.driveId || app.parentReference.driveId === driveId); } catch {}
+    if (own) { toast("Das ist dein eigener Ordner – den Link brauchen nur die eingeladenen Kollegen.", "info", 7000); return false; }
+  }
   if (!confirm(`Gemeinsame Ablage von ${owner || "einem Kollegen"} verwenden?\n\nStahlwork arbeitet dann mit diesen Daten. Was auf diesem Gerät noch nicht hochgeladen ist, wird verworfen (dein eigenes OneDrive bleibt unverändert).`)) return false;
   od.setAblage({ driveId, itemId, owner: owner || "" });
   await resetLocal();
