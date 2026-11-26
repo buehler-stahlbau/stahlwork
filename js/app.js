@@ -1092,11 +1092,12 @@ function renderMap(app) {
   const onMap = list.filter(geoValid);
   const missing = list.filter((p) => !geoValid(p));
 
-  const chip = (key, label, cls) => `<button type="button" class="map-chip ${cls} ${f[key] ? "on" : ""}" data-filter="${key}" aria-pressed="${f[key] ? "true" : "false"}"><span class="map-dot"></span>${label}</button>`;
+  // am Handy Kurzform (BV, Fav, Mon, Arc)
+  const chip = (key, label, cls, short) => `<button type="button" class="map-chip ${cls} ${f[key] ? "on" : ""}" data-filter="${key}" aria-pressed="${f[key] ? "true" : "false"}" title="${h(label)}"><span class="map-dot"></span><span class="lg">${h(label)}</span><span class="sm">${h(short)}</span></button>`;
   app.appendChild(el(`
     <div class="page-head map-head"><h1>Karte</h1>
       <div class="map-filter" role="group" aria-label="Anzeigen">
-        ${chip("other", "Bauvorhaben", "c-other")}${rr.doc ? chip("fav", "Favoriten", "c-fav") : ""}${rr.mon ? chip("montage", '<span class="lg">Laufende </span>Montagen', "c-mont") : ""}${chip("archive", "Archiv", "c-arch")}
+        ${chip("other", "Bauvorhaben", "c-other", "BV")}${rr.doc ? chip("fav", "Favoriten", "c-fav", "Fav") : ""}${rr.mon ? chip("montage", "Laufende Montagen", "c-mont", "Mon") : ""}${chip("archive", "Archiv", "c-arch", "Arc")}
       </div>
     </div>`));
   $$(".map-chip").forEach((b) => {
