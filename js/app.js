@@ -21,7 +21,7 @@ import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
 import { exportBackup, importBackup } from "./backup.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
-import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo } from "./baumon-ui.js";
+import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -1011,6 +1011,7 @@ const PIN_STYLE = {
   fav: { fill: "#d6a21c", stroke: "#fff", text: "#fff" },
   other: { fill: "#8d8c87", stroke: "#fff", text: "#fff" },
   archive: { fill: "#fff", stroke: "#8d8c87", text: "#5f5e59" },
+  montage: { fill: "#cb3130", stroke: "#fff", text: "#fff" }, // laufende Montage: Bühler-Rot
 };
 
 // Pin mit Anzahl im Kopf; optional goldenes Abzeichen oben rechts (Anzahl Favoriten)
@@ -1018,9 +1019,10 @@ const PIN_STYLE = {
 // Grundfarbe: grau, wenn aktive BV (ohne Favoriten) da sind; sonst gold (nur Favoriten) bzw. weiß (nur Archiv).
 // Weitere Arten am selben Ort als Abzeichen: gold = Favoriten, weiß = Archiv.
 function pinIcon(L, counts, cluster = false) {
-  const kind = counts.other ? "other" : counts.fav ? "fav" : "archive";
+  const kind = counts.montage ? "montage" : counts.other ? "other" : counts.fav ? "fav" : "archive";
   const st = PIN_STYLE[kind];
-  const count = counts[kind];
+  // roter Pin (laufende Montage): zählt auch die übrigen BV am Ort mit
+  const count = kind === "montage" ? counts.montage + (counts.other || 0) : counts[kind];
   const num = (v) => (v > 99 ? "99+" : String(v));
   // Sammel-Pin (mehrere Orte): zweiter, leicht versetzter Umriss dahinter ("Stapel")
   const stack = cluster ? `<path transform="translate(2.6 -1.6)" d="M12 33s9.5-10.2 9.5-20.3A9.5 9.5 0 0 0 2.5 12.7C2.5 22.8 12 33 12 33z" fill="${st.fill}" stroke="${st.stroke}" stroke-width="1.6" opacity=".55"/>` : "";
@@ -1081,7 +1083,11 @@ function renderMap(app) {
   // Welche Arten werden angezeigt? (wird gemerkt)
   if (!st.mapFilter || typeof st.mapFilter !== "object") st.mapFilter = { fav: true, other: true, archive: false };
   const f = st.mapFilter;
-  const kindOf = (p) => (st.archivedProjects.includes(p) ? "archive" : p.fav ? "fav" : "other");
+  // ohne BauDoc-Recht gibt es keine Favoriten -> wie „Bauvorhaben“ behandeln
+  // laufende Montage (heute) = eigene Art mit roten Pins; ohne BauDoc-Recht gibt es keine Favoriten
+  if (f.montage === undefined) f.montage = true;
+  const kindOf = (p) => (st.archivedProjects.includes(p) ? "archive" : rr.mon && f.montage && montageLaeuft(p.number) ? "montage" : p.fav && rr.doc ? "fav" : "other");
+  // „Montage“: nur BV, auf denen heute montiert wird
   const list = [...st.projects, ...st.archivedProjects].filter((p) => f[kindOf(p)] && matches(p));
   const onMap = list.filter(geoValid);
   const missing = list.filter((p) => !geoValid(p));
@@ -1090,7 +1096,7 @@ function renderMap(app) {
   app.appendChild(el(`
     <div class="page-head map-head"><h1>Karte</h1>
       <div class="map-filter" role="group" aria-label="Anzeigen">
-        ${chip("other", "Bauvorhaben", "c-other")}${chip("fav", "Favoriten", "c-fav")}${chip("archive", "Archiv", "c-arch")}
+        ${chip("other", "Bauvorhaben", "c-other")}${rr.doc ? chip("fav", "Favoriten", "c-fav") : ""}${rr.mon ? chip("montage", '<span class="lg">Laufende </span>Montagen', "c-mont") : ""}${chip("archive", "Archiv", "c-arch")}
       </div>
     </div>`));
   $$(".map-chip").forEach((b) => {
@@ -1130,7 +1136,7 @@ function renderMap(app) {
     const groups = new Map();
     for (const p of onMap) {
       const k = p.geo.lat.toFixed(4) + "," + p.geo.lon.toFixed(4);
-      if (!groups.has(k)) groups.set(k, { lat: p.geo.lat, lon: p.geo.lon, place: p.geo.place, fav: [], other: [], archive: [] });
+      if (!groups.has(k)) groups.set(k, { lat: p.geo.lat, lon: p.geo.lon, place: p.geo.place, montage: [], fav: [], other: [], archive: [] });
       groups.get(k)[kindOf(p)].push(p);
     }
     const byNum = (a, b) => a.number.localeCompare(b.number);
@@ -1141,30 +1147,32 @@ function renderMap(app) {
       spiderfyOnMaxZoom: true,
       disableClusteringAtZoom: 14,
       iconCreateFunction: (c) => {
-        const sum = { fav: 0, other: 0, archive: 0 };
+        const sum = { montage: 0, fav: 0, other: 0, archive: 0 };
         for (const mk of c.getAllChildMarkers()) for (const k in sum) sum[k] += mk.options.counts[k];
         return pinIcon(L, sum, true);
       },
     });
     for (const g of groups.values()) {
-      const total = g.fav.length + g.other.length + g.archive.length;
+      const total = g.montage.length + g.fav.length + g.other.length + g.archive.length;
       // ein Pin je Ort, gleicher Umriss: Farbe nach der "wichtigsten" Art,
       // Favoriten als goldenes Abzeichen, wenn noch andere Arten am selben Ort sind
-      const icon = pinIcon(L, { fav: g.fav.length, other: g.other.length, archive: g.archive.length });
-      const m = L.marker([g.lat, g.lon], { icon, title: `${g.place}: ${total} BV`, counts: { fav: g.fav.length, other: g.other.length, archive: g.archive.length } });
+      const counts = { montage: g.montage.length, fav: g.fav.length, other: g.other.length, archive: g.archive.length };
+      const icon = pinIcon(L, counts);
+      const m = L.marker([g.lat, g.lon], { icon, title: `${g.place}: ${total} BV${g.montage.length ? " · Montage läuft" : ""}`, counts });
       clusters.addLayer(m);
-      const sorted = [...g.fav.sort(byNum), ...g.other.sort(byNum), ...g.archive.sort(byNum)];
+      const sorted = [...g.montage.sort(byNum), ...g.fav.sort(byNum), ...g.other.sort(byNum), ...g.archive.sort(byNum)];
       m.bindPopup(`<div class="map-pop"><h4>${h(g.place)} · ${total} BV</h4>${sorted.map((p) => {
         const arch = st.archivedProjects.includes(p);
         const mon = rr.mon ? monInfo(p.number) : null;
+        const monBtn = rr.mon && p.number;
         return `<div class="mp-row"><div class="mp-name">${p.fav && !arch ? '<span class="star">★</span>' : ""}<span class="bv-num">${h(p.number)}</span> ${h(p.client || p.title)}${arch ? ' <span class="arch-tag">Archiv</span>' : ""}</div>
           ${mon ? `<div class="mp-sub">${h(mon.text)}</div>` : ""}
-          <div class="mp-acts">${rr.doc ? `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">BauDoc</button>` : ""}${mon ? `<button type="button" data-mon="${h(mon.id)}">BauMon</button>` : ""}</div></div>`;
+          <div class="mp-acts">${rr.doc ? `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">BauDoc</button>` : ""}${monBtn ? `<button type="button" data-monbv="${h(p.number)}" data-montitle="${h(p.title)}">BauMon</button>` : ""}</div></div>`;
       }).join("")}</div>`);
     }
     map.addLayer(clusters);
     map.on("popupopen", (e) => {
-      $$("[data-mon]", e.popup.getElement()).forEach((b) => { b.onclick = () => openSearchHit("einsatzZeigen", b.dataset.mon); });
+      $$("[data-monbv]", e.popup.getElement()).forEach((b) => { b.onclick = () => openBVinMon(b.dataset.monbv, b.dataset.montitle); });
       $$("[data-pid]", e.popup.getElement()).forEach((b) => {
         b.onclick = () => {
           if (b.dataset.arch) {

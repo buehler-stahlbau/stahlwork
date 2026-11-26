@@ -1104,7 +1104,7 @@ export function openAbw(a, preset = {}) {
 
 export function openEinsatz(e, preset = {}) {
   const isNew = !e;
-  const cur = e ? { ...e } : { id: null, truppId: preset.truppId || null, bvNumber: "", baustelle: "", von: preset.von, bis: preset.bis, monteure: [], leih: "", kran: "", notiz: "" };
+  const cur = e ? { ...e } : { id: null, truppId: preset.truppId || null, bvNumber: preset.bvNumber || "", baustelle: preset.baustelle || "", von: preset.von, bis: preset.bis, monteure: [], leih: "", kran: "", notiz: "" };
   // Stammbesetzung eines Trupps: Richtmeister + hinterlegte Monteure
   const crewOf = (tid) => { const t = M.get("trupps", tid); return t ? [...new Set([t.fuehrerId, ...(t.monteure || [])].filter((id) => id && M.get("monteure", id)))] : []; };
   if (isNew && cur.truppId) cur.monteure = crewOf(cur.truppId);
@@ -1588,6 +1588,28 @@ export function monInfo(bvNumber) {
   const tr = M.truppName(M.get("trupps", e.truppId));
   const when = `${M.shortDate(e.von)}–${M.shortDate(e.bis)}`;
   return { id: e.id, text: `${run.length ? "Montage läuft" : next.length ? "Montage geplant" : "Montage war"} · ${tr} · ${when}` };
+}
+
+// Karte: läuft heute eine Montage auf diesem BV?
+export function montageLaeuft(bvNumber) {
+  const t = M.today();
+  return !!bvNumber && M.list("einsaetze").some((e) => e.bvNumber === bvNumber && e.von <= t && e.bis >= t);
+}
+// Karte › BauMon: Einsatz zeigen; ohne Einsatz: Bühnen ohne Einsatz bzw. neuen Einsatz für dieses BV anlegen
+export function openBVinMon(bvNumber, title) {
+  const info = monInfo(bvNumber);
+  if (info) return openSearchHit("einsatzZeigen", info.id);
+  const m = M.mon();
+  const bs = M.list("buehnen").filter((b) => b.bvNumber === bvNumber && !b.abgemeldetAm);
+  if (bs.length) {
+    m.zoom = "buehnen";
+    const b0 = bs.sort((a, b) => (a.von || "").localeCompare(b.von || ""))[0];
+    const start = M.addDays(M.range().start, weekOffset * 7), end = M.addDays(start, 20);
+    const v = b0.von || b0.bis || M.today();
+    if ((b0.bis || v) < start || v > end) weekOffset = Math.max(0, Math.round((M.parseDay(M.mondayOf(v)) - M.parseDay(M.range().start)) / (7 * 86400000)));
+  }
+  U.go({ sparte: "mon", view: "monplan", selectedProjectId: null, selectedDocId: null });
+  if (!bs.length && editable()) setTimeout(() => openEinsatz(null, { bvNumber, baustelle: title || "", von: M.today(), bis: M.today() }), 60);
 }
 
 export function openSearchHit(kind, id) {
