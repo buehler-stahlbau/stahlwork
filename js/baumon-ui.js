@@ -178,6 +178,21 @@ function bindStammButtons(root) {
 let planKeep = null; // Scrollposition nach einer Änderung in der Detailansicht beibehalten
 function keepPlanScroll(card) { const sc = card.querySelector(".g-scroll"); planKeep = { x: sc ? sc.scrollLeft : 0, y: window.scrollY }; }
 let weekOffset = 0; // Planung: um ganze Wochen nach vorne/hinten verschoben (0 = aktuelle KW + zwei kommende)
+// Schmale Einsatz-Balken (z. B. 1 Tag): passt die BV-Nummer nicht neben Griffe und Bühnen-Symbol,
+// nur die letzten 3 Ziffern zeigen; das Bühnen-Symbol wird zum Punkt (grau = Bühne, rot = abmelden)
+function markNarrow(g) {
+  for (const b of g.querySelectorAll(".g-bar")) {
+    b.classList.remove("narrow", "tiny");
+    const num = b.querySelector(".g-num") || b.querySelector(".g-name.only");
+    const lift = b.querySelector(".g-lift");
+    const need = (num ? Math.min(num.scrollWidth, 60) : 30) + (lift && lift.offsetWidth ? lift.offsetWidth + 6 : 0) + 26;
+    if (b.clientWidth < need) b.classList.add("narrow");
+    if (b.clientWidth < 30) b.classList.add("tiny"); // Kompakt am Handy: nur Farbe + Punkt
+  }
+}
+let narrowResize = null;
+window.addEventListener("resize", () => { clearTimeout(narrowResize); narrowResize = setTimeout(() => { const g = document.querySelector(".gantt"); if (g) markNarrow(g); }, 150); });
+
 export function renderMonPlan(app) {
   const m = M.mon();
   const start = M.addDays(M.range().start, weekOffset * 7);
@@ -272,7 +287,7 @@ export function renderMonPlan(app) {
     const von = b.von || b.bis || days[0], bis = b.abgemeldetAm || b.bis || days[20];
     if (bis < days[0] || von > days[20]) return "";
     const s0 = Math.max(0, days.indexOf(von < days[0] ? days[0] : von)), e0 = days.indexOf(bis > days[20] ? days[20] : bis);
-    return `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""} ${von < days[0] ? "cut-l" : ""} ${bis > days[20] ? "cut-r" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${color}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${due ? '<span class="bue-dot" title="abmelden!"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))} · ${b.abgemeldetAm ? "abgemeldet " + h(M.shortDate(b.abgemeldetAm)) : "bis " + (b.bis ? h(M.shortDate(b.bis)) : "?")}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`;
+    return `<button type="button" class="g-bue ${due ? "due" : ""} ${b.abgemeldetAm ? "done" : ""} ${von < days[0] ? "cut-l" : ""} ${bis > days[20] ? "cut-r" : ""}" data-bid="${h(b.id)}" style="grid-column:${2 + s0} / ${3 + e0};grid-row:${gridRow};--c:${color}" title="${h(M.buehneText(b))} · ${h(M.baustelleLabel(b))} · ${h(vermieterName(b.vermieterId))} · Mietbeginn ${h(M.shortDate(von))} · Mietende ${b.bis ? h(M.shortDate(b.bis)) : "fehlt"}${due ? " – abmelden!" : ""}">${editable() && !b.abgemeldetAm && von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}${due ? '<span class="bue-dot" title="abmelden!"></span>' : ""}<span class="g-bue-t">${h(vermieterName(b.vermieterId))}${b.abgemeldetAm ? " · abgemeldet" : ""}</span>${editable() && !b.abgemeldetAm && b.bis && b.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`;
   }
   // Kopf: Wochen + Tage
   let head = `<div class="g-corner">Trupp</div>`;
@@ -367,7 +382,7 @@ export function renderMonPlan(app) {
         }
         g.insertAdjacentHTML("beforeend", `<button type="button" class="g-bar ${mode} ${dueHere ? "has-due" : ""} ${dbl.length ? "conflict" : ""} ${e.von < days[0] ? "cut-l" : ""} ${e.bis > days[20] ? "cut-r" : ""}" data-eid="${h(e.id)}"
           style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};--lanes:${L};--lane:${li};--c:${siteColor(e)};${pad}" title="${h(M.baustelleLabel(e))}: ${h(M.longDate(e.von))} – ${h(M.longDate(e.bis))}${dbl.length ? " – DOPPELT EINGETEILT: " + h([...new Set(dbl.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}${abs.length ? " – krank/Urlaub (an diesen Tagen nicht eingeteilt): " + h([...new Set(abs.map((c) => (M.get("monteure", c.monteurId) || {}).name))].join(", ")) : ""}">
-          ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}</span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
+          ${bg}${editable() && e.von >= days[0] ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="g-bar-t"><span class="g-l1">${e.bvNumber ? `<span class="g-num">${h(e.bvNumber)}</span> <span class="g-name">${h(e.baustelle)}</span>` : `<span class="g-name only">${h(e.baustelle || "Baustelle")}</span>`}<span class="g-num3">${h(e.bvNumber ? e.bvNumber.slice(-3) : (e.baustelle || "?").slice(0, 3))}</span></span>${sub ? `<span class="g-sub">${h(sub)}</span>` : ""}</span>${bh.length ? `<span class="g-lift ${dueHere ? "due" : ""}" title="${bh.length} Bühne(n)${dueHere ? " – abmelden!" : ""}">${ICO.lift}</span><span class="g-ldot ${dueHere ? "due" : ""}"></span>` : ""}${editable() && e.bis <= days[20] ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`);
         // Überlappung: sichtbarer Griff mitten auf der Schräge (Länge ändern)
         if (editable() && mode.startsWith("join")) {
           const kn = (side) => `<div class="g-knobs" style="grid-column:${2 + s} / ${3 + en};grid-row:${gridRow};${pad}"><span class="g-knob ${side}" data-eid="${h(e.id)}" data-h="${side === "r" ? "end" : "start"}" title="Ziehen: ${side === "r" ? "Ende" : "Beginn"} ändern"></span></div>`;
@@ -550,6 +565,7 @@ export function renderMonPlan(app) {
       }
     };
     sc.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(follow); }, { passive: true });
+    markNarrow(g);
     follow();
   });
   const touch = "ontouchstart" in window;

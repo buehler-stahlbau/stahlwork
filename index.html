@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.16.3-beta" />
+  <meta name="app-version" content="3.16.4-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -315,6 +315,18 @@
     .g-bue.cut-l { border-left-width: 0; }
     .g-bar-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .g-num { font-variant-numeric: tabular-nums; }
+    /* schmale Balken: letzte 3 Ziffern der BV-Nummer, Bühne als Punkt (Griffe bleiben) */
+    .g-num3, .g-ldot { display: none; }
+    .g-bar.narrow { padding-left: 7px !important; padding-right: 7px !important; justify-content: center; }
+    .g-bar.narrow .g-bar-t { text-align: center; overflow: hidden; min-width: 0; text-overflow: clip; }
+    .g-bar.narrow .g-l1 { text-overflow: clip; letter-spacing: -.02em; }
+    .g-bar.narrow.tiny { padding: 0 !important; }
+    .g-bar.narrow.tiny .g-bar-t { display: none; }
+    .g-bar.narrow .g-l1 > :not(.g-num3), .g-bar.narrow .g-sub, .g-bar.narrow .g-lift { display: none; }
+    .g-bar.narrow .g-num3 { display: inline; font-variant-numeric: tabular-nums; font-weight: 700; font-size: .72rem; }
+    .g-bar.narrow .g-ldot { display: block; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+    .g-bar.narrow .g-ldot.due { background: var(--brand-red); box-shadow: 0 0 0 1.5px #fff; }
+    .gantt.wochen .g-bar.narrow.has-due::after { display: none; }
     .g-lift { flex: 0 0 auto; margin-left: auto; display: inline-flex; background: rgba(255,255,255,.22); border-radius: 6px; padding: 2px; }
     .g-lift .ico { width: 15px; height: 15px; }
     .g-lift.due { background: var(--brand-red); }
