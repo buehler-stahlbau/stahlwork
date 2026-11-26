@@ -440,7 +440,24 @@ async function refreshListing(root, dataDir) {
       continue;
     }
     if (p.remote.folderId !== f.item.id) {
-      if (p.remote.folderId && foundIds.has(p.remote.folderId)) continue; // doppelter Ordner – ignorieren
+      if (p.remote.folderId && foundIds.has(p.remote.folderId)) {
+        // zwei Ordner mit derselben BV-Nummer (zwei Geräte haben gleichzeitig angelegt):
+        // alle Geräte einigen sich auf denselben Ordner (kleinste ID); ein leerer zweiter Ordner wird entfernt
+        const canon = [p.remote.folderId, f.item.id].sort()[0];
+        const hasDocs = (p.docs || []).some((d) => d.remote && d.remote.folderId);
+        if (canon === f.item.id && !hasDocs && f.loc === (isActive(p) ? "active" : "archive")) {
+          const old = p.remote.folderId;
+          p.remote = { folderId: f.item.id, baseName: f.item.name, etag: null };
+          try {
+            if (!(await od.listChildren(old)).length) {
+              await od.deleteItem(old);
+              const df = await od.getChild(dataDir.id, dataFileName({ remote: { folderId: old } }));
+              if (df) await od.deleteItem(df.id);
+            }
+          } catch (e) { console.warn("doppelter Ordner", e); }
+        }
+        continue;
+      }
       p.remote = { folderId: f.item.id, baseName: f.item.name, etag: null };
     }
     if (p.remote.baseName !== f.item.name && !p.dirty) {

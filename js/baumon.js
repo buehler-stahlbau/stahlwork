@@ -40,6 +40,113 @@ function splitBuehnen(m) {
   }
   return changed;
 }
+/* ---------- Widersprüche nach dem Abgleich zweier Geräte auflösen ----------
+   (z. B. beide tragen gleichzeitig etwas ein). Ergebnis ist auf allen Geräten gleich. */
+// Dieselbe Person zweimal angelegt (gleicher Name) -> zu einer zusammenführen
+function mergeDupPeople(m) {
+  const D = m.data;
+  const byName = new Map();
+  for (const p of Object.values(D.monteure)) {
+    const k = String(p.name || "").trim().toLowerCase();
+    if (!k) continue;
+    if (!byName.has(k)) byName.set(k, []);
+    byName.get(k).push(p);
+  }
+  let changed = false;
+  const now = Date.now();
+  for (const list of byName.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => a.id.localeCompare(b.id));
+    const keep = list[0];
+    for (const dup of list.slice(1)) {
+      const rep = (id) => (id === dup.id ? keep.id : id);
+      for (const t of Object.values(D.trupps)) {
+        if (t.fuehrerId !== dup.id && !(t.monteure || []).includes(dup.id)) continue;
+        D.trupps[t.id] = { ...t, fuehrerId: t.fuehrerId ? rep(t.fuehrerId) : t.fuehrerId, monteure: [...new Set((t.monteure || []).map(rep))], updatedAt: now };
+      }
+      for (const e of Object.values(D.einsaetze)) {
+        const off = e.off || {};
+        if (!(e.monteure || []).includes(dup.id) && !off[dup.id]) continue;
+        const o2 = { ...off };
+        if (o2[dup.id]) { o2[keep.id] = [...new Set([...(o2[keep.id] || []), ...o2[dup.id]])].sort(); delete o2[dup.id]; }
+        D.einsaetze[e.id] = { ...e, monteure: [...new Set((e.monteure || []).map(rep))], off: o2, updatedAt: now };
+      }
+      for (const a of Object.values(D.abwesenheiten)) if (a.monteurId === dup.id) D.abwesenheiten[a.id] = { ...a, monteurId: keep.id, updatedAt: now };
+      if (dup.aktiv !== false && keep.aktiv === false) D.monteure[keep.id] = { ...keep, aktiv: true, updatedAt: now };
+      delete D.monteure[dup.id];
+      m.tomb[dup.id] = now;
+      changed = true;
+    }
+  }
+  // zwei Trupps desselben Richtmeisters/Malers -> einer
+  const byLead = new Map();
+  for (const t of Object.values(D.trupps)) {
+    if (!t.fuehrerId) continue;
+    if (!byLead.has(t.fuehrerId)) byLead.set(t.fuehrerId, []);
+    byLead.get(t.fuehrerId).push(t);
+  }
+  for (const list of byLead.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => a.id.localeCompare(b.id));
+    const keep = list[0];
+    let mon = [...(keep.monteure || [])];
+    for (const dup of list.slice(1)) {
+      mon = [...new Set([...mon, ...(dup.monteure || [])])];
+      for (const e of Object.values(D.einsaetze)) if (e.truppId === dup.id) D.einsaetze[e.id] = { ...e, truppId: keep.id, updatedAt: now };
+      delete D.trupps[dup.id];
+      m.tomb[dup.id] = now;
+    }
+    D.trupps[keep.id] = { ...D.trupps[keep.id], monteure: mon, name: keep.name || list.map((x) => x.name).find(Boolean) || "", updatedAt: now };
+    changed = true;
+  }
+  return changed;
+}
+// Abwesenheiten derselben Person, die sich überschneiden: der zuletzt eingetragene Eintrag gilt,
+// der ältere wird an diesen Tagen gekürzt (ggf. geteilt oder gelöscht)
+function resolveAbsences(m) {
+  const D = m.data;
+  const byP = new Map();
+  for (const a of Object.values(D.abwesenheiten)) {
+    if (!a.monteurId || !a.von || !a.bis) continue;
+    if (!byP.has(a.monteurId)) byP.set(a.monteurId, []);
+    byP.get(a.monteurId).push(a);
+  }
+  let changed = false;
+  const now = Date.now();
+  for (const list of byP.values()) {
+    if (list.length < 2) continue;
+    // neueste zuerst (bei Gleichstand: feste Reihenfolge nach ID)
+    list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || a.id.localeCompare(b.id));
+    const kept = [];
+    for (const a of list) {
+      let parts = [[a.von, a.bis]];
+      for (const k of kept) {
+        const next = [];
+        for (const [v, b] of parts) {
+          if (k.bis < v || k.von > b) { next.push([v, b]); continue; }
+          if (v < k.von) next.push([v, addDays(k.von, -1)]);
+          if (b > k.bis) next.push([addDays(k.bis, 1), b]);
+        }
+        parts = next;
+      }
+      if (parts.length === 1 && parts[0][0] === a.von && parts[0][1] === a.bis) { kept.push(a); continue; }
+      changed = true;
+      if (!parts.length) { delete D.abwesenheiten[a.id]; m.tomb[a.id] = now; continue; }
+      parts.forEach(([v, b], i) => {
+        const id = i === 0 ? a.id : `${a.id}-${i}`.slice(0, 64);
+        const rec = { ...a, id, von: v, bis: b, updatedAt: (a.updatedAt || 0) };
+        D.abwesenheiten[id] = rec;
+        kept.push(rec);
+      });
+    }
+  }
+  return changed;
+}
+function resolveConflicts(m) {
+  const a = mergeDupPeople(m);
+  const b = resolveAbsences(m);
+  return a || b;
+}
 let splitChecked = null;
 export function mon() {
   const st = S.state;
@@ -52,7 +159,7 @@ export function mon() {
   if (m.zoom === "tage") m.zoom = "personal";
   if (m.zoom === "wochen") m.zoom = "kompakt";
   if (!["kompakt", "personal", "buehnen"].includes(m.zoom)) m.zoom = "personal";
-  if (splitChecked !== m) { splitChecked = m; if (splitBuehnen(m)) { m.dirty = true; m.rev++; } }
+  if (splitChecked !== m) { splitChecked = m; if (splitBuehnen(m) | resolveConflicts(m)) { m.dirty = true; m.rev++; } }
   return m;
 }
 
@@ -596,6 +703,7 @@ function mergeRemote(m, remote) {
   for (const id of Object.keys(tomb)) if (now - tomb[id] > TOMB_MAX_AGE) delete tomb[id];
   m.tomb = tomb;
   if (splitBuehnen(m)) localNewer = true; // ältere Geräte: Anzahl > 1 aufteilen
+  if (resolveConflicts(m)) localNewer = true; // gleichzeitig auf zwei Geräten eingetragen
   const rt = (remote && remote.tomb) || {};
   if (Object.keys(tomb).some((id) => !rt[id])) localNewer = true;
   m.tomb = tomb;
