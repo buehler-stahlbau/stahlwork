@@ -191,7 +191,9 @@ export function renderKonPlan(app) {
     const flush = () => {
       if (!run) return;
       const one = run.e === run.s;
-      html += `<button type="button" class="k-st ${run.typ} ${one ? "one" : ""} ${run.s % 5 === 0 ? "wk" : ""}" data-kid="${h(k.id)}" data-day="${days[run.s]}" ${run.aid ? `data-aid="${h(run.aid)}"` : ""} style="grid-column:${2 + run.s} / ${3 + run.e};grid-row:${r} / span 2" title="${h(k.name)}: ${h(run.title)}"><span class="l">${h(ABW_LABEL[run.typ] || run.typ)}</span><span class="s">${h(ABW_ONE[run.typ] || "")}</span></button>`;
+      const rec = run.aid ? K.get("abwesenheiten", run.aid) : null;
+      const hl = rec && editable() && rec.von >= days[0], hr = rec && editable() && rec.bis <= days[last];
+      html += `<button type="button" class="k-st ${run.typ} ${one ? "one" : ""} ${run.s % 5 === 0 ? "wk" : ""}" data-kid="${h(k.id)}" data-day="${days[run.s]}" data-end="${days[run.e]}" ${run.aid ? `data-aid="${h(run.aid)}"` : ""} style="grid-column:${2 + run.s} / ${3 + run.e};grid-row:${r} / span 2" title="${h(k.name)}: ${h(run.title)}">${hl ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="l">${h(ABW_LABEL[run.typ] || run.typ)}</span><span class="s">${h(ABW_ONE[run.typ] || "")}</span>${hr ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`;
       run = null;
     };
     days.forEach((d, i) => {
@@ -396,6 +398,21 @@ function enableDrag(g, days) {
       else openZut(null, { kId: s0.kid, von: days[a], bis: days[b] });
       return;
     }
+    if (s0.abw) {
+      const a = K.get("abwesenheiten", s0.aid);
+      const delta = s0.delta || 0;
+      if (!a || !delta) { U.render(); return; }
+      let von = a.von, bis = a.bis;
+      if (s0.kind === "move") { von = K.shiftWeekdays(K.nextWeekday(a.von), delta); bis = K.shiftWeekdays(K.prevWeekday(a.bis), delta); }
+      else if (s0.kind === "start") { von = K.shiftWeekdays(K.nextWeekday(a.von), delta); if (von > a.bis) von = K.prevWeekday(a.bis); }
+      else { bis = K.shiftWeekdays(K.prevWeekday(a.bis), delta); if (bis < a.von) bis = K.nextWeekday(a.von); }
+      const ov = K.list("abwesenheiten").find((x) => x.id !== a.id && x.kId === a.kId && x.typ !== "arbeit" && x.von <= bis && x.bis >= von);
+      if (ov) { toast(`Überschneidet sich mit ${K.ABW_TYPES[ov.typ]} ${shortDate(ov.von)}–${shortDate(ov.bis)}.`, "warn", 4000); U.render(); return; }
+      K.put("abwesenheiten", { ...a, von, bis });
+      K.settle();
+      changed();
+      return;
+    }
     const z = K.get("zuteilungen", s0.zid);
     if (!z) return;
     if (s0.kind === "codes") {
@@ -427,6 +444,16 @@ function enableDrag(g, days) {
     const hd = ev.target.closest(".g-h");
     const bar = ev.target.closest(".k-bar");
     const code = ev.target.closest(".k-code");
+    const ab = !bar && !code && ev.target.closest(".k-st[data-aid]");
+    if (ab) {
+      const cols = [...g.querySelectorAll(".g-day")].map((c) => c.getBoundingClientRect());
+      st = { pid: ev.pointerId, x0: ev.clientX, y0: ev.clientY, touch: ev.pointerType !== "mouse", active: false, abw: true, aid: ab.dataset.aid, bar: ab, cols,
+        kind: hd ? hd.dataset.h : "move", s: days.indexOf(ab.dataset.day), e: days.indexOf(ab.dataset.end) };
+      st.c0 = colAt(ev.clientX);
+      if (st.touch) st.timer = setTimeout(() => { if (st && !st.active) begin(ev); }, 350);
+      else if (hd) begin(ev);
+      return;
+    }
     const bg = !bar && !code && ev.target.closest(".k-bg");
     if (bg) {
       const cols = [...g.querySelectorAll(".g-day")].map((c) => c.getBoundingClientRect());

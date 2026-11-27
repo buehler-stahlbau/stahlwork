@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.19.6-beta" />
+  <meta name="app-version" content="3.19.7-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -236,6 +236,8 @@
     .k-st { position: relative; z-index: 2; margin: 6px 3px; min-height: 0; padding: 0 6px; border: 0; border-radius: 7px; font-size: .72rem; font-weight: 700; color: #222; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .k-st .s { display: none; } .k-st.one .l { display: none; } .k-st.one .s { display: inline; } .k-st.one { padding: 0; }
     .k-st .l { overflow: hidden; text-overflow: ellipsis; }
+    .k-st .g-h::after { background: rgba(0,0,0,.3); } .k-st.urlaub .g-h::after { background: rgba(255,255,255,.7); }
+    .k-st.drag { opacity: .85; box-shadow: 0 4px 12px rgba(0,0,0,.25); z-index: 4; }
     .k-st.urlaub { background: #3aa660; color: #fff; }
     .k-st.krank { background: #f3a632; }
     .k-st.ausgleich { background: #9fd36a; }
