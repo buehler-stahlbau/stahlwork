@@ -390,6 +390,11 @@ function enableDrag(g, days) {
     else e = Math.max(st.s, st.e + delta);
     st.delta = delta;
     st.bar.style.gridColumn = `${2 + Math.max(0, s)} / ${3 + Math.min(days.length - 1, e)}`;
+    // BV-Balken auch hoch/runter zu einem anderen Konstrukteur
+    if (st.kind === "move" && st.rows) {
+      const row = st.rows.find((x) => ev.clientY >= x.top && ev.clientY < x.bottom);
+      if (row) { st.kid = row.kid; st.bar.style.gridRow = String(row.r); }
+    }
     U.$$(`.k-code[data-zid="${CSS.escape(st.zid)}"]`, g).forEach((x) => x.classList.add("ghost"));
   };
   const cancel = () => {
@@ -439,12 +444,13 @@ function enableDrag(g, days) {
       return;
     }
     const delta = s0.delta || 0;
-    if (!delta) { U.render(); return; }
+    const moveTo = s0.kind === "move" && s0.kid && s0.kid !== z.kId ? s0.kid : null;
+    if (!delta && !moveTo) { U.render(); return; }
     let next;
     if (s0.kind === "move") {
       const codes = {};
       for (const [d, c] of Object.entries(z.codes || {})) codes[K.shiftWeekdays(d, delta)] = c;
-      next = { ...z, von: K.shiftWeekdays(z.von, delta), bis: K.shiftWeekdays(z.bis, delta), codes };
+      next = { ...z, von: K.shiftWeekdays(z.von, delta), bis: K.shiftWeekdays(z.bis, delta), codes, ...(moveTo ? { kId: moveTo } : {}) };
     } else if (s0.kind === "start") {
       const v = K.shiftWeekdays(z.von, delta);
       next = { ...z, von: v > z.bis ? z.bis : v };
@@ -487,6 +493,7 @@ function enableDrag(g, days) {
     const span = U.$$(`.k-code[data-zid="${CSS.escape(zid)}"]`, g).map((c) => days.indexOf(c.dataset.day));
     st = { pid: ev.pointerId, x0: ev.clientX, y0: ev.clientY, touch: ev.pointerType !== "mouse", active: false, zid, bar: barEl, cols,
       kind: code ? "codes" : hd ? hd.dataset.h : "move", s: Math.min(...span), e: Math.max(...span) };
+    if (st.kind === "move") st.rows = U.$$(".k-name", g).map((n) => { const r = n.getBoundingClientRect(); return { kid: n.dataset.kid, top: r.top, bottom: r.bottom, r: parseInt(n.style.gridRowStart, 10) }; });
     st.c0 = colAt(ev.clientX);
     st.a = st.b = st.c0;
     if (st.touch) st.timer = setTimeout(() => { if (st && !st.active) begin(ev); }, 350);
