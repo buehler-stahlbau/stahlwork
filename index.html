@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.18.6-beta" />
+  <meta name="app-version" content="3.18.7-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -631,8 +631,8 @@
     .actions button { width: 100%; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .93rem; }
     .doc-item { display:flex; align-items:center; gap:10px; cursor:pointer; padding: 10px 14px; border-top: 1px solid var(--brand-gray-100); min-height: 58px; }
     /* Bilder speichern: dezent links neben dem PDF-Knopf */
-    .doc-img-btn { width: 36px; height: 32px; min-height: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }
-    .doc-img-btn .ico { width: 19px; height: 19px; }
+    .doc-img-btn { gap: 4px; font-size: .8rem; font-weight: 600; padding: 0 8px !important; width: auto !important; height: 32px; min-height: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }
+    .doc-img-btn .ico { width: 17px; height: 17px; }
     .doc-img-btn:disabled { opacity: .3; cursor: default; }
     @media (hover: hover) and (pointer: fine){ .doc-img-btn:not(:disabled):hover { background: var(--brand-gray-100); border-color: var(--brand-gray-200); color: var(--brand-gray-900); } }
     .doc-item.selected { background: rgba(71,70,66,.07); box-shadow: inset 3px 0 0 var(--brand-red); }
@@ -810,19 +810,31 @@
     .img-edit .ico { width: 17px; height: 17px; }
     @media (hover: hover) and (pointer: fine){ .img-edit { opacity: .7; } .image-wrapper:hover .img-edit { opacity: 1; background: rgba(255,255,255,.85); } }
     /* Zeichen-Editor (Vollbild) */
-    .draw-modal { position: fixed; inset: 0; z-index: 4000; background: #1d1c1a; display: flex; flex-direction: column; padding: calc(8px + var(--safe-top)) 8px calc(8px + var(--safe-bottom)); gap: 8px; }
-    .draw-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-    .draw-tools, .draw-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .draw-modal { position: fixed; inset: 0; z-index: 4000; background: #1d1c1a; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; grid-template-areas: "tools acts" "stage stage"; padding: calc(8px + var(--safe-top)) 8px calc(8px + var(--safe-bottom)); gap: 8px; }
+    .draw-tools { grid-area: tools; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .draw-acts { grid-area: acts; display: flex; align-items: center; gap: 8px; }
+    .draw-stage { grid-area: stage; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    /* Handy: wie in Apps üblich – unten links Abbrechen, unten rechts Speichern (PC: oben rechts) */
+    @media (max-width: 760px){
+      .draw-modal { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "tools" "stage" "acts"; }
+      .draw-tools { justify-content: center; gap: 5px; }
+      .draw-acts { justify-content: space-between; }
+      .draw-acts button { min-width: 120px; }
+    }
     .draw-col { width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); background: var(--c); cursor: pointer; }
     .draw-col.on { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+    .draw-eraser { width: 38px; height: 34px; min-height: 0; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .draw-eraser.on { background: rgba(255,255,255,.22); border-color: #fff; }
     .draw-size { width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .draw-size i { display: block; width: var(--d); height: var(--d); border-radius: 50%; background: #fff; }
     .draw-size.on { background: rgba(255,255,255,.18); border-color: #fff; }
     .draw-undo { width: 38px; height: 34px; min-height: 0; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
     .draw-undo:disabled { opacity: .35; }
     .draw-sep { width: 1px; height: 24px; background: rgba(255,255,255,.2); }
-    .draw-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .draw-stage canvas { touch-action: none; display: block; background: #fff; cursor: crosshair; }
+    .draw-canvas { position: relative; }
+    .draw-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .draw-canvas canvas.base { background: #fff; }
+    .draw-canvas canvas.ink { touch-action: none; cursor: crosshair; }
     .images img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--brand-gray-200); background: var(--brand-gray-200); cursor: zoom-in; display:block; }
     .images img.missing { opacity:.4; }
     .img-delete { position:absolute; top:-8px; right:-8px; width:26px; height:26px; min-height: 0; padding:0; background: var(--brand-red); color:#fff; border: 2px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; }
