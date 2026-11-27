@@ -242,9 +242,23 @@ async function syncAll(full) {
   // die Inhalte von BauDoc (Dokus, Fotos, PDFs, Favoriten) nur mit BauDoc-Recht
   if (rights.doc || rights.mon) firstError = await syncBauDoc(full, !!rights.doc);
   // BauMon (eigene Datei)
-  if (rights.mon) { try { await syncMon({ full }); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; } }
+  if (rights.mon) { try { await syncMon({ full }); await syncMonPdfs(); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; } }
   outboxCount = (await outboxSafe()).length;
   if (firstError) throw firstError;
+}
+
+// BauMon-PDFs (Montageplanung) -> <App-Ordner>/BauMon/Montageplanung/
+async function syncMonPdfs() {
+  const list = (await outboxSafe()).filter((o) => o.mon);
+  if (!list.length) return;
+  const appDir = await od.getAppFolder();
+  const dir = await od.ensureFolder(appDir.id, CONFIG.monFolder || "BauMon");
+  const pdfDir = await od.ensureFolder(dir.id, "Montageplanung");
+  for (const o of list) {
+    await od.uploadFile(pdfDir.id, o.name, o.blob, "application/pdf");
+    await db.outboxDelete(o.id);
+    outboxCount = Math.max(0, outboxCount - 1);
+  }
 }
 
 async function syncBauDoc(full, withContent = true) {

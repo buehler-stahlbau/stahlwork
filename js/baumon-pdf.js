@@ -6,6 +6,8 @@
 import * as M from "./baumon.js";
 import { pdfSafe, ensureLogo, logoRatio } from "./pdf.js";
 import { formatDateTimeDE } from "./util.js";
+import { creatorName } from "./store.js";
+import { getAccount } from "./onedrive.js";
 
 const RED = [202, 50, 45], DARK = [40, 40, 38], GRAY = [71, 70, 66], MUTED = [125, 124, 119], LINE = [222, 222, 219];
 const SOFT = [246, 246, 244], WE = [238, 238, 235], HOL = [250, 232, 231];
@@ -277,11 +279,12 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
   /* ---------- Fußzeile ---------- */
   const total = pdf.getNumberOfPages();
   const created = formatDateTimeDE(new Date());
+  const by = creatorName(getAccount());
   for (let n = 1; n <= total; n++) {
     pdf.setPage(n);
     hair(ML, FOOT_Y - 9, W - ML);
     font("normal", 7, MUTED);
-    pdf.text(`Stahlwork · BauMon · Stand ${created}`, ML, FOOT_Y);
+    pdf.text(`Stahlwork · BauMon · Stand ${created}${by ? " · erstellt von " + pdfSafe(by) : ""}`, ML, FOOT_Y);
     pdf.text(`Seite ${n} von ${total}`, W - ML, FOOT_Y, { align: "right" });
   }
   const blob = pdf.output("blob");

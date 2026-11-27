@@ -9,7 +9,7 @@ import * as od from "./onedrive.js";
 import { toPdfImage } from "./images.js";
 import { formatDateDE, formatDateTimeDE, sanitizeName, isoDay } from "./util.js";
 import { contentCode, sigValid, isSafeSig } from "./integrity.js";
-import { imagesOfDoc } from "./store.js";
+import { imagesOfDoc, creatorName } from "./store.js";
 
 export const PDF_MAX_BYTES = 15 * 1024 * 1024;
 const IMG_BUDGET = 13.5 * 1024 * 1024;
@@ -381,6 +381,7 @@ export async function buildPdf(p, d, onProgress = () => {}) {
   /* ---------- Fußzeile + Prüfcode auf jeder Seite ---------- */
   const total = pdf.getNumberOfPages();
   const created = formatDateTimeDE(new Date());
+  const by = creatorName(od.getAccount());
   for (let n = 1; n <= total; n++) {
     pdf.setPage(n);
     // Fußzeile nur mit Seitenzahl (Firma, BV und Titel stehen schon im Kopf)
@@ -389,7 +390,7 @@ export async function buildPdf(p, d, onProgress = () => {}) {
     pdf.text(`Seite ${n} von ${total}`, pageWidth - ML, FOOT_Y, { align: "right" });
     // Prüfcode dezent senkrecht am linken Rand
     font("normal", 6.5, [170, 170, 166]);
-    pdf.text(`BauDoc · Prüfcode ${code} · erstellt ${created}`, 22, FOOT_Y - 10, { angle: 90 });
+    pdf.text(`BauDoc · Prüfcode ${code} · erstellt ${created}${by ? " von " + pdfSafe(by) : ""}`, 22, FOOT_Y - 10, { angle: 90 });
   }
   color(DARK);
 

@@ -249,6 +249,12 @@ export function moveLocal(p, loc) {
   }
 }
 
+// Name für „erstellt von“ in PDFs (Microsoft-Profil, sonst Anmeldekonto)
+export function creatorName(account) {
+  const p = (S.state && S.state.prefs && S.state.prefs.profile) || {};
+  return String(p.name || (account && account.name) || "").trim();
+}
+
 export function imagesOfDoc(d) {
   const out = [];
   for (const e of d.entries || []) for (const i of e.images || []) out.push(i);

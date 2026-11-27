@@ -23,7 +23,7 @@ import { makeZip } from "./zip.js";
 import { editImage } from "./draw.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast, sanitizeName } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
-import { dueBuehnen, autoSignature } from "./baumon.js";
+import { dueBuehnen, autoSignature, canEdit as monCanEdit } from "./baumon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -2046,7 +2046,7 @@ async function exportPdf(pid, did) {
   }
 }
 
-function openPdfPreview(blob, filename, shareText = "") {
+function openPdfPreview(blob, filename, shareText = "", stored = od.isConfigured()) {
   if (lastPdf.url) { try { URL.revokeObjectURL(lastPdf.url); } catch {} }
   lastPdf = { blob, url: URL.createObjectURL(blob), name: filename };
 
@@ -2055,7 +2055,7 @@ function openPdfPreview(blob, filename, shareText = "") {
   const pages = $("#pdfPages");
   $("#pdfName").textContent = filename;
   $("#pdfSize").textContent = `${(blob.size / 1048576).toFixed(1)} MB` +
-    (od.isConfigured() ? " · wird in OneDrive abgelegt" : "");
+    (stored ? " · wird in OneDrive abgelegt" : "");
   modal.style.display = "block";
   document.body.style.overflow = "hidden";
   if (isTouch) {
@@ -2573,7 +2573,12 @@ function versionMismatch() {
   window.__bootStep = "Anzeige aufbauen";
   setupGlobalSearch();
   setupDrawer();
-  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initMonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, storeMonPdf: async (blob, name) => {
+    // Montageplanung in OneDrive ablegen (BauMon/Montageplanung); nur wer BauMon bearbeiten darf
+    if (!od.isConfigured() || !od.getAccount() || !monCanEdit()) return false;
+    try { await db.outboxPut({ id: "monpdf:" + name, mon: true, name, blob }); } catch { return false; }
+    await sync.updateOutboxCount(); sync.schedule(800); return true;
+  }, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   let rightsKey = JSON.stringify(S.state.rights);
   sync.onStatus(() => {
     updateSyncChip(); updateAuthBar();

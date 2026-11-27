@@ -594,7 +594,8 @@ function openPlanPdf() {
           assignColors(M.list("einsaetze").filter((e) => e.bis >= from.value && e.von <= pEnd));
           const { blob, filename } = await buildPlanPdf({ colorOf: (x) => M.colorOf(x), start: from.value, weeks: n });
           U.busy(null);
-          U.openPdf(blob, filename, "Montageplanung");
+          const stored = await U.storeMonPdf(blob, filename);
+          U.openPdf(blob, filename, "Montageplanung", stored);
         } catch (e) {
           U.busy(null);
           toast("PDF konnte nicht erstellt werden: " + (e.message || e), "error", 8000);
