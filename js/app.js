@@ -18,8 +18,9 @@ import { captureFromWebcam, hasWebcam, isMobileDevice } from "./camera.js";
 import { contentCode, sigValid, validSignatures, normalizeCode, isSafeSig } from "./integrity.js";
 import { searchPlaces, geoValid, loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from "./geo.js";
 import { processFile, makeThumb } from "./images.js";
-import { buildPdf, PDF_MAX_BYTES } from "./pdf.js";
-import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast } from "./util.js";
+import { buildPdf, PDF_MAX_BYTES, sourceBlob } from "./pdf.js";
+import { makeZip } from "./zip.js";
+import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast, sanitizeName } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
 
@@ -1529,6 +1530,7 @@ function renderDocEditor(container, p, d) {
 
       <div class="row wrap doc-footer">
         <button class="danger-outline" id="delDoc" type="button">Doku löschen</button>
+        ${imagesOfDoc(d).length && !isTouch ? `<button class="secondary" id="imgDoc" type="button" title="${window.showDirectoryPicker ? "Ordner wählen – Fotos einzeln dort ablegen" : "Fotos als ZIP-Datei herunterladen"}">Bilder speichern</button>` : ""}
         <button class="primary" id="pdfDoc" type="button">PDF erstellen</button>
       </div>
     </div>`);
@@ -1536,6 +1538,7 @@ function renderDocEditor(container, p, d) {
 
   $("#closeDoc").onclick = () => go({ selectedDocId: null }, { scroll: false });
   $("#pdfDoc").onclick = () => exportPdf(p.id, d.id);
+  const imgBtn = $("#imgDoc"); if (imgBtn) imgBtn.onclick = () => exportImages(p.id, d.id);
   $("#delDoc").onclick = () => deleteDoc(p.id, d.id);
 
   const titleEl = $("#docTitle");
@@ -1912,6 +1915,56 @@ document.addEventListener("click", (e) => {
    PDF
 ========================================================= */
 let lastPdf = { blob: null, url: null, name: "dokumentation.pdf" };
+
+/* ---------- Bilder einer Doku speichern ----------
+   Nur am PC. Edge/Chrome: Ordner im Explorer wählen (auch Netzlaufwerk/Server) -> Fotos einzeln als JPG dort ablegen.
+   Firefox: eine ZIP-Datei. Die Fotos bleiben in OneDrive. */
+async function exportImages(pid, did) {
+  const p = findProject(pid);
+  const d = p && (p.docs || []).find((x) => x.id === did);
+  if (!d) return;
+  const imgs = imagesOfDoc(d);
+  if (!imgs.length) { toast("Diese Doku hat keine Fotos.", "info"); return; }
+  const base = sanitizeName(`${p.number} ${d.title || "Dokumentation"} ${String(d.date || "").slice(0, 10)}`.trim());
+  const nameOf = (i) => `${base} - ${String(i + 1).padStart(2, "0")}.jpg`;
+  // Ordnerauswahl muss direkt auf den Klick folgen (vor jedem anderen „await“)
+  let dir = null;
+  if (window.showDirectoryPicker) {
+    try { dir = await window.showDirectoryPicker({ id: "stahlwork-bilder", mode: "readwrite", startIn: "pictures" }); }
+    catch (e) { if (e && e.name === "AbortError") return; console.warn("Ordnerauswahl", e); dir = null; }
+  }
+  const files = [];
+  let missing = 0, done = 0;
+  try {
+    for (let i = 0; i < imgs.length; i++) {
+      setBusy(`Bild ${i + 1}/${imgs.length} wird geladen …`);
+      const blob = await sourceBlob(imgs[i]);
+      if (!blob) { missing++; continue; }
+      const name = nameOf(i);
+      if (dir) {
+        // vorhandene Datei nicht überschreiben -> „… (2).jpg“
+        let n = name, k = 2;
+        while (true) { try { await dir.getFileHandle(n); n = name.replace(/\.jpg$/, ` (${k++}).jpg`); } catch { break; } }
+        const fh = await dir.getFileHandle(n, { create: true });
+        const w = await fh.createWritable();
+        await w.write(blob); await w.close();
+        done++;
+      } else files.push(new File([blob], name, { type: "image/jpeg" }));
+    }
+    if (!dir && files.length) {
+      // Firefox u. a. (kein Ordnerzugriff): eine ZIP-Datei
+      const zip = await makeZip(files.map((f) => ({ name: f.name, blob: f })), (i, n) => setBusy(`ZIP wird erstellt: ${i + 1}/${n} …`));
+      const url = URL.createObjectURL(zip);
+      const a = document.createElement("a"); a.href = url; a.download = `${base} - Bilder.zip`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      done = files.length;
+    }
+  } catch (e) {
+    toast("Bilder speichern fehlgeschlagen: " + (e.message || e), "error", 8000);
+    return;
+  } finally { setBusy(null); }
+  toast(`${done} Bild(er) gespeichert${dir ? ` in „${dir.name}“` : " (ZIP-Datei im Download-Ordner)"}.${missing ? ` ${missing} nicht verfügbar (offline?).` : ""}`, missing ? "warn" : "info", 6000);
+}
 
 async function exportPdf(pid, did) {
   const p = findProject(pid);

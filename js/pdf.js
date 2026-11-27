@@ -48,7 +48,7 @@ export async function ensureLogo() {
   return logoDataURL;
 }
 
-async function sourceBlob(img) {
+export async function sourceBlob(img) {
   const rec = await db.imgGet(img.id);
   if (rec && rec.archive) return rec.archive;
   if (img.rid && od.isSignedIn() && navigator.onLine) {
