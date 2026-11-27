@@ -659,10 +659,11 @@ export function renderKonPersonal(app) {
   const t = K.today();
   app.appendChild(U.el(`<div class="page-head"><h1>Personal</h1>${ro ? "" : `<button class="primary" id="konPNew" type="button">+ Neu</button>`}</div>`));
   const pn = U.$("#konPNew"); if (pn) pn.onclick = () => editPerson(null);
-  // Abwesenheit (aktuell + kommend)
-  const abw = K.list("abwesenheiten").filter((a) => a.typ !== "arbeit" && a.bis >= t && K.get("konstrukteure", a.kId)).sort((a, b) => a.von.localeCompare(b.von));
+  // Abwesenheit: laufende und kommende (plus die letzten 14 Tage) – Darstellung wie BauMon
+  const abw = K.list("abwesenheiten").filter((a) => a.typ !== "arbeit" && a.bis >= addDays(t, -14) && K.get("konstrukteure", a.kId)).sort((a, b) => a.von.localeCompare(b.von));
   const aCard = U.el(`<div class="card list-card"><div class="card-head"><h3 class="section-title">Abwesenheit</h3>${ro ? "" : `<div class="row"><button type="button" class="secondary small" id="konBU">Betriebsurlaub</button><button type="button" class="secondary small" id="konAbwNew">+ Abwesenheit</button></div>`}</div>
-    ${abw.length ? `<div class="mon-abw-list kon-abw-list">${abw.map((a) => `<button type="button" class="mon-abw-chip" data-aid="${h(a.id)}"><b>${h(K.get("konstrukteure", a.kId).name)}</b> · <span class="abw-tag">${K.ABW_TYPES[a.typ]}</span> ${h(shortDate(a.von))}${a.bis !== a.von ? "–" + h(shortDate(a.bis)) : ""}</button>`).join("")}</div>` : `<p class="muted">Niemand abwesend eingetragen.</p>`}</div>`);
+    ${abw.map((a) => `<button type="button" class="mon-brow ${a.von <= t && a.bis >= t ? "now" : ""}" data-aid="${h(a.id)}"><span class="mon-brow-main"><b>${h(K.get("konstrukteure", a.kId).name)}</b> · <span class="abw-tag ${a.typ}">${K.ABW_TYPES[a.typ]}</span></span>
+      <span class="muted">${h(wdName(a.von))} ${h(shortDate(a.von))} – ${h(wdName(a.bis))} ${h(shortDate(a.bis))}${a.notiz ? " · " + h(a.notiz) : ""}${a.bis < t ? " · vorbei" : ""}</span></button>`).join("") || `<p class="muted">Niemand abwesend eingetragen.</p>`}</div>`);
   app.appendChild(aCard);
   const an = aCard.querySelector("#konAbwNew"); if (an) an.onclick = () => openAbw(null);
   const bu = aCard.querySelector("#konBU"); if (bu) bu.onclick = () => openBetriebsurlaub();
