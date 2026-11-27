@@ -1016,7 +1016,7 @@ function quickMenu(x, y, pid, day, card) {
       <button type="button" data-q="del" class="qm-danger">${M.ABW_TYPES[a.typ]} löschen</button>`
     : `<button type="button" data-q="krank">Krank – dieser Tag</button>
       <button type="button" data-q="urlaub">Urlaub – dieser Tag</button>
-      <button type="button" data-q="ausgleich">Ausgleich (Überstunden) – dieser Tag</button>
+      <button type="button" data-q="ausgleich">Ausgleich – dieser Tag</button>
       <button type="button" data-q="range">Abwesenheit mit Zeitraum …</button>`}</div>`);
   document.body.appendChild(menu);
   const r = menu.getBoundingClientRect();
