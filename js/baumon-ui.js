@@ -947,7 +947,7 @@ function chipPicker(all, selected) {
   const draw = () => {
     box.innerHTML = all.map((x) => {
       const b = busy.get(x.id);
-      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="${h(b.title)}"` : ""}>${h(x.name)}${x.rm ? ' <span class="p-badge">RM</span>' : x.maler ? ' <span class="p-badge">Maler</span>' : ""}${b ? ` <small>· ${h(b.label)}</small>` : ""}</button>`;
+      return `<button type="button" class="chip ${sel.has(x.id) ? "on" : ""} ${b ? "busy" : ""}" data-id="${h(x.id)}" ${b ? `title="${h(b.title)}"` : ""}>${h(x.name)}${x.rm ? ' <span class="p-badge">RM</span>' : x.maler ? ' <span class="p-badge">Maler</span>' : ""}${b && b.label ? ` <small>· ${h(b.label)}</small>` : ""}</button>`;
     }).join("") || `<span class="muted">Noch keine Monteure angelegt.</span>`;
     U.$$(".chip", box).forEach((c) => { c.onclick = () => { sel.has(c.dataset.id) ? sel.delete(c.dataset.id) : sel.add(c.dataset.id); draw(); }; });
   };
@@ -1550,7 +1550,7 @@ function editTrupp(t) {
     if (o.id === cur.id || M.isMalerTrupp(o)) continue;
     for (const id of new Set([o.fuehrerId, ...(o.monteure || [])].filter(Boolean))) if (!inOther.has(id)) inOther.set(id, o);
   }
-  chips.setBusy(new Map([...inOther].map(([id, o]) => [id, { label: M.truppName(o), title: "schon im Trupp " + M.truppName(o) }])));
+  chips.setBusy(new Map([...inOther].map(([id, o]) => [id, { label: "", title: "schon im Trupp " + M.truppName(o) }])));
   const save = () => {
     const fuehrerId = fsel.value || null;
     const name = body.querySelector(".f-name").value.trim();
