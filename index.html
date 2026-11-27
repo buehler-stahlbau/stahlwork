@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.18.13-beta" />
+  <meta name="app-version" content="3.19.0-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -192,7 +192,70 @@
     body.sparte-mon .search-wrap, body.sparte-mon #searchBtn { display: none !important; }
     /* Einstellungen: neutrale Kopfzeile (keine Reiter der Sparten) */
     body.view-settings .tabs, body.view-settings .search-wrap, body.view-settings #searchBtn { display: none !important; }
-    @media (min-width: 1051px){ #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { width: 184px; } }
+    @media (min-width: 1051px){ #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal, #tabKonPlan, #tabKonPersonal { width: 184px; } }
+    @media (max-width: 520px){ .rights-card .r-row { grid-template-columns: minmax(0, 1fr) 46px 46px 46px 40px; gap: 4px; } .rights-card .r-head { font-size: .7rem; } }
+    /* BauKon: eigene Reiter */
+    #tabKonPlan, #tabKonPersonal { display: none; }
+    body.sparte-kon #tabKonPlan, body.sparte-kon #tabKonPersonal { display: inline-flex; }
+    body.sparte-kon #tabProjects, body.sparte-kon #tabFav, body.sparte-kon #tabMap, body.sparte-kon #tabArchive,
+    body.sparte-kon .search-wrap, body.sparte-kon #searchBtn { display: none !important; }
+
+    /* ===== BauKon – Planung (Mo–Fr, zwei Zeilen je BV-Balken) ===== */
+    .gantt.kon { --k1: 30px; --k2: 22px; grid-template-columns: 140px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(140px + var(--days) * 38px); }
+    @media (max-width: 600px){ .gantt.kon { grid-template-columns: 92px repeat(var(--days), minmax(34px, 1fr)); min-width: calc(92px + var(--days) * 34px); } .gantt.kon .k-name { padding: 4px 6px; } .gantt.kon .g-corner { padding: 6px; font-size: .7rem; } }
+    .gantt.kon .g-week.wk, .gantt.kon .g-day.wk, .gantt.kon .k-bg.wk { border-left: 2px solid #8f8d87; }
+    .gantt.kon .k-name { border-top: 1px solid var(--brand-gray-200); border-bottom: 0; }
+    .gantt.kon .k-name { flex-direction: row; align-items: center; justify-content: flex-start; gap: 5px; }
+    .gantt.kon .k-name b { min-width: 0; }
+    .gantt.kon .k-bdg { display: inline-flex; gap: 3px; flex: 0 0 auto; }
+    .gantt.kon .k-name .p-badge { font-size: .62rem; padding: 0 4px; }
+    @media (max-width: 600px){ .gantt.kon .k-name { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; } .gantt.kon .k-name b { font-size: .8rem; max-width: 100%; } }
+    .k-bg { border-left: 1px solid var(--brand-gray-100); border-top: 1px solid var(--brand-gray-200); cursor: pointer; }
+    .k-bg.today { background: var(--brand-primary-soft); }
+    @media (hover: hover) and (pointer: fine){ .k-bg:hover { background: rgba(46,91,138,.06); } }
+    .k-bar { position: relative; z-index: 1; margin: 4px 1px 0; min-height: 0; padding: 0 8px; border: 0; border-radius: 6px 6px 0 0; font-size: .74rem; font-weight: 700; text-align: left; display: flex; align-items: center; overflow: hidden; white-space: nowrap; cursor: pointer; color: #222; }
+    .k-bar-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .k-bar-t small { font-weight: 500; font-size: .68rem; color: rgba(0,0,0,.62); }
+    .k-code { position: relative; z-index: 1; margin: 0 0 3px; display: flex; align-items: center; justify-content: center; font-size: .74rem; font-weight: 800; color: #222; cursor: pointer; user-select: none; -webkit-user-select: none; box-shadow: inset 1px 0 0 rgba(255,255,255,.45); }
+    .k-code.first { margin-left: 1px; border-bottom-left-radius: 6px; box-shadow: none; }
+    .k-code.last { margin-right: 1px; border-bottom-right-radius: 6px; }
+    .k-bar.cut-l { border-top-left-radius: 0; margin-left: 0; } .k-bar.cut-r { border-top-right-radius: 0; margin-right: 0; }
+    /* Farben: Stahlbau grau, Rohbau braunrot – Ton im Wechsel je BV; Platzhalter weiß */
+    .k-bar.stahl.t0, .k-code.stahl.t0 { background: #d6d5d1; } .k-bar.stahl.t1, .k-code.stahl.t1 { background: #b8b6b0; }
+    .k-bar.roh.t0, .k-code.roh.t0 { background: #ecc0ba; } .k-bar.roh.t1, .k-code.roh.t1 { background: #d6958d; }
+    .k-bar.ph, .k-code.ph { background: #fff; border: 1.5px solid #9a9893; }
+    .k-bar.ph { border-bottom: 0; } .k-code.ph { border-top: 1px dashed #c9c7c2; border-left: 0; border-right: 0; box-shadow: none; }
+    .k-code.ph.first { border-left: 1.5px solid #9a9893; } .k-code.ph.last { border-right: 1.5px solid #9a9893; }
+    .k-code.ph:empty::after { content: "+"; color: #b3b1ab; font-weight: 600; }
+    .k-code.sel { outline: 2px solid var(--brand-primary); outline-offset: -2px; z-index: 2; }
+    .k-code.ghost { opacity: .35; }
+    .k-bar.drag { opacity: .85; box-shadow: 0 4px 12px rgba(0,0,0,.25); z-index: 3; }
+    .k-bar .g-h::after { background: rgba(0,0,0,.3); }
+    @media (hover: hover) and (pointer: fine){ .k-code:hover { filter: brightness(.94); } }
+    /* Abwesenheit, Schule, Teilzeit-frei, Feiertag: farbig über beiden Zeilen */
+    .k-st { position: relative; z-index: 2; margin: 2px 1px; min-height: 0; padding: 0 6px; border: 0; border-radius: 6px; font-size: .72rem; font-weight: 700; color: #222; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .k-st .s { display: none; } .k-st.one .l { display: none; } .k-st.one .s { display: inline; } .k-st.one { padding: 0; }
+    .k-st .l { overflow: hidden; text-overflow: ellipsis; }
+    .k-st.urlaub { background: #3aa660; color: #fff; }
+    .k-st.krank { background: #f3a632; }
+    .k-st.ausgleich { background: #9fd36a; }
+    .k-st.schule { background: #ffe03a; }
+    .k-st.frei { background: repeating-linear-gradient(135deg, #bfe0ee 0 5px, #dceef6 5px 10px); color: #2c5a6e; font-weight: 600; }
+    .k-st.feiertag { background: #5cb6e6; color: #fff; cursor: default; }
+    .gantt.kon .g-day.hol { background: #5cb6e6; } .gantt.kon .g-day.hol b, .gantt.kon .g-day.hol .g-hol, .gantt.kon .g-day.hol { color: #fff; }
+    body.dragging, body.dragging * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
+    /* Schnellmenü: Kürzel als Knöpfe */
+    .kon-menu .qm-codes { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 6px; }
+    .kon-menu .qm-codes button { min-width: 38px; min-height: 36px; padding: 0; text-align: center; font-weight: 800; border: 1px solid var(--brand-gray-200); border-radius: 8px; background: #fff; }
+    .kon-menu .qm-codes button.on { background: var(--brand-primary); color: #fff; border-color: var(--brand-primary); }
+    .kon-menu .qm-sub { padding: 4px 10px 0; font-size: .7rem; font-weight: 700; color: var(--brand-gray-500); text-transform: uppercase; letter-spacing: .05em; }
+    .kon-menu .qm-sep { height: 1px; background: var(--brand-gray-100); margin: 4px 6px; }
+    /* Personal: Rhythmus (Schultage, freie Tage) */
+    .rh-box { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+    .rh-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .rh-row .rh-l { width: 70px; font-size: .8rem; color: var(--brand-gray-500); }
+    .rh-row .chip { min-width: 40px; justify-content: center; }
+    .rh-seg { align-self: flex-start; }
     body.locked .menu-btn { display: none; }
     .drawer { position: fixed; inset: 0; z-index: 2000; }
     .drawer[hidden] { display: none; }
@@ -221,7 +284,7 @@
     .drawer-item.disabled { opacity: .45; cursor: not-allowed; }
     .drawer-item.disabled .d-ico { filter: grayscale(1); }
     /* Benutzer und Rechte */
-    .rights-card .r-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 44px; align-items: center; gap: 6px; padding: 8px 0; border-top: 1px solid var(--brand-gray-100); }
+    .rights-card .r-row { display: grid; grid-template-columns: minmax(0, 1fr) 60px 60px 60px 44px; align-items: center; gap: 6px; padding: 8px 0; border-top: 1px solid var(--brand-gray-100); }
     .rights-card .r-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rights-card .r-row > span:not(:first-child) { text-align: center; }
     .rights-card .r-head { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--brand-gray-500); border-top: 0; }
@@ -976,6 +1039,8 @@
         <button id="tabMonPlan" class="tab" type="button" title="Planung" aria-label="Planung"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg><span class="label">Planung</span></button>
         <button id="tabMonBuehnen" class="tab" type="button" title="Bühnen" aria-label="Bühnen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v4M19 3v4M4 3h16M3 7.5h18M6 8l12 7M18 8L6 15"/><rect x="3" y="15" width="18" height="3.5" rx="1" fill="currentColor"/><circle cx="7" cy="20.5" r="1.6"/><circle cx="17" cy="20.5" r="1.6"/></svg><span class="label">Bühnen</span><span class="cnt due" id="cntMonB"></span></button>
         <button id="tabMonPersonal" class="tab" type="button" title="Personal" aria-label="Personal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-6 6.5-6s5.9 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14c2.7.2 4.6 2.3 5 5"/></svg><span class="label">Personal</span></button>
+        <button id="tabKonPlan" class="tab" type="button" title="Planung" aria-label="Planung"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg><span class="label">Planung</span></button>
+        <button id="tabKonPersonal" class="tab" type="button" title="Personal" aria-label="Personal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-6 6.5-6s5.9 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14c2.7.2 4.6 2.3 5 5"/></svg><span class="label">Personal</span></button>
         <button id="tabProjects" class="tab" type="button" title="Bauvorhaben" aria-label="Bauvorhaben"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M10 21v-5h4v5"/><path d="M9 10h1M14 10h1M9 13h1M14 13h1"/></svg><span class="label">Bauvorhaben</span><span class="cnt" id="cntProjects"></span></button>
         <button id="tabFav" class="tab" type="button" title="Favoriten" aria-label="Favoriten"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.9 6.2.7-4.6 4.3 1.2 6.1L12 17l-5.6 3 1.2-6.1L3 9.6l6.2-.7z"/></svg><span class="label">Favoriten</span><span class="cnt" id="cntFav"></span></button>
         <button id="tabArchive" class="tab" type="button" title="Archiv" aria-label="Archiv"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg><span class="label">Archiv</span><span class="cnt" id="cntArchive"></span></button>

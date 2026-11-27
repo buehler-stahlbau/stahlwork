@@ -31,7 +31,7 @@ function defaultState() {
     remote: { rootId: null, pendingFolderDeletes: [] },
     prefs: { favUpdatedAt: 0, rev: 0, dirty: false }, // Favoriten je Nutzer
     accountId: null,
-    sparte: "doc", // "doc" = BauDoc, "mon" = BauMon
+    sparte: "doc", // "doc" = BauDoc, "mon" = BauMon, "kon" = BauKon
     rights: null,      // eigene Rechte in der gemeinsamen Ablage { doc, mon, admin }
     rightsData: null,  // Rechte-Datei (für Verwalter)
     rightsDirty: false,
@@ -125,15 +125,18 @@ export async function load() {
     S.state = Object.assign(def, saved);
     S.state.remote = Object.assign(defaultState().remote, saved.remote || {});
     S.state.prefs = Object.assign(defaultState().prefs, saved.prefs || {});
-    if (!["doc", "mon"].includes(S.state.sparte)) S.state.sparte = "doc";
+    if (!["doc", "mon", "kon"].includes(S.state.sparte)) S.state.sparte = "doc";
     for (const k of ["codeIndex", "codeIndexPending"]) {
       if (!S.state[k] || typeof S.state[k] !== "object" || Array.isArray(S.state[k])) S.state[k] = {};
     }
     if (!Array.isArray(S.state.mapRemove)) S.state.mapRemove = [];
     const MON_VIEWS = ["mon", "monplan", "monbuehnen", "monpersonal"];
     if (S.state.view === "monstamm") { S.state.sparte = "mon"; S.state.view = S.state.monStamm === "vermieter" ? "monbuehnen" : "monpersonal"; } // früher: Stammdaten in den Einstellungen
-    if (!["projects", "favorites", "map", "archive", "settings", ...MON_VIEWS].includes(S.state.view)) S.state.view = "projects";
-    if (S.state.sparte === "doc" && MON_VIEWS.includes(S.state.view)) S.state.view = "projects";
+    const KON_VIEWS = ["konplan", "konpersonal"];
+    if (!["projects", "favorites", "map", "archive", "settings", ...MON_VIEWS, ...KON_VIEWS].includes(S.state.view)) S.state.view = "projects";
+    if (S.state.sparte === "doc" && [...MON_VIEWS, ...KON_VIEWS].includes(S.state.view)) S.state.view = "projects";
+    if (S.state.sparte === "kon" && !KON_VIEWS.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "konplan";
+    if (S.state.sparte === "mon" && KON_VIEWS.includes(S.state.view)) S.state.view = "mon";
     if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "mon";
     allProjects().forEach(normalizeProject);
     if (migrated) await saveNow();

@@ -24,6 +24,8 @@ import { editImage } from "./draw.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast, sanitizeName } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature, canEdit as monCanEdit } from "./baumon.js";
+import { initKonUI, renderKonPlan, renderKonPersonal, searchKon, openKonHit, openBVinKon, konInfo } from "./baukon-ui.js";
+import { canEdit as konCanEdit } from "./baukon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -92,8 +94,8 @@ window.addEventListener("popstate", (e) => {
   const s = e.state;
   if (!s) return;
   closeDrawer();
-  S.state.sparte = s.sp === "mon" ? "mon" : "doc";
-  S.state.view = s.view || (S.state.sparte === "mon" ? "mon" : "projects");
+  S.state.sparte = ["mon", "kon"].includes(s.sp) ? s.sp : "doc";
+  S.state.view = s.view || START_VIEW[S.state.sparte];
   S.state.selectedProjectId = s.pid || null;
   S.state.selectedDocId = s.did || null;
   saveSoon();
@@ -246,7 +248,7 @@ let loginError = "";
 /* ---------- Gemeinsame Ablage: Rechte ----------
    Eigenes OneDrive = alles. Gemeinsame Ablage = Rechte aus rechte.json (beim Abgleich geladen). */
 function currentRights() {
-  if (!od.isConfigured() || !od.getAblage()) return { doc: true, mon: true, admin: true, owner: true };
+  if (!od.isConfigured() || !od.getAblage()) return { doc: true, mon: true, kon: true, admin: true, owner: true };
   return S.state.rights || null;
 }
 function renderAccessPage(app, kind) {
@@ -359,6 +361,9 @@ function render() {
 }
 
 const MON_VIEWS_UI = ["mon", "monplan", "monbuehnen", "monpersonal"];
+const KON_VIEWS_UI = ["konplan", "konpersonal"];
+const START_VIEW = { doc: "projects", mon: "mon", kon: "konplan" };
+const VIEWS_OF = { doc: ["projects", "favorites", "archive"], mon: MON_VIEWS_UI, kon: KON_VIEWS_UI };
 function renderInner() {
   pendingRender = false;
   if (S.state.view !== "archive" || S.state.selectedProjectId) filterText = "";
@@ -374,14 +379,19 @@ function renderInner() {
   if (locked) { renderLogin(app); return; }
   // gemeinsame Ablage: erst Zugriff prüfen
   const rights = currentRights();
-  if (!rights || (!rights.doc && !rights.mon) || (od.getAblage() && od.getAuthError())) {
+  if (!rights || (!rights.doc && !rights.mon && !rights.kon) || (od.getAblage() && od.getAuthError())) {
     document.body.classList.add("locked");
     renderAccessPage(app, !rights && !od.getAuthError() ? "checking" : "none");
     return;
   }
-  // Sparte ohne Recht -> auf die erlaubte wechseln
-  if (S.state.sparte === "mon" && !rights.mon) { S.state.sparte = "doc"; if (MON_VIEWS_UI.includes(S.state.view)) S.state.view = "projects"; }
-  if (S.state.sparte === "doc" && !rights.doc) { S.state.sparte = "mon"; if (!MON_VIEWS_UI.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "mon"; }
+  // Sparte ohne Recht -> auf die erste erlaubte wechseln
+  if (!rights[S.state.sparte]) {
+    const sp = ["doc", "mon", "kon"].find((x) => rights[x]);
+    S.state.sparte = sp;
+    if (!["settings", "map"].includes(S.state.view)) S.state.view = START_VIEW[sp];
+  }
+  // Ansicht passt nicht zum Modul (z. B. nach dem Wechsel) -> Startansicht des Moduls
+  if (!["settings", "map"].includes(S.state.view) && !VIEWS_OF[S.state.sparte].includes(S.state.view)) S.state.view = START_VIEW[S.state.sparte];
   updateHeader();
   const st = S.state;
 
@@ -392,6 +402,10 @@ function renderInner() {
     else if (st.view === "monbuehnen") renderMonBuehnen(app);
     else if (st.view === "monpersonal") renderMonPersonal(app);
     else renderMonStart(app);
+  }
+  else if (st.sparte === "kon") {
+    if (st.view === "konpersonal") renderKonPersonal(app);
+    else renderKonPlan(app);
   }
   else if (st.view === "archive") renderArchive(app);
   else if (st.view === "settings") renderSettings(app);
@@ -417,9 +431,12 @@ function updateHeader() {
     tabMonPlan: "monplan",
     tabMonBuehnen: "monbuehnen",
     tabMonPersonal: "monpersonal",
+    tabKonPlan: "konplan",
+    tabKonPersonal: "konpersonal",
   };
   const inSettings = st.view === "settings" || st.view === "map"; // spartenübergreifend: Stahlwork-Logo
   document.body.classList.toggle("sparte-mon", st.sparte === "mon");
+  document.body.classList.toggle("sparte-kon", st.sparte === "kon");
   document.body.classList.toggle("view-settings", inSettings); // Einstellungen gehören zu keiner Sparte
   // oben rechts: Logo der aktuellen Sparte, in den Einstellungen das Stahlwork-Logo
   const sp = SPARTEN.find((x) => x.id === st.sparte) || SPARTEN[0];
@@ -474,7 +491,7 @@ function openDrawer() {
       if (!(currentRights() || {})[sp]) { toast("Für dieses Modul hast du keine Berechtigung.", "warn", 3500); return; }
       closeDrawer();
       if (sp === st.sparte && !["settings", "map"].includes(st.view)) { window.scrollTo(0, 0); return; }
-      go({ sparte: sp, view: sp === "mon" ? "mon" : "projects", selectedProjectId: null, selectedDocId: null });
+      go({ sparte: sp, view: START_VIEW[sp], selectedProjectId: null, selectedDocId: null });
     };
   });
   $("#drawerMap").classList.toggle("active", st.view === "map");
@@ -534,6 +551,7 @@ function buildSearch(q) {
   if (rr.doc) groups.push({ title: "Dokumentationen", items: docs.map(({ p, d }) => ({ label: d.title, sub: `${pLabel(p)} · ${formatDateDE(d.date)}`, act: () => go({ sparte: "doc", view: "projects", selectedProjectId: p.id, selectedDocId: d.id }) })) });
   if (rr.doc) groups.push({ title: "Archiv", items: sorted(st.archivedProjects.filter((p) => hit(pText(p)))).map((p) => ({ label: pLabel(p), sub: pSub(p), tag: "Archiv", act: () => { go({ sparte: "doc", view: "archive", selectedProjectId: null, selectedDocId: null }); filterText = p.number; render(); } })) });
   if (rr.mon) for (const g of searchMon(words)) groups.push({ title: g.title, items: g.items.map((x) => ({ ...x, act: () => openSearchHit(x.kind, x.id) })) });
+  if (rr.kon) for (const g of searchKon(words)) groups.push({ title: g.title, items: g.items.map((x) => ({ ...x, act: () => openKonHit(x.kind, x.id) })) });
   return groups.filter((g) => g.items.length);
 }
 function renderSearch() {
@@ -1194,14 +1212,16 @@ function renderMap(app) {
         const arch = st.archivedProjects.includes(p);
         const mon = rr.mon ? monInfo(p.number) : null;
         const monBtn = rr.mon && p.number;
+        const kon = rr.kon && p.number ? konInfo(p.number) : null;
         return `<div class="mp-row"><div class="mp-name">${p.fav && !arch ? '<span class="star">★</span>' : ""}<span class="bv-num">${h(p.number)}</span> ${h(p.client || p.title)}${arch ? ' <span class="arch-tag">Archiv</span>' : ""}</div>
-          ${mon ? `<div class="mp-sub">${h(mon.text)}</div>` : ""}
-          <div class="mp-acts">${rr.doc ? `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">BauDoc</button>` : ""}${monBtn ? `<button type="button" data-monbv="${h(p.number)}" data-montitle="${h(p.title)}">BauMon</button>` : ""}</div></div>`;
+          ${mon ? `<div class="mp-sub">${h(mon.text)}</div>` : ""}${kon ? `<div class="mp-sub">${h(kon.text)}</div>` : ""}
+          <div class="mp-acts">${rr.doc ? `<button type="button" data-pid="${h(p.id)}" data-arch="${arch ? 1 : ""}">BauDoc</button>` : ""}${monBtn ? `<button type="button" data-monbv="${h(p.number)}" data-montitle="${h(p.title)}">BauMon</button>` : ""}${rr.kon && p.number ? `<button type="button" data-konbv="${h(p.number)}" data-kontitle="${h(p.title)}">BauKon</button>` : ""}</div></div>`;
       }).join("")}</div>`);
     }
     map.addLayer(clusters);
     map.on("popupopen", (e) => {
       $$("[data-monbv]", e.popup.getElement()).forEach((b) => { b.onclick = () => openBVinMon(b.dataset.monbv, b.dataset.montitle); });
+      $$("[data-konbv]", e.popup.getElement()).forEach((b) => { b.onclick = () => openBVinKon(b.dataset.konbv, b.dataset.kontitle); });
       $$("[data-pid]", e.popup.getElement()).forEach((b) => {
         b.onclick = () => {
           if (b.dataset.arch) {
@@ -2170,7 +2190,7 @@ function renderRightsCard(app) {
   if (ab && !r.admin) {
     const c = el(`<div class="card"><h3 class="section-title">Gemeinsame Ablage</h3>
       <p>Du arbeitest in der gemeinsamen Ablage von <b>${h(ab.owner || "Kollege")}</b>.</p>
-      <p class="muted">Deine Rechte: ${[r.doc ? "BauDoc" : "", r.mon ? "BauMon" : ""].filter(Boolean).join(", ") || "keine"}</p>
+      <p class="muted">Deine Rechte: ${[r.doc ? "BauDoc" : "", r.mon ? "BauMon" : "", r.kon ? "BauKon" : ""].filter(Boolean).join(", ") || "keine"}</p>
       <button class="secondary" type="button" id="leaveAb">Gemeinsame Ablage verlassen</button></div>`);
     app.appendChild(c);
     $("#leaveAb", c).onclick = leaveAblage;
@@ -2183,13 +2203,13 @@ function renderRightsCard(app) {
   const me = String((od.getAccount() || {}).username || "").toLowerCase();
   const card = el(`<div class="card rights-card"><h3 class="section-title">Benutzer und Rechte</h3>
     <p class="muted">${ab ? `Gemeinsame Ablage von ${h(ab.owner || "")}.` : "Die Daten liegen in deinem OneDrive (Ordner Stahlwork). Hier legst du fest, wer sie mit Stahlwork nutzen darf."} Wer hier nicht steht, hat keinen Zugriff.</p>
-    <div class="r-row r-head"><span>Anmeldename (E-Mail)</span><span>BauDoc</span><span>BauMon</span><span></span></div>
-    <div class="r-row r-me"><span>${h(me)} <span class="p-badge">${ab ? "Verwalter" : "Besitzer"}</span></span><span>✓</span><span>✓</span><span></span></div>
+    <div class="r-row r-head"><span>Anmeldename (E-Mail)</span><span>BauDoc</span><span>BauMon</span><span>BauKon</span><span></span></div>
+    <div class="r-row r-me"><span>${h(me)} <span class="p-badge">${ab ? "Verwalter" : "Besitzer"}</span></span><span>✓</span><span>✓</span><span>✓</span><span></span></div>
     ${users.map(([mail, u]) => `<div class="r-row" data-mail="${h(mail)}"><span>${h(mail)}</span>
-      <span>${u.doc ? "✓" : ""}</span><span>${u.mon ? "✓" : ""}</span>
+      <span>${u.doc ? "✓" : ""}</span><span>${u.mon ? "✓" : ""}</span><span>${u.kon ? "✓" : ""}</span>
       <span><button type="button" class="secondary small icon-only" data-edit title="Bearbeiten" aria-label="${h(mail)} bearbeiten"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button></span></div>`).join("")}
     <div class="r-row r-add"><input type="email" id="rMail" placeholder="${h((CONFIG.orgDomains || [])[0] ? "name@" + CONFIG.orgDomains[0] : "vorname.nachname@…")}" autocomplete="off">
-      <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span>
+      <span><input type="checkbox" id="rDoc" checked aria-label="BauDoc"></span><span><input type="checkbox" id="rMon" aria-label="BauMon"></span><span><input type="checkbox" id="rKon" aria-label="BauKon"></span>
       <span><button type="button" class="primary small" id="rAdd">+</button></span></div>
     ${!ab ? `<div class="r-invite"><p class="muted">Einladen: Person oben eintragen, dann diesen Link schicken. Sie öffnet ihn einmal und meldet sich an.</p>
       <button type="button" class="secondary" id="rLink">Einladungslink kopieren</button></div>
@@ -2211,14 +2231,15 @@ function renderRightsCard(app) {
       const u = (data.users || {})[mail] || {};
       const body = el(`<div class="mon-form"><p><b>${h(mail)}</b></p>
         <label class="opt-row"><input type="checkbox" class="e-doc" ${u.doc ? "checked" : ""}> <span>BauDoc</span></label>
-        <label class="opt-row"><input type="checkbox" class="e-mon" ${u.mon ? "checked" : ""}> <span>BauMon</span></label></div>`);
+        <label class="opt-row"><input type="checkbox" class="e-mon" ${u.mon ? "checked" : ""}> <span>BauMon</span></label>
+        <label class="opt-row"><input type="checkbox" class="e-kon" ${u.kon ? "checked" : ""}> <span>BauKon</span></label></div>`);
       monModal("Rechte bearbeiten", body, [
         { label: "Entfernen", cls: "danger-outline", fn: () => { remove(); } },
         { label: "Abbrechen", fn: () => {} },
         { label: "Speichern", cls: "primary", fn: () => {
-          const doc = $(".e-doc", body).checked, mon = $(".e-mon", body).checked;
-          if (!doc && !mon) { toast("Mindestens BauDoc oder BauMon – sonst „Entfernen“.", "warn"); return false; }
-          save({ ...data.users, [mail]: { ...u, doc, mon } });
+          const doc = $(".e-doc", body).checked, mon = $(".e-mon", body).checked, kon = $(".e-kon", body).checked;
+          if (!doc && !mon && !kon) { toast("Mindestens ein Modul – sonst „Entfernen“.", "warn"); return false; }
+          save({ ...data.users, [mail]: { ...u, doc, mon, kon } });
         } },
       ]);
     };
@@ -2229,14 +2250,14 @@ function renderRightsCard(app) {
     const doms = (CONFIG.orgDomains || []).map((d) => String(d).toLowerCase());
     if (doms.length && !doms.includes(mail.split("@")[1])) { toast(`Nur Firmenadressen möglich (@${doms.join(", @")}).`, "warn", 6000); return; }
     if (mail === me || (data.users || {})[mail]) { toast("Diese Person steht schon in der Liste.", "warn"); return; }
-    const doc = $("#rDoc", card).checked, mon = $("#rMon", card).checked;
-    if (!doc && !mon) { toast("Bitte mindestens BauDoc oder BauMon anhaken.", "warn"); return; }
+    const doc = $("#rDoc", card).checked, mon = $("#rMon", card).checked, kon = $("#rKon", card).checked;
+    if (!doc && !mon && !kon) { toast("Bitte mindestens ein Modul anhaken.", "warn"); return; }
     if (!ab) {
       // Ordner Stahlwork in deinem OneDrive für die Person freigeben (Bearbeiten)
       try { await sync.share(mail); toast(`${mail}: Ordner Stahlwork freigegeben. Jetzt den Einladungslink schicken.`, "info", 6000); }
       catch (e) { toast("Freigabe im OneDrive nicht möglich: " + (e.message || e) + " – bitte den Ordner Stahlwork selbst für die Person freigeben (Bearbeiten).", "warn", 10000); }
     }
-    save({ ...(data.users || {}), [mail]: { doc, mon } });
+    save({ ...(data.users || {}), [mail]: { doc, mon, kon } });
   };
   const jb = $("#rJoinBtn", card);
   if (jb) jb.onclick = () => { const t = $("#rJoin", card).value.trim(); const m = t.match(/[?&]ablage=([^&#\s]+)/); joinAblage(m ? m[1] : t); };
@@ -2577,6 +2598,12 @@ function versionMismatch() {
     // Montageplanung in OneDrive ablegen (BauMon/Montageplanung); nur wer BauMon bearbeiten darf
     if (!od.isConfigured() || !od.getAccount() || !monCanEdit()) return false;
     try { await db.outboxPut({ id: "monpdf:" + name, mon: true, name, blob }); } catch { return false; }
+    await sync.updateOutboxCount(); sync.schedule(800); return true;
+  }, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
+  initKonUI({ el, $, $$, go, render, busy: setBusy, openPdf: openPdfPreview, storeKonPdf: async (blob, name) => {
+    // Einteilung in OneDrive ablegen (BauKon/Einteilung); nur wer BauKon bearbeiten darf
+    if (!od.isConfigured() || !od.getAccount() || !konCanEdit()) return false;
+    try { await db.outboxPut({ id: "konpdf:" + name, kon: true, name, blob }); } catch { return false; }
     await sync.updateOutboxCount(); sync.schedule(800); return true;
   }, schedule: () => sync.schedule(2000), account: () => od.getAccount(), createBV: quickCreateBV, openMail, findBV: (n) => { const p = findByNumber(n); return p ? { p, archived: S.state.archivedProjects.includes(p) } : null; }, placeSuggest: (input, list, cb) => attachPlaceSuggest(input, list, cb), projects: () => S.state.projects.slice().sort((a, b) => a.number.localeCompare(b.number)) });
   let rightsKey = JSON.stringify(S.state.rights);

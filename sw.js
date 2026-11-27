@@ -4,7 +4,7 @@
    bei fehlendem Netz der zwischengespeicherte Stand.
    Bei jeder neuen Version CACHE hochzählen.
 ========================================================= */
-const CACHE = "stahlwork-3.18.13-beta-1";
+const CACHE = "stahlwork-3.19.0-beta-1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -17,6 +17,7 @@ const ASSETS = [
   "./favicon.svg",
   "./sparte-baudoc.svg",
   "./sparte-baumon.svg",
+  "./sparte-baukon.svg",
   "./app-logo.svg",
   "./favicon-16.png",
   "./favicon-32.png",
@@ -34,6 +35,10 @@ const ASSETS = [
   "./js/baumon.js",
   "./js/baumon-ui.js",
   "./js/baumon-pdf.js",
+  "./js/baukon.js",
+  "./js/baukon-ui.js",
+  "./js/baukon-pdf.js",
+  "./js/plan-core.js",
   "./js/camera.js",
   "./js/config.js",
   "./js/db.js",

@@ -7,6 +7,7 @@ import * as M from "./baumon.js";
 import { S } from "./store.js";
 import { escapeHtml as h, toast } from "./util.js";
 import { buildPlanPdf } from "./baumon-pdf.js";
+import { HOL_SHORT } from "./plan-core.js";
 
 let U = null; // Hilfsfunktionen aus app.js: el, $, $$, go, render, schedule, account, projects
 export function initMonUI(helpers) { U = helpers; }
@@ -69,9 +70,6 @@ document.addEventListener("keydown", (ev) => {
   top.querySelector("[data-x]")?.click();
 }, true);
 // Kurzformen der Feiertage für die schmale Tagesspalte
-const HOL_SHORT = { "Heilige Drei Könige": "Hl. 3 Kön.", "Ostermontag": "Ostermo.", "Tag der Arbeit": "1. Mai", "Christi Himmelfahrt": "Himmelf.",
-  "Pfingstmontag": "Pfingstmo.", "Fronleichnam": "Fronleichn.", "Tag der Deutschen Einheit": "Dt. Einheit", "Allerheiligen": "Allerheil.",
-  "1. Weihnachtstag": "1. Weihn.", "2. Weihnachtstag": "2. Weihn.", "Karfreitag": "Karfr." };
 const editable = () => M.canEdit();
 
 /* ---------- Farben je Baustelle: fest je BV (siehe baumon.js) ---------- */
@@ -898,7 +896,7 @@ export function modal(title, body, actions) {
 }
 
 // Baustelle wählen: BV aus BauDoc (Nummer, Bauherr, Ort) oder freier Text
-function siteField(init) {
+export function siteField(init, canCreate = editable()) {
   const box = U.el(`<div class="mon-site-field">
     <label class="field-label">Baustelle (BV)</label>
     <input type="text" class="site-in" placeholder="BV-Nr. oder Name suchen" autocomplete="off" />
@@ -911,7 +909,7 @@ function siteField(init) {
     const q = input.value.trim().toLowerCase();
     const ps = U.projects().filter((p) => !q || (p.number + " " + p.title + " " + (p.client || "") + " " + (p.place || "")).toLowerCase().includes(q)).slice(0, 300);
     const qRaw = input.value.trim();
-    listEl.innerHTML = (editable() && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "")
+    listEl.innerHTML = (canCreate && U.createBV ? `<button type="button" class="place-opt new-bv" data-new="1">+ Neues BV anlegen${qRaw ? ` „${h(qRaw)}“` : ""}</button>` : "")
       + ps.map((p) => `<button type="button" class="place-opt" data-n="${h(p.number)}" data-t="${h(p.title)}">${h(p.number)} ${h(p.client || p.title)}<span>${h(p.place || "")}</span></button>`).join("");
     const nb = listEl.querySelector("[data-new]");
     if (nb) nb.addEventListener("click", (e) => {

@@ -22,6 +22,7 @@ export const CONFIG = {
   legacyUsersFolder: "_Nutzer", // bis Version 2.8 (wird automatisch umgezogen)
   scopes: ["User.Read", "Files.ReadWrite"],
   monFolder: "BauMon",      // Ordner der Sparte BauMon: <appFolder>/BauMon/_daten/
+  konFolder: "BauKon",      // Ordner der Sparte BauKon: <appFolder>/BauKon/_daten/
   // BauMon bearbeiten dürfen nur diese Konten (Anmeldename, z. B. "vorname.nachname@firma.de").
   // Leer = alle (Testphase). Später: 1. und 2. Montageleiter eintragen.
   monEditors: [],
@@ -34,6 +35,7 @@ export const CONFIG = {
 export const SPARTEN = [
   { id: "doc", name: "BauDoc", desc: "Doku, Abnahme", icon: "sparte-baudoc.svg" },
   { id: "mon", name: "BauMon", desc: "Montage", icon: "sparte-baumon.svg" },
+  { id: "kon", name: "BauKon", desc: "Konstruktion", icon: "sparte-baukon.svg" },
 ];
 
-export const APP_VERSION = "3.18.13-beta";
+export const APP_VERSION = "3.19.0-beta";

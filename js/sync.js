@@ -35,6 +35,7 @@ import { makeThumb } from "./images.js";
 import { cleanGeo, geoValid } from "./geo.js";
 import { contentCode } from "./integrity.js";
 import { syncMon } from "./baumon.js";
+import { syncKon } from "./baukon.js";
 
 const ARCHIVE_FILE = "Stahlwork-Daten.json"; // im archivierten BV-Ordner: alle Daten des BV
 const CODE_INDEX = "pruefcodes.json";        // _daten: Prüfcodes archivierter/ausgelagerter BV
@@ -92,7 +93,7 @@ function hasUnuploaded(p) {
 }
 
 function countPending() {
-  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0) + (S.state.mon && S.state.mon.dirty ? 1 : 0) + (S.state.rightsDirty ? 1 : 0);
+  let n = outboxCount + (S.state.remote.pendingFolderDeletes || []).length + (S.state.prefs.dirty ? 1 : 0) + (S.state.mon && S.state.mon.dirty ? 1 : 0) + (S.state.kon && S.state.kon.dirty ? 1 : 0) + (S.state.rightsDirty ? 1 : 0);
   for (const p of allProjects()) {
     if (p.dirty || p.moveTo) n++;
     n += (p.pendingDeletes || []).length;
@@ -145,7 +146,7 @@ export async function whenIdle() {
 
 function snapshot() {
   try {
-    return JSON.stringify([S.state.projects, S.state.archivedProjects, S.state.selectedProjectId, S.state.mon && S.state.mon.data]);
+    return JSON.stringify([S.state.projects, S.state.archivedProjects, S.state.selectedProjectId, S.state.mon && S.state.mon.data, S.state.kon && S.state.kon.data]);
   } catch { return Math.random().toString(); }
 }
 
@@ -189,14 +190,14 @@ export async function loadProject() {
 /* ---------- Ablauf ---------- */
 /* ---------- Benutzer und Rechte (Datei rechte.json im Hauptordner der Ablage) ----------
    Besitzer der Ablage (eigenes OneDrive) darf alles und verwaltet die Rechte.
-   Andere: Eintrag in rechte.json { users: { "<anmeldename>": { doc, mon } }, admins: [...] } */
+   Andere: Eintrag in rechte.json { users: { "<anmeldename>": { doc, mon, kon } }, admins: [...] } */
 const RIGHTS_FILE = "rechte.json";
 export function rightsFor(data, me, owner) {
-  if (owner) return { doc: true, mon: true, admin: true, owner: true };
+  if (owner) return { doc: true, mon: true, kon: true, admin: true, owner: true };
   const d = data || {};
   const admin = (d.admins || []).map((x) => String(x).toLowerCase()).includes(me);
   const u = (d.users || {})[me] || null;
-  return { doc: admin || !!(u && u.doc), mon: admin || !!(u && u.mon), admin, owner: false };
+  return { doc: admin || !!(u && u.doc), mon: admin || !!(u && u.mon), kon: admin || !!(u && u.kon), admin, owner: false };
 }
 async function syncRights() {
   const st = S.state;
@@ -205,7 +206,7 @@ async function syncRights() {
   let app;
   try { app = await od.getAppFolder(); }
   catch (e) {
-    if (e && (e.status === 403 || e.status === 404) && !owner) { st.rights = { doc: false, mon: false, admin: false, owner: false, noShare: true }; return; }
+    if (e && (e.status === 403 || e.status === 404) && !owner) { st.rights = { doc: false, mon: false, kon: false, admin: false, owner: false, noShare: true }; return; }
     throw e;
   }
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -240,11 +241,27 @@ async function syncAll(full) {
   let firstError = null;
   // Bauvorhaben-Liste (Nummer, Bauherr, Ort, Kartenposition) ist die gemeinsame Grundlage aller Module;
   // die Inhalte von BauDoc (Dokus, Fotos, PDFs, Favoriten) nur mit BauDoc-Recht
-  if (rights.doc || rights.mon) firstError = await syncBauDoc(full, !!rights.doc);
+  if (rights.doc || rights.mon || rights.kon) firstError = await syncBauDoc(full, !!rights.doc);
   // BauMon (eigene Datei)
   if (rights.mon) { try { await syncMon({ full }); await syncMonPdfs(); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauMon", e); if (!firstError) firstError = e; } }
+  // BauKon (eigene Datei)
+  if (rights.kon) { try { await syncKon({ full }); await syncKonPdfs(); } catch (e) { if (e && e.authRequired) throw e; console.warn("BauKon", e); if (!firstError) firstError = e; } }
   outboxCount = (await outboxSafe()).length;
   if (firstError) throw firstError;
+}
+
+// BauKon-PDFs (Einteilung) -> <App-Ordner>/BauKon/Einteilung/
+async function syncKonPdfs() {
+  const list = (await outboxSafe()).filter((o) => o.kon);
+  if (!list.length) return;
+  const appDir = await od.getAppFolder();
+  const dir = await od.ensureFolder(appDir.id, CONFIG.konFolder || "BauKon");
+  const pdfDir = await od.ensureFolder(dir.id, "Einteilung");
+  for (const o of list) {
+    await od.uploadFile(pdfDir.id, o.name, o.blob, "application/pdf");
+    await db.outboxDelete(o.id);
+    outboxCount = Math.max(0, outboxCount - 1);
+  }
 }
 
 // BauMon-PDFs (Montageplanung) -> <App-Ordner>/BauMon/Montageplanung/
