@@ -179,11 +179,11 @@ export function renderKonPlan(app) {
       const tc = toneCls(z, tones.get(z.id) || 0);
       const cutL = z.von < days[0], cutR = z.bis > days[last];
       const label = `<span class="g-num">${h(z.bvNumber)}</span> ${h(z.baustelle || "")}`;
-      html += `<button type="button" class="k-bar ${tc} ${cutL ? "cut-l" : ""} ${cutR ? "cut-r" : ""} ${flashBv && z.bvNumber === flashBv ? "flash-bar" : ""}" data-zid="${h(z.id)}" style="grid-column:${2 + s} / ${3 + e};grid-row:${r}"
+      html += `<button type="button" class="k-bar ${tc} ${s % 5 === 0 ? "wk" : ""} ${cutL ? "cut-l" : ""} ${cutR ? "cut-r" : ""} ${flashBv && z.bvNumber === flashBv ? "flash-bar" : ""}" data-zid="${h(z.id)}" style="grid-column:${2 + s} / ${3 + e};grid-row:${r}"
         title="${h(K.bvLabel(z))}${z.text ? " · " + h(z.text) : ""}: ${h(longDate(z.von))} – ${h(longDate(z.bis))}">${editable() && !cutL ? '<span class="g-h l" data-h="start" aria-hidden="true"></span>' : ""}<span class="k-bar-t">${z.bvNumber ? label : h(z.baustelle || "Bauvorhaben")}${z.text ? ` <small>· ${h(z.text)}</small>` : ""}</span>${editable() && !cutR ? '<span class="g-h r" data-h="end" aria-hidden="true"></span>' : ""}</button>`;
       for (let i = s; i <= e; i++) {
         const d = days[i], c = (z.codes || {})[d] || "";
-        html += `<div class="k-code ${tc} ${i === s && !cutL ? "first" : ""} ${i === e && !cutR ? "last" : ""}" data-zid="${h(z.id)}" data-day="${d}" style="grid-column:${2 + i};grid-row:${r + 1}" title="${c ? h(c + " – " + K.CODE_NAMES[c]) : "Kürzel eintragen"}">${h(c)}</div>`;
+        html += `<div class="k-code ${tc} ${i % 5 === 0 ? "wk" : ""}" data-zid="${h(z.id)}" data-day="${d}" style="grid-column:${2 + i};grid-row:${r + 1}" title="${c ? h(c + " – " + K.CODE_NAMES[c]) : "Kürzel eintragen"}">${h(c)}</div>`;
       }
     }
     // Abwesenheit, Schule, Teilzeit-frei, Feiertag: farbig über beiden Zeilen (zusammenhängende Tage als ein Block)
@@ -191,7 +191,7 @@ export function renderKonPlan(app) {
     const flush = () => {
       if (!run) return;
       const one = run.e === run.s;
-      html += `<button type="button" class="k-st ${run.typ} ${one ? "one" : ""}" data-kid="${h(k.id)}" data-day="${days[run.s]}" ${run.aid ? `data-aid="${h(run.aid)}"` : ""} style="grid-column:${2 + run.s} / ${3 + run.e};grid-row:${r} / span 2" title="${h(k.name)}: ${h(run.title)}"><span class="l">${h(ABW_LABEL[run.typ] || run.typ)}</span><span class="s">${h(ABW_ONE[run.typ] || "")}</span></button>`;
+      html += `<button type="button" class="k-st ${run.typ} ${one ? "one" : ""} ${run.s % 5 === 0 ? "wk" : ""}" data-kid="${h(k.id)}" data-day="${days[run.s]}" ${run.aid ? `data-aid="${h(run.aid)}"` : ""} style="grid-column:${2 + run.s} / ${3 + run.e};grid-row:${r} / span 2" title="${h(k.name)}: ${h(run.title)}"><span class="l">${h(ABW_LABEL[run.typ] || run.typ)}</span><span class="s">${h(ABW_ONE[run.typ] || "")}</span></button>`;
       run = null;
     };
     days.forEach((d, i) => {

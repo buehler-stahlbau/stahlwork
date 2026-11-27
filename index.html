@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.19.4-beta" />
+  <meta name="app-version" content="3.19.5-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -201,7 +201,7 @@
     body.sparte-kon .search-wrap, body.sparte-kon #searchBtn { display: none !important; }
 
     /* ===== BauKon – Planung (Mo–Fr, zwei Zeilen je BV-Balken) ===== */
-    .gantt.kon { --k1: 30px; --k2: 22px; grid-template-columns: 140px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(140px + var(--days) * 38px); }
+    .gantt.kon { --k1: 40px; --k2: 32px; grid-template-columns: 140px repeat(var(--days), minmax(38px, 1fr)); min-width: calc(140px + var(--days) * 38px); }
     @media (max-width: 600px){ .gantt.kon { grid-template-columns: 92px repeat(var(--days), minmax(34px, 1fr)); min-width: calc(92px + var(--days) * 34px); } .gantt.kon .k-name { padding: 4px 6px; } .gantt.kon .g-corner { padding: 6px; font-size: .7rem; } }
     .gantt.kon .g-week.wk, .gantt.kon .g-day.wk, .gantt.kon .k-bg.wk { border-left: 2px solid #8f8d87; }
     .gantt.kon .k-name { border-top: 1px solid var(--brand-gray-200); border-bottom: 0; z-index: 5; }
@@ -215,19 +215,17 @@
     .k-bg.today { background: var(--brand-primary-soft); }
     .k-bg.sel { background: rgba(46,91,138,.22) !important; }
     @media (hover: hover) and (pointer: fine){ .k-bg:hover { background: rgba(46,91,138,.06); } }
-    .k-bar { position: relative; z-index: 1; margin: 4px 1px 0; min-height: 0; padding: 0 8px; border: 0; border-radius: 6px 6px 0 0; font-size: .74rem; font-weight: 700; text-align: left; display: flex; align-items: center; overflow: hidden; white-space: nowrap; cursor: pointer; color: #222; }
+    .k-bar { position: relative; z-index: 1; margin: 6px 3px 2px; min-height: 0; padding: 0 8px; border: 0; border-radius: 7px; font-size: .76rem; font-weight: 700; text-align: left; display: flex; align-items: center; overflow: hidden; white-space: nowrap; cursor: pointer; color: #222; }
     .k-bar-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .k-bar-t small { font-weight: 500; font-size: .68rem; color: rgba(0,0,0,.62); }
-    .k-code { position: relative; z-index: 1; margin: 0 0 3px; display: flex; align-items: center; justify-content: center; font-size: .74rem; font-weight: 800; color: #222; cursor: pointer; user-select: none; -webkit-user-select: none; box-shadow: inset 1px 0 0 rgba(255,255,255,.45); }
-    .k-code.first { margin-left: 1px; border-bottom-left-radius: 6px; box-shadow: none; }
-    .k-code.last { margin-right: 1px; border-bottom-right-radius: 6px; }
-    .k-bar.cut-l { border-top-left-radius: 0; margin-left: 0; } .k-bar.cut-r { border-top-right-radius: 0; margin-right: 0; }
+    .k-code { position: relative; z-index: 1; margin: 2px 3px 6px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 800; color: #222; cursor: pointer; user-select: none; -webkit-user-select: none; }
+    .k-bar.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; } .k-bar.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+    /* dicker Wochenstrich liegt in der Montagsspalte: dort 2 px mehr Abstand, damit links und rechts gleich wirken */
+    .k-bar.wk:not(.cut-l), .k-code.wk, .k-st.wk { margin-left: 5px; }
     /* Farben: Stahlbau grau, Rohbau braunrot – Ton im Wechsel je BV; Platzhalter weiß */
     .k-bar.stahl.t0, .k-code.stahl.t0 { background: #d6d5d1; } .k-bar.stahl.t1, .k-code.stahl.t1 { background: #b8b6b0; }
     .k-bar.roh.t0, .k-code.roh.t0 { background: #ecc0ba; } .k-bar.roh.t1, .k-code.roh.t1 { background: #d6958d; }
-    .k-bar.ph, .k-code.ph { background: #fff; border: 1.5px solid #9a9893; }
-    .k-bar.ph { border-bottom: 0; } .k-code.ph { border-top: 1px dashed #c9c7c2; border-left: 0; border-right: 0; box-shadow: none; }
-    .k-code.ph.first { border-left: 1.5px solid #9a9893; } .k-code.ph.last { border-right: 1.5px solid #9a9893; }
+    .k-bar.ph { background: #fff; border: 1.5px solid #9a9893; } .k-code.ph { background: #fff; border: 1.5px dashed #c9c7c2; }
     .k-code.ph:empty::after { content: "+"; color: #b3b1ab; font-weight: 600; }
     .k-code.sel { outline: 2px solid var(--brand-primary); outline-offset: -2px; z-index: 2; }
     .k-code.ghost { opacity: .35; }
@@ -235,7 +233,7 @@
     .k-bar .g-h::after { background: rgba(0,0,0,.3); }
     @media (hover: hover) and (pointer: fine){ .k-code:hover { filter: brightness(.94); } }
     /* Abwesenheit, Schule, Teilzeit-frei, Feiertag: farbig über beiden Zeilen */
-    .k-st { position: relative; z-index: 2; margin: 2px 1px; min-height: 0; padding: 0 6px; border: 0; border-radius: 6px; font-size: .72rem; font-weight: 700; color: #222; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .k-st { position: relative; z-index: 2; margin: 6px 3px; min-height: 0; padding: 0 6px; border: 0; border-radius: 7px; font-size: .72rem; font-weight: 700; color: #222; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .k-st .s { display: none; } .k-st.one .l { display: none; } .k-st.one .s { display: inline; } .k-st.one { padding: 0; }
     .k-st .l { overflow: hidden; text-overflow: ellipsis; }
     .k-st.urlaub { background: #3aa660; color: #fff; }
