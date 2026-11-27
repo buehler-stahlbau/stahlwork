@@ -787,13 +787,19 @@ function enableDrag(card, g, days) {
 }
 
 // Bühnen der Baustelle, die mit dem Einsatz enden, ziehen beim Verschieben mit
+// Einsatz verschoben/verlängert: Bühnen, die den Einsatz vorher ganz abgedeckt haben (deckungsgleich
+// oder länger), decken ihn auch danach ab – sie wachsen nur nach außen, die Mietzeit wird nie
+// automatisch verkürzt. Bühnen nur für einen Teil des Einsatzes bleiben unverändert. (Regeln folgen noch.)
 function followBuehnen(oldE, newE) {
-  const siteEnd = M.list("einsaetze").filter((x) => M.sameSite(x, newE)).reduce((mx, x) => (x.bis > mx ? x.bis : mx), "");
   let n = 0;
   for (const b of M.buehnenOf(newE)) {
-    if (!b.abgemeldetAm && b.bis === oldE.bis && siteEnd && b.bis !== siteEnd) { M.put("buehnen", { ...b, bis: siteEnd }); n++; }
+    if (b.abgemeldetAm || !b.von || !b.bis) continue;
+    if (!(b.von <= oldE.von && b.bis >= oldE.bis)) continue;
+    const von = newE.von < b.von ? newE.von : b.von;
+    const bis = newE.bis > b.bis ? newE.bis : b.bis;
+    if (von !== b.von || bis !== b.bis) { M.put("buehnen", { ...b, von, bis }); n++; }
   }
-  if (n) setTimeout(() => toast(`Mietende von ${n} Bühne${n > 1 ? "n" : ""} mit angepasst: ${M.longDate(siteEnd)}`, "info", 4000), 2600);
+  if (n) setTimeout(() => toast(`Mietzeit von ${n} Bühne${n > 1 ? "n" : ""} mit angepasst.`, "info", 4000), 2600);
 }
 
 /* =========================================================
