@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.18.2-beta" />
+  <meta name="app-version" content="3.18.3-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -186,8 +186,8 @@
     #tabMon, #tabMonPlan, #tabMonBuehnen, #tabMonPersonal { display: none; }
     body.sparte-mon #tabMon, body.sparte-mon #tabMonPlan, body.sparte-mon #tabMonBuehnen, body.sparte-mon #tabMonPersonal { display: inline-flex; }
     .tab .cnt.due:not(:empty) { background: var(--brand-red); color: #fff; }
-    /* dreistellige Zähler: kleinere Schrift, etwas weiter nach außen – Symbol bleibt sichtbar */
-    .tab .cnt.c3 { font-size: .58rem; padding: 0 3px; right: -10px; top: -6px; letter-spacing: -.02em; }
+    /* dreistellige Zähler: kleinere Schrift (Position wie bei ein-/zweistelligen) */
+    .tab .cnt.c3 { font-size: .58rem; padding: 0 3px; letter-spacing: -.02em; }
     body.sparte-mon #tabProjects, body.sparte-mon #tabFav, body.sparte-mon #tabMap, body.sparte-mon #tabArchive,
     body.sparte-mon .search-wrap, body.sparte-mon #searchBtn { display: none !important; }
     /* Einstellungen: neutrale Kopfzeile (keine Reiter der Sparten) */
