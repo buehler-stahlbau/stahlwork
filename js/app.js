@@ -1533,7 +1533,7 @@ function renderDocEditor(container, p, d) {
 
       <div class="row wrap doc-footer">
         <button class="danger-outline" id="delDoc" type="button">Doku löschen</button>
-        ${imagesOfDoc(d).length && !isTouch ? `<button class="secondary" id="imgDoc" type="button" title="${window.showDirectoryPicker ? "Ordner wählen – Fotos einzeln dort ablegen" : "Fotos als ZIP-Datei herunterladen"}">Bilder speichern</button>` : ""}
+        ${imagesOfDoc(d).length && !isMobileDevice ? `<button class="secondary" id="imgDoc" type="button" title="${window.showDirectoryPicker ? "Ordner wählen – Fotos einzeln dort ablegen" : "Fotos als ZIP-Datei herunterladen"}">Bilder speichern</button>` : ""}
         <button class="primary" id="pdfDoc" type="button">PDF erstellen</button>
       </div>
     </div>`);
