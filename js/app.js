@@ -20,6 +20,7 @@ import { searchPlaces, geoValid, loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from 
 import { processFile, makeThumb } from "./images.js";
 import { buildPdf, PDF_MAX_BYTES, sourceBlob } from "./pdf.js";
 import { makeZip } from "./zip.js";
+import { editImage } from "./draw.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast, sanitizeName } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature } from "./baumon.js";
@@ -153,7 +154,8 @@ function thumbHtml(img, deletable = true) {
     <div class="image-wrapper">
       <img data-img-id="${h(img.id)}" data-rid="${h(img.rid || "")}" alt="Foto" />
       ${img.rid || !od.isConfigured() ? "" : `<span class="img-pending" title="Noch nicht hochgeladen">⏳</span>`}
-      ${deletable ? `<button class="img-delete" data-del-img="${h(img.id)}" type="button" aria-label="Foto löschen">×</button>` : ""}
+      ${deletable ? `<button class="img-delete" data-del-img="${h(img.id)}" type="button" aria-label="Foto löschen">×</button>
+      <button class="img-edit" data-edit-img="${h(img.id)}" type="button" aria-label="Foto markieren" title="Markieren (mit dem Stift ins Bild zeichnen)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l5 5L9 20H4v-5z"/><path d="M12.5 6.5l5 5"/></svg></button>` : ""}
     </div>`;
 }
 
@@ -1592,6 +1594,18 @@ function renderDocEditor(container, p, d) {
     };
   });
 
+  $$("[data-edit-img]", $("#draftImages")).forEach((b) => {
+    b.onclick = async (e) => {
+      e.stopPropagation();
+      const id = b.dataset.editImg;
+      const nid = await markImage({ id });
+      if (!nid) return;
+      draftImgs[d.id] = (draftImgs[d.id] || []).map((x) => (x === id ? nid : x));
+      saveSoon();
+      try { await db.imgDelete(id); } catch {}
+      renderNow();
+    };
+  });
   $$("[data-del-img]", $("#draftImages")).forEach((b) => {
     b.onclick = async (e) => {
       e.stopPropagation();
@@ -1767,6 +1781,26 @@ function renderProtocol(box, p, d) {
   });
 }
 
+// Foto im Zeichen-Editor markieren -> neues Foto (ID) oder null
+async function markImage(img) {
+  setBusy("Foto wird geladen …");
+  let blob = null;
+  try { blob = await sourceBlob(img); } finally { setBusy(null); }
+  if (!blob) { toast("Foto ist gerade nicht verfügbar (offline?).", "warn"); return null; }
+  const edited = await editImage(blob);
+  if (!edited) return null;
+  setBusy("Foto wird gespeichert …");
+  try {
+    const r = await processFile(edited);
+    const id = newId();
+    await db.imgPut({ id, archive: r.archive, thumb: r.thumb });
+    return id;
+  } catch (e) {
+    toast("Speichern fehlgeschlagen: " + (e.message || e), "error", 7000);
+    return null;
+  } finally { setBusy(null); }
+}
+
 async function processFiles(files) {
   const ids = [];
   try {
@@ -1857,6 +1891,29 @@ function renderEntries(container, p, d) {
       deleteEntry(f.cp, f.cd, en.id);
       renderNow();
     };
+
+    $$("[data-edit-img]", c).forEach((b) => {
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        const g = guardContentEdit();
+        if (g === false) return;
+        const f0 = findEntry();
+        const img0 = f0 && f0.ce.images.find((x) => x.id === b.dataset.editImg);
+        if (!img0) return;
+        const nid = await markImage(img0);
+        if (!nid) return;
+        const f = findEntry();
+        if (!f) return;
+        const i = f.ce.images.findIndex((x) => x.id === img0.id);
+        if (i < 0) return;
+        // bearbeitetes Foto ersetzt das alte (gleiche Stelle); das alte wird in OneDrive entfernt
+        f.ce.images[i] = { id: nid };
+        if (img0.rid) f.cp.pendingDeletes.push({ id: img0.rid, parent: (f.cd.remote || {}).bilderId || null });
+        try { await db.imgDelete(img0.id); } catch {}
+        touchEntry(f.cp, f.cd, f.ce);
+        renderNow();
+      };
+    });
 
     $$("[data-del-img]", c).forEach((b) => {
       b.onclick = async (e) => {

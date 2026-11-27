@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.18.0-beta" />
+  <meta name="app-version" content="3.18.1-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -798,6 +798,24 @@
     .images { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
     .images:empty { display: none; }
     .image-wrapper { position:relative; }
+    /* Markieren: dezenter Stift mitten im Vorschaubild */
+    .img-edit { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.55); color: rgba(30,30,30,.8); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); box-shadow: 0 1px 3px rgba(0,0,0,.2); cursor: pointer; }
+    .img-edit .ico { width: 17px; height: 17px; }
+    @media (hover: hover) and (pointer: fine){ .img-edit { opacity: .7; } .image-wrapper:hover .img-edit { opacity: 1; background: rgba(255,255,255,.85); } }
+    /* Zeichen-Editor (Vollbild) */
+    .draw-modal { position: fixed; inset: 0; z-index: 4000; background: #1d1c1a; display: flex; flex-direction: column; padding: calc(8px + var(--safe-top)) 8px calc(8px + var(--safe-bottom)); gap: 8px; }
+    .draw-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+    .draw-tools, .draw-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .draw-col { width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); background: var(--c); cursor: pointer; }
+    .draw-col.on { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+    .draw-size { width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .draw-size i { display: block; width: var(--d); height: var(--d); border-radius: 50%; background: #fff; }
+    .draw-size.on { background: rgba(255,255,255,.18); border-color: #fff; }
+    .draw-undo { width: 38px; height: 34px; min-height: 0; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+    .draw-undo:disabled { opacity: .35; }
+    .draw-sep { width: 1px; height: 24px; background: rgba(255,255,255,.2); }
+    .draw-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .draw-stage canvas { touch-action: none; display: block; background: #fff; cursor: crosshair; }
     .images img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--brand-gray-200); background: var(--brand-gray-200); cursor: zoom-in; display:block; }
     .images img.missing { opacity:.4; }
     .img-delete { position:absolute; top:-8px; right:-8px; width:26px; height:26px; min-height: 0; padding:0; background: var(--brand-red); color:#fff; border: 2px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; }
