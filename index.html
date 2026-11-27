@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.19.2-beta" />
+  <meta name="app-version" content="3.19.3-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -212,6 +212,7 @@
     @media (max-width: 600px){ .gantt.kon .k-name { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; } .gantt.kon .k-name b { font-size: .8rem; max-width: 100%; } }
     .k-bg { border-left: 1px solid var(--brand-gray-100); border-top: 1px solid var(--brand-gray-200); cursor: pointer; }
     .k-bg.today { background: var(--brand-primary-soft); }
+    .k-bg.sel { background: rgba(46,91,138,.22) !important; }
     @media (hover: hover) and (pointer: fine){ .k-bg:hover { background: rgba(46,91,138,.06); } }
     .k-bar { position: relative; z-index: 1; margin: 4px 1px 0; min-height: 0; padding: 0 8px; border: 0; border-radius: 6px 6px 0 0; font-size: .74rem; font-weight: 700; text-align: left; display: flex; align-items: center; overflow: hidden; white-space: nowrap; cursor: pointer; color: #222; }
     .k-bar-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }

@@ -320,7 +320,8 @@ function codeMenu(x, y, zid, ds) {
 
 /* ---------- Ziehen ----------
    Balken: verschieben bzw. an den Griffen Beginn/Ende ändern (Werktage). Kürzel: über mehrere Tage
-   ziehen -> Kürzel für alle auf einmal. Maus: sofort (ab 4 px); Finger: kurz halten (0,35 s), dann ziehen. */
+   ziehen -> Kürzel für alle auf einmal. Freie Tage einer Person: über mehrere Tage ziehen -> neue Zuteilung
+   für diesen Zeitraum. Maus: sofort (ab 4 px); Finger: kurz halten (0,35 s), dann ziehen. */
 let dragJustEnded = false;
 function enableDrag(g, days) {
   let st = null;
@@ -336,11 +337,18 @@ function enableDrag(g, days) {
     const [a, b] = st.a <= st.b ? [st.a, st.b] : [st.b, st.a];
     U.$$(`.k-code[data-zid="${CSS.escape(st.zid)}"]`, g).forEach((c) => { const i = days.indexOf(c.dataset.day); if (i >= a && i <= b) c.classList.add("sel"); });
   };
+  // neue Zuteilung: markierte Tage in der Zeile der Person
+  const markNew = () => {
+    U.$$(".k-bg.sel", g).forEach((c) => c.classList.remove("sel"));
+    if (!st || st.kind !== "new") return;
+    const [a, b] = st.a <= st.b ? [st.a, st.b] : [st.b, st.a];
+    U.$$(`.k-bg[data-kid="${CSS.escape(st.kid)}"]`, g).forEach((c) => { const i = days.indexOf(c.dataset.day); if (i >= a && i <= b) c.classList.add("sel"); });
+  };
   const begin = (ev) => {
     st.active = true;
     document.body.classList.add("dragging");
     if (st.touch && navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
-    if (st.kind === "codes") markCodes(); else st.bar.classList.add("drag");
+    if (st.kind === "codes") markCodes(); else if (st.kind === "new") markNew(); else st.bar.classList.add("drag");
   };
   const move = (ev) => {
     if (!st || ev.pointerId !== st.pid) return;
@@ -352,6 +360,7 @@ function enableDrag(g, days) {
     }
     ev.preventDefault();
     const c = colAt(ev.clientX);
+    if (st.kind === "new") { st.b = c; markNew(); return; }
     if (st.kind === "codes") {
       st.b = Math.max(st.s, Math.min(st.e, c));
       markCodes();
@@ -380,6 +389,13 @@ function enableDrag(g, days) {
     document.body.classList.remove("dragging");
     if (!s0.active) return;
     dragJustEnded = true; setTimeout(() => { dragJustEnded = false; }, 50);
+    if (s0.kind === "new") {
+      U.$$(".k-bg.sel", g).forEach((c) => c.classList.remove("sel"));
+      const [a, b] = s0.a <= s0.b ? [s0.a, s0.b] : [s0.b, s0.a];
+      if (a === b) dayMenu(ev.clientX, ev.clientY, s0.kid, days[a]); // nur ein Tag: Menü wie beim Antippen
+      else openZut(null, { kId: s0.kid, von: days[a], bis: days[b] });
+      return;
+    }
     const z = K.get("zuteilungen", s0.zid);
     if (!z) return;
     if (s0.kind === "codes") {
@@ -411,6 +427,15 @@ function enableDrag(g, days) {
     const hd = ev.target.closest(".g-h");
     const bar = ev.target.closest(".k-bar");
     const code = ev.target.closest(".k-code");
+    const bg = !bar && !code && ev.target.closest(".k-bg");
+    if (bg) {
+      const cols = [...g.querySelectorAll(".g-day")].map((c) => c.getBoundingClientRect());
+      st = { pid: ev.pointerId, x0: ev.clientX, y0: ev.clientY, touch: ev.pointerType !== "mouse", active: false, kind: "new", kid: bg.dataset.kid, cols };
+      st.a = st.b = st.c0 = colAt(ev.clientX);
+      if (st.touch) st.timer = setTimeout(() => { if (st && !st.active) begin(ev); }, 350);
+      else ev.preventDefault(); // kein Markieren von Text beim Ziehen
+      return;
+    }
     if (!bar && !code) return;
     const zid = (bar || code).dataset.zid;
     const z = K.get("zuteilungen", zid);
