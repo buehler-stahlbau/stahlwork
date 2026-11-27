@@ -22,6 +22,7 @@ let keep = null; // Scrollposition nach Änderungen behalten
 function keepScroll() { const sc = document.querySelector(".kon-plan-card .g-scroll"); keep = { x: sc ? sc.scrollLeft : 0, y: window.scrollY }; }
 let flashBv = null; // nach dem Öffnen aus Suche/Karte: Balken dieses BV kurz hervorheben
 
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const ABW_LABEL = { ...K.ABW_TYPES, feiertag: "Feiertag", frei: "frei (Teilzeit)" };
 const ABW_ONE = { ...K.ABW_SHORT, feiertag: "FT", frei: "frei" };
 
@@ -149,16 +150,23 @@ export function renderKonPlan(app) {
   const g = card.querySelector(".gantt");
 
   // Kopf: Wochen + Tage (Mo–Fr), dicker Strich zwischen den Wochen
-  let html = `<div class="g-corner">Konstrukteur</div>`;
+  let html = `<div class="g-corner" style="grid-row:1 / span 3">Konstrukteur</div>`;
+  // Monate über den Kalenderwochen
+  for (let i = 0; i < days.length;) {
+    let j = i; while (j + 1 < days.length && days[j + 1].slice(0, 7) === days[i].slice(0, 7)) j++;
+    const m = parseDay(days[i]);
+    html += `<div class="g-month ${i ? "mstart" : ""}" style="grid-column:${2 + i} / ${3 + j}"><span>${MONTHS[m.getMonth()]} ${m.getFullYear()}</span></div>`;
+    i = j + 1;
+  }
   for (let w = 0; w < WEEKS; w++) {
     const d0 = days[w * 5];
-    html += `<div class="g-week wk ${mondayOf(t) === d0 ? "cur" : ""}" style="grid-column:${2 + w * 5} / span 5">KW ${isoWeek(d0)} <span>${shortDate(d0)}–${shortDate(days[w * 5 + 4])}</span></div>`;
+    html += `<div class="g-week wk ${mondayOf(t) === d0 ? "cur" : ""}" style="grid-column:${2 + w * 5} / span 5;grid-row:2">KW ${isoWeek(d0)} <span>${shortDate(d0)}–${shortDate(days[w * 5 + 4])}</span></div>`;
   }
   days.forEach((d, i) => {
     const hol = holiday(d);
-    html += `<div class="g-day ${i % 5 === 0 ? "wk" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" style="grid-column:${2 + i}" ${hol ? `title="${h(hol)}"` : ""}>${wdName(d)}<b>${Number(d.slice(8))}</b><i class="g-hol">${hol ? h(HOL_SHORT[hol] || hol) : "&nbsp;"}</i></div>`;
+    html += `<div class="g-day ${i % 5 === 0 ? "wk" : ""} ${hol ? "hol" : ""} ${d === t ? "today" : ""}" data-day="${d}" style="grid-column:${2 + i};grid-row:3" ${hol ? `title="${h(hol)}"` : ""}>${wdName(d)}<b>${Number(d.slice(8))}</b><i class="g-hol">${hol ? h(HOL_SHORT[hol] || hol) : "&nbsp;"}</i></div>`;
   });
-  g.style.gridTemplateRows = "auto auto " + people.map(() => "var(--k1) var(--k2)").join(" ");
+  g.style.gridTemplateRows = "auto auto auto " + people.map(() => "var(--k1) var(--k2)").join(" ");
   const col = (d, dir) => { // Spalte eines Tages (Wochenende -> nächster/vorheriger Werktag)
     let x = dir > 0 ? K.nextWeekday(d) : K.prevWeekday(d);
     if (x < days[0]) x = days[0];
@@ -166,7 +174,7 @@ export function renderKonPlan(app) {
     return days.indexOf(x);
   };
   people.forEach((k, n) => {
-    const r = 3 + n * 2;
+    const r = 4 + n * 2;
     html += `<div class="g-trupp k-name" style="grid-row:${r} / span 2" data-kid="${h(k.id)}" title="${h(k.name)}${k.azubi ? " · Azubi" : ""}${k.teilzeit ? " · Teilzeit" : ""}"><b>${h(k.name)}</b>${k.azubi || k.teilzeit ? `<span class="k-bdg">${k.azubi ? '<span class="p-badge" title="Azubi">A</span>' : ""}${k.teilzeit ? '<span class="p-badge" title="Teilzeit">T</span>' : ""}</span>` : ""}</div>`;
     days.forEach((d, i) => {
       html += `<div class="k-bg ${i % 5 === 0 ? "wk" : ""} ${holiday(d) ? "hol" : ""} ${d === t ? "today" : ""}" data-kid="${h(k.id)}" data-day="${d}" style="grid-column:${2 + i};grid-row:${r} / span 2"></div>`;

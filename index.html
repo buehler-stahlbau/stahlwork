@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.19.7-beta" />
+  <meta name="app-version" content="3.19.8-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -205,6 +205,8 @@
     @media (max-width: 600px){ .gantt.kon { grid-template-columns: 92px repeat(var(--days), minmax(34px, 1fr)); min-width: calc(92px + var(--days) * 34px); } .gantt.kon .k-name { padding: 4px 6px; } .gantt.kon .g-corner { padding: 6px; font-size: .7rem; } }
     .gantt.kon .g-week.wk, .gantt.kon .g-day.wk, .gantt.kon .k-bg.wk { border-left: 2px solid #8f8d87; }
     .gantt.kon .k-name { border-top: 1px solid var(--brand-gray-200); border-bottom: 0; z-index: 5; }
+    .gantt.kon .g-month { grid-row: 1; padding: 6px 8px 0; font-weight: 700; font-size: .8rem; color: var(--brand-gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--brand-gray-100); }
+    .gantt.kon .g-month.mstart { border-left: 2px solid #8f8d87; }
     .gantt.kon .g-corner { z-index: 6; } /* Namensspalte bleibt beim seitlichen Scrollen über Balken und Abwesenheiten */
     .gantt.kon .k-name { flex-direction: row; align-items: center; justify-content: flex-start; gap: 5px; }
     .gantt.kon .k-name b { min-width: 0; }

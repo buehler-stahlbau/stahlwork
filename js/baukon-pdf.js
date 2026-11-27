@@ -79,7 +79,19 @@ export async function buildKonPdf({ start: from, weeks = 5 }) {
   const L1 = 14, L2 = 11, ROW = L1 + L2;
   let y = header(true);
 
+  const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   function gridHead() {
+    // Monate (mit Jahr) über den Kalenderwochen
+    for (let i = 0; i < days.length;) {
+      let j = i; while (j + 1 < days.length && days[j + 1].slice(0, 7) === days[i].slice(0, 7)) j++;
+      const mo = Number(days[i].slice(5, 7)) - 1, x0 = colX(i), x1 = colX(j + 1);
+      font("bold", 8.5, DARK);
+      pdf.text(fit(`${MONTHS[mo]} ${days[i].slice(0, 4)}`, x1 - x0 - 6), (x0 + x1) / 2, y + 9, { align: "center" });
+      if (i) { draw(WEEK); pdf.setLineWidth(1.4); pdf.line(x0, y, x0, y + 12); }
+      i = j + 1;
+    }
+    hair(gx, y + 12.5, W - ML, LINE, 0.5);
+    y += 14;
     font("bold", 8, DARK);
     for (let w = 0; w < nW; w++) {
       const x0 = colX(w * 5), x1 = colX(w * 5 + 5);
