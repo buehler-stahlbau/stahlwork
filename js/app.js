@@ -1443,11 +1443,12 @@ function renderProjectDetail(app, p, d) {
           <div class="doc-title">${h(doc.title)}${doc.protocol && doc.protocol.enabled ? ` <span class="badge-abn">Abnahme</span>` : ""}</div>
           <div class="muted doc-meta">${formatDateDE(doc.date)} · ${doc.entries.length} ${doc.entries.length === 1 ? "Eintrag" : "Einträge"} · ${n} ${n === 1 ? "Foto" : "Fotos"}</div>
         </div>
+        ${isMobileDevice ? "" : `<button class="doc-img-btn" data-a="img" type="button" ${n ? `title="Bilder speichern (${n})"` : 'title="Keine Fotos in dieser Doku" disabled'} aria-label="Bilder speichern"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 15l-5-5-8 8"/></svg></button>`}
         <button class="secondary small" data-a="pdf" type="button">PDF</button>
       </div>`);
     r.onclick = (e) => {
       const a = e.target.closest("[data-a]");
-      if (a) { e.stopPropagation(); exportPdf(p.id, doc.id); return; }
+      if (a) { e.stopPropagation(); if (a.disabled) return; if (a.dataset.a === "img") exportImages(p.id, doc.id); else exportPdf(p.id, doc.id); return; }
       if (d && d.id === doc.id) {
         go({ selectedDocId: null }, { scroll: false });
       } else {

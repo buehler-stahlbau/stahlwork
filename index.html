@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Stahlwork</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="app-version" content="3.18.5-beta" />
+  <meta name="app-version" content="3.18.6-beta" />
   <!-- Sicherheit: nur eigener Code; Daten nur an Microsoft (Anmeldung, OneDrive) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.sharepoint.com https://*.svc.ms https://*.1drv.com https://*.microsoft.com; connect-src 'self' blob: data: https://nominatim.openstreetmap.org https://graph.microsoft.com https://login.microsoftonline.com https://login.windows.net https://*.sharepoint.com https://*.svc.ms https://*.1drv.com; frame-src 'self' blob: https://login.microsoftonline.com; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://login.microsoftonline.com" />
   <meta name="referrer" content="no-referrer" />
@@ -630,6 +630,11 @@
     .actions { margin-top: 12px; display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
     .actions button { width: 100%; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .93rem; }
     .doc-item { display:flex; align-items:center; gap:10px; cursor:pointer; padding: 10px 14px; border-top: 1px solid var(--brand-gray-100); min-height: 58px; }
+    /* Bilder speichern: dezent links neben dem PDF-Knopf */
+    .doc-img-btn { width: 36px; height: 32px; min-height: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--brand-gray-500); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }
+    .doc-img-btn .ico { width: 19px; height: 19px; }
+    .doc-img-btn:disabled { opacity: .3; cursor: default; }
+    @media (hover: hover) and (pointer: fine){ .doc-img-btn:not(:disabled):hover { background: var(--brand-gray-100); border-color: var(--brand-gray-200); color: var(--brand-gray-900); } }
     .doc-item.selected { background: rgba(71,70,66,.07); box-shadow: inset 3px 0 0 var(--brand-red); }
     .doc-title { font-weight:700; }
     .doc-fields { display: grid; grid-template-columns: 1fr 11em; gap: 10px; margin-bottom: 14px; }
