@@ -436,11 +436,12 @@ function updateHeader() {
       go({ view, selectedProjectId: null, selectedDocId: null });
     };
   }
-  const cnt = (n) => (n ? String(n) : ""); // 0 nicht anzeigen
-  $("#cntProjects").textContent = cnt(st.projects.length);
-  $("#cntFav").textContent = cnt(st.projects.filter((p) => p.fav).length);
-  $("#cntArchive").textContent = cnt(st.archivedProjects.length);
-  $("#cntMonB").textContent = cnt(dueBuehnen().length); // Bühnen zum Abmelden
+  // Zähler an den Reitern: 0 nicht anzeigen, ab 3 Stellen kleinere Schrift, ab 1000 „999+“
+  const setCnt = (id, n) => { const e = $("#" + id); const t = n ? (n > 999 ? "999+" : String(n)) : ""; e.textContent = t; e.classList.toggle("c3", t.length >= 3); };
+  setCnt("cntProjects", st.projects.length);
+  setCnt("cntFav", st.projects.filter((p) => p.fav).length);
+  setCnt("cntArchive", st.archivedProjects.length);
+  setCnt("cntMonB", dueBuehnen().length); // Bühnen zum Abmelden
 
   updateSyncChip();
 }
