@@ -174,6 +174,37 @@ export function overlapText(list) {
 export function personUsage(id) {
   return { zut: list("zuteilungen").filter((z) => z.kId === id).length, abw: list("abwesenheiten").filter((a) => a.kId === id).length };
 }
+/* ---------- Abwesenheit geändert: BV behalten ihre Dauer in Arbeitstagen ----------
+   Vor der Änderung: Arbeitstage je BV merken (snapshot). Danach (reflow): jedes BV der Person neu legen –
+   gleich viele Arbeitstage ab seinem Beginn (bzw. nach dem vorherigen BV); kommt ein freier Tag dazu,
+   wird es länger und die folgenden rücken nach; fällt einer weg, wird es kürzer (folgende bleiben stehen). */
+export function snapshot(kId) {
+  const k = get("konstrukteure", kId);
+  const m = new Map();
+  if (!k) return m;
+  for (const z of list("zuteilungen").filter((z) => z.kId === kId)) m.set(z.id, workDays(k, z.von, z.bis));
+  return m;
+}
+export function reflow(kId, snap) {
+  const k = get("konstrukteure", kId);
+  if (!k || !snap) return 0;
+  const zs = list("zuteilungen").filter((z) => z.kId === kId).sort((a, b) => a.von.localeCompare(b.von) || a.id.localeCompare(b.id));
+  let prevEnd = null, n = 0;
+  for (const z of zs) {
+    const old = snap.get(z.id);
+    if (!old) { prevEnd = prevEnd && prevEnd > z.bis ? prevEnd : z.bis; continue; }
+    let start = nextWork(k, z.von);
+    if (prevEnd && start <= prevEnd) start = nextWork(k, addDays(prevEnd, 1));
+    const nd = layoutDays(k, start, Math.max(1, old.length));
+    const codes = {};
+    old.forEach((d, i) => { const c = (z.codes || {})[d]; if (c && nd[i]) codes[nd[i]] = c; });
+    const von = nd[0], bis = nd[nd.length - 1];
+    if (von !== z.von || bis !== z.bis || JSON.stringify(codes) !== JSON.stringify(z.codes || {})) { put("zuteilungen", { ...z, von, bis, codes }); n++; }
+    prevEnd = bis;
+  }
+  return n;
+}
+
 export function removePerson(id) {
   for (const z of list("zuteilungen").filter((z) => z.kId === id)) remove("zuteilungen", z.id);
   for (const a of list("abwesenheiten").filter((a) => a.kId === id)) remove("abwesenheiten", a.id);

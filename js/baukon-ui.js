@@ -263,17 +263,27 @@ function showMenu(x, y, html, onPick) {
   setTimeout(() => { document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", close, true); }, 0);
   U.$$("[data-q]", menu).forEach((b) => { b.onclick = () => { close(); onPick(b.dataset.q); }; });
 }
+// Abwesenheit ändern und die BV der betroffenen Personen anpassen (Dauer in Arbeitstagen bleibt)
+function absChange(kIds, fn) {
+  const ids = [...new Set(kIds.filter(Boolean))];
+  const snaps = ids.map((id) => [id, K.snapshot(id)]);
+  const r = fn();
+  K.settle();
+  let n = 0;
+  for (const [id, sn] of snaps) n += K.reflow(id, sn);
+  if (n) { K.settle(); toast(`${n} BV angepasst (Dauer in Arbeitstagen bleibt).`, "info", 3000); }
+  return r;
+}
 // Abwesenheit für einen Tag: an einen direkt angrenzenden Eintrag gleicher Art anhängen, sonst neu
-function setDayAbsence(k, day, typ) {
+function setDayAbsence(k, day, typ) { absChange([k.id], () => setDayAbsence0(k, day, typ)); changed(); }
+function setDayAbsence0(k, day, typ) {
   const isAbs = (a) => a && a.typ === typ;
   const prev = K.absRec(k.id, K.shiftWeekdays(day, -1)), next = K.absRec(k.id, K.shiftWeekdays(day, 1));
   if (isAbs(prev) && isAbs(next) && prev.id !== next.id) { K.put("abwesenheiten", { ...prev, bis: next.bis }); K.remove("abwesenheiten", next.id); }
   else if (isAbs(prev)) K.put("abwesenheiten", { ...prev, bis: day });
   else if (isAbs(next)) K.put("abwesenheiten", { ...next, von: day });
   else K.put("abwesenheiten", { kId: k.id, typ, von: day, bis: day, notiz: "" });
-  K.settle();
   toast(`${k.name}: ${K.ABW_TYPES[typ]} am ${longDate(day)}`, "info", 2500);
-  changed();
 }
 function absenceItems(k, day) {
   const info = K.dayInfo(k, day);
@@ -291,10 +301,10 @@ function absenceItems(k, day) {
 function absencePick(q, k, day) {
   const info = K.dayInfo(k, day);
   if (q === "edit") return openAbw(info.rec);
-  if (q === "del") { if (!confirm(`${K.ABW_TYPES[info.typ]} von ${k.name} (${shortDate(info.rec.von)}–${shortDate(info.rec.bis)}) löschen?`)) return; K.remove("abwesenheiten", info.rec.id); changed(); return; }
+  if (q === "del") { if (!confirm(`${K.ABW_TYPES[info.typ]} von ${k.name} (${shortDate(info.rec.von)}–${shortDate(info.rec.bis)}) löschen?`)) return; absChange([k.id], () => K.remove("abwesenheiten", info.rec.id)); changed(); return; }
   if (q === "range") return openAbw(null, { kId: k.id, von: day, bis: day });
-  if (q === "arbeit") { K.put("abwesenheiten", { kId: k.id, typ: "arbeit", von: day, bis: day, notiz: "" }); K.settle(); changed(); return; }
-  if (q === "arbeit-weg") { const a = K.arbeitRec(k.id, day); if (a) K.remove("abwesenheiten", a.id); changed(); return; }
+  if (q === "arbeit") { absChange([k.id], () => K.put("abwesenheiten", { kId: k.id, typ: "arbeit", von: day, bis: day, notiz: "" })); changed(); return; }
+  if (q === "arbeit-weg") { const a = K.arbeitRec(k.id, day); if (a) absChange([k.id], () => K.remove("abwesenheiten", a.id)); changed(); return; }
   if (K.ABW_TYPES[q]) setDayAbsence(k, day, q);
 }
 function dayMenu(x, y, kId, day) {
@@ -428,8 +438,7 @@ function enableDrag(g, days) {
       else { bis = K.shiftWeekdays(K.prevWeekday(a.bis), delta); if (bis < a.von) bis = K.nextWeekday(a.von); }
       const ov = K.list("abwesenheiten").find((x) => x.id !== a.id && x.kId === a.kId && x.typ !== "arbeit" && x.von <= bis && x.bis >= von);
       if (ov) { toast(`Überschneidet sich mit ${K.ABW_TYPES[ov.typ]} ${shortDate(ov.von)}–${shortDate(ov.bis)}.`, "warn", 4000); U.render(); return; }
-      K.put("abwesenheiten", { ...a, von, bis });
-      K.settle();
+      absChange([a.kId], () => K.put("abwesenheiten", { ...a, von, bis }));
       changed();
       return;
     }
@@ -613,12 +622,11 @@ export function openAbw(a, preset = {}) {
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
     const ov = K.list("abwesenheiten").find((x) => x.id !== cur.id && x.kId === kId && x.typ !== "arbeit" && x.von <= bis && x.bis >= von);
     if (ov) { toast(`Überschneidet sich mit ${K.ABW_TYPES[ov.typ]} ${shortDate(ov.von)}–${shortDate(ov.bis)}.`, "warn", 5000); return false; }
-    K.put("abwesenheiten", { ...cur, kId, typ, von, bis, notiz: body.querySelector(".f-notiz").value.trim() });
-    K.settle();
+    absChange([kId, cur.kId], () => K.put("abwesenheiten", { ...cur, kId, typ, von, bis, notiz: body.querySelector(".f-notiz").value.trim() }));
     changed();
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
-    ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Eintrag löschen?")) return false; K.remove("abwesenheiten", cur.id); changed(); } }]),
+    ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm("Eintrag löschen?")) return false; absChange([cur.kId], () => K.remove("abwesenheiten", cur.id)); changed(); } }]),
     { label: "Abbrechen", fn: () => {} },
     { label: isNew ? "Eintragen" : "Speichern", cls: "primary", fn: save },
   ];
@@ -646,7 +654,7 @@ function openBetriebsurlaub() {
       if (!ids.length) { toast("Bitte mindestens eine Person wählen.", "warn"); return false; }
       // je Person nur die Tage ohne bestehende Abwesenheit
       let n = 0;
-      for (const kId of ids) {
+      absChange(ids, () => { for (const kId of ids) {
         let run = null;
         const flush = () => { if (run) { K.put("abwesenheiten", { kId, typ: "urlaub", von: run[0], bis: run[1], notiz: "Betriebsurlaub" }); n++; run = null; } };
         for (let d = von; d <= bis; d = addDays(d, 1)) {
@@ -655,8 +663,7 @@ function openBetriebsurlaub() {
           else if (run) run[1] = d; else run = [d, d];
         }
         flush();
-      }
-      K.settle();
+      } });
       toast(`Betriebsurlaub für ${ids.length} Person(en) eingetragen.`, "info", 3000);
       changed();
     } },
