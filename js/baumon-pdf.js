@@ -284,7 +284,7 @@ export async function buildPlanPdf({ colorOf, start: from, weeks = 2 }) {
     pdf.setPage(n);
     hair(ML, FOOT_Y - 9, W - ML);
     font("normal", 7, MUTED);
-    pdf.text(`Stahlwork · BauMon · Stand ${created}${by ? " · erstellt von " + pdfSafe(by) : ""}`, ML, FOOT_Y);
+    pdf.text(`Stand ${created}${by ? " · erstellt von " + pdfSafe(by) : ""}`, ML, FOOT_Y);
     pdf.text(`Seite ${n} von ${total}`, W - ML, FOOT_Y, { align: "right" });
   }
   const blob = pdf.output("blob");

@@ -390,7 +390,7 @@ export async function buildPdf(p, d, onProgress = () => {}) {
     pdf.text(`Seite ${n} von ${total}`, pageWidth - ML, FOOT_Y, { align: "right" });
     // Prüfcode dezent senkrecht am linken Rand
     font("normal", 6.5, [170, 170, 166]);
-    pdf.text(`BauDoc · Prüfcode ${code} · erstellt ${created}${by ? " von " + pdfSafe(by) : ""}`, 22, FOOT_Y - 10, { angle: 90 });
+    pdf.text(`Prüfcode ${code} · erstellt ${created}${by ? " von " + pdfSafe(by) : ""}`, 22, FOOT_Y - 10, { angle: 90 });
   }
   color(DARK);
 
