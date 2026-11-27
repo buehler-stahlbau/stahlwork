@@ -1986,12 +1986,6 @@ async function exportImages(pid, did) {
   if (!imgs.length) { toast("Diese Doku hat keine Fotos.", "info"); return; }
   const base = sanitizeName(`${p.number} ${d.title || "Dokumentation"} ${String(d.date || "").slice(0, 10)}`.trim());
   const nameOf = (i) => `${base} - ${String(i + 1).padStart(2, "0")}.jpg`;
-  // Ordnerauswahl muss direkt auf den Klick folgen (vor jedem anderen „await“)
-  let dir = null;
-  if (window.showDirectoryPicker) {
-    try { dir = await window.showDirectoryPicker({ id: "stahlwork-bilder", mode: "readwrite", startIn: "pictures" }); }
-    catch (e) { if (e && e.name === "AbortError") return; console.warn("Ordnerauswahl", e); dir = null; }
-  }
   const files = [];
   let missing = 0, done = 0;
   try {
@@ -1999,22 +1993,13 @@ async function exportImages(pid, did) {
       setBusy(`Bild ${i + 1}/${imgs.length} wird geladen …`);
       const blob = await sourceBlob(imgs[i]);
       if (!blob) { missing++; continue; }
-      const name = nameOf(i);
-      if (dir) {
-        // vorhandene Datei nicht überschreiben -> „… (2).jpg“
-        let n = name, k = 2;
-        while (true) { try { await dir.getFileHandle(n); n = name.replace(/\.jpg$/, ` (${k++}).jpg`); } catch { break; } }
-        const fh = await dir.getFileHandle(n, { create: true });
-        const w = await fh.createWritable();
-        await w.write(blob); await w.close();
-        done++;
-      } else files.push(new File([blob], name, { type: "image/jpeg" }));
+      files.push(new File([blob], nameOf(i), { type: "image/jpeg" }));
     }
-    if (!dir && files.length) {
-      // Firefox u. a. (kein Ordnerzugriff): eine ZIP-Datei
+    if (files.length) {
+      // eine ZIP-Datei (alle Browser); Name beginnt mit dem Datum (JJJJ-MM-TT)
       const zip = await makeZip(files.map((f) => ({ name: f.name, blob: f })), (i, n) => setBusy(`ZIP wird erstellt: ${i + 1}/${n} …`));
       const url = URL.createObjectURL(zip);
-      const a = document.createElement("a"); a.href = url; a.download = `${base} - Bilder.zip`; document.body.appendChild(a); a.click(); a.remove();
+      const a = document.createElement("a"); a.href = url; a.download = sanitizeName(`${String(d.date || "").slice(0, 10)} ${p.number} ${d.title || "Dokumentation"} - Bilder`.trim()) + ".zip"; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       done = files.length;
     }
@@ -2022,7 +2007,7 @@ async function exportImages(pid, did) {
     toast("Bilder speichern fehlgeschlagen: " + (e.message || e), "error", 8000);
     return;
   } finally { setBusy(null); }
-  toast(`${done} Bild(er) gespeichert${dir ? ` in „${dir.name}“` : " (ZIP-Datei im Download-Ordner)"}.${missing ? ` ${missing} nicht verfügbar (offline?).` : ""}`, missing ? "warn" : "info", 6000);
+  toast(`${done} Bild(er) gespeichert (ZIP-Datei im Download-Ordner).${missing ? ` ${missing} nicht verfügbar (offline?).` : ""}`, missing ? "warn" : "info", 6000);
 }
 
 async function exportPdf(pid, did) {
