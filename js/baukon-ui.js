@@ -219,12 +219,12 @@ export function renderKonPlan(app) {
   flashBv = null;
 
   // Klicks
-  U.$$(".k-bg", g).forEach((c) => { c.onclick = (ev) => { if (dragJustEnded) return; if (editable()) dayMenu(ev.clientX, ev.clientY, c.dataset.kid, c.dataset.day); }; });
-  U.$$(".k-bar", g).forEach((b) => { b.onclick = () => { if (dragJustEnded) return; openZut(K.get("zuteilungen", b.dataset.zid)); }; });
-  U.$$(".k-code", g).forEach((c) => { c.onclick = (ev) => { if (dragJustEnded) return; if (editable()) codeMenu(ev.clientX, ev.clientY, c.dataset.zid, [c.dataset.day]); }; });
+  U.$$(".k-bg", g).forEach((c) => { c.onclick = (ev) => { if (dragJustEnded || menuJustClosed()) return; if (editable()) dayMenu(ev.clientX, ev.clientY, c.dataset.kid, c.dataset.day); }; });
+  U.$$(".k-bar", g).forEach((b) => { b.onclick = () => { if (dragJustEnded || menuJustClosed()) return; openZut(K.get("zuteilungen", b.dataset.zid)); }; });
+  U.$$(".k-code", g).forEach((c) => { c.onclick = (ev) => { if (dragJustEnded || menuJustClosed()) return; if (editable()) codeMenu(ev.clientX, ev.clientY, c.dataset.zid, [c.dataset.day]); }; });
   U.$$(".k-st", g).forEach((b) => {
     b.onclick = (ev) => {
-      if (dragJustEnded) return;
+      if (dragJustEnded || menuJustClosed()) return;
       if (b.classList.contains("feiertag")) { toast(`${shortDate(b.dataset.day)}: ${holiday(b.dataset.day)}`, "info", 2500); return; }
       if (b.dataset.aid) { openAbw(K.get("abwesenheiten", b.dataset.aid)); return; }
       if (editable()) dayMenu(ev.clientX, ev.clientY, b.dataset.kid, dayAt(b, ev.clientX, days));
@@ -244,6 +244,9 @@ function dayAt(el, x, days) {
 }
 
 /* ---------- Schnellmenüs ---------- */
+// Klick, mit dem ein offenes Menü geschlossen wurde, öffnet nicht gleich etwas Neues
+let swallow = false, swallowTimer = 0;
+const menuJustClosed = () => { if (!swallow) return false; swallow = false; return true; };
 function showMenu(x, y, html, onPick) {
   document.querySelector(".quick-menu")?.remove();
   const menu = U.el(`<div class="quick-menu kon-menu" role="menu">${html}</div>`);
@@ -252,7 +255,11 @@ function showMenu(x, y, html, onPick) {
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - r.width - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(y, innerHeight - r.height - 8))}px`;
   const close = () => { menu.remove(); document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", close, true); };
-  const outside = (ev) => { if (!menu.contains(ev.target)) close(); };
+  // Klick/Tippen daneben schließt nur das Menü – es öffnet nicht gleich das nächste
+  const outside = (ev) => {
+    if (!menu.isConnected) { close(); return; } // schon anders geschlossen (z. B. Esc): nur aufräumen
+    if (!menu.contains(ev.target)) { swallow = true; clearTimeout(swallowTimer); swallowTimer = setTimeout(() => { swallow = false; }, 700); close(); }
+  };
   setTimeout(() => { document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", close, true); }, 0);
   U.$$("[data-q]", menu).forEach((b) => { b.onclick = () => { close(); onPick(b.dataset.q); }; });
 }
