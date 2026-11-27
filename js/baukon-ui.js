@@ -303,7 +303,7 @@ function dayMenu(x, y, kId, day) {
   const info = K.dayInfo(k, day);
   if (info && info.typ === "feiertag") { toast(`${shortDate(day)}: ${info.name}`, "info", 2500); return; }
   showMenu(x, y, `<div class="qm-head">${h(k.name)} · ${h(wdName(day))} ${h(shortDate(day))}</div>
-    ${!info || !info.rec ? `<button type="button" data-q="zut">+ Zuteilung ab hier …</button>` : ""}
+    ${!info ? `<button type="button" data-q="zut">+ Zuteilung ab hier …</button>` : ""}
     ${absenceItems(k, day)}`, (q) => {
     if (q === "zut") return openZut(null, { kId, von: day });
     absencePick(q, k, day);
@@ -447,18 +447,21 @@ function enableDrag(g, days) {
     const moveTo = s0.kind === "move" && s0.kid && s0.kid !== z.kId ? s0.kid : null;
     if (!delta && !moveTo) { U.render(); return; }
     let next;
+    const kOld = K.get("konstrukteure", z.kId), kNew = K.get("konstrukteure", moveTo || z.kId);
     if (s0.kind === "move") {
-      const codes = {};
-      for (const [d, c] of Object.entries(z.codes || {})) codes[K.shiftWeekdays(d, delta)] = c;
-      next = { ...z, von: K.shiftWeekdays(z.von, delta), bis: K.shiftWeekdays(z.bis, delta), codes, ...(moveTo ? { kId: moveTo } : {}) };
+      const n = Math.max(1, K.workDays(kOld, z.von, z.bis).length);
+      const nd = K.layoutDays(kNew, K.shiftWeekdays(z.von, delta), n);
+      next = { ...z, kId: kNew ? kNew.id : z.kId, von: nd[0], bis: nd[nd.length - 1], codes: K.remapCodes(kOld, z, nd) };
     } else if (s0.kind === "start") {
-      const v = K.shiftWeekdays(z.von, delta);
-      next = { ...z, von: v > z.bis ? z.bis : v };
+      let v = K.nextWork(kOld, K.shiftWeekdays(z.von, delta));
+      if (v > z.bis) v = K.prevWork(kOld, z.bis);
+      next = { ...z, von: v };
     } else {
-      const b = K.shiftWeekdays(z.bis, delta);
-      next = { ...z, bis: b < z.von ? z.von : b };
+      let b = K.prevWork(kOld, K.shiftWeekdays(z.bis, delta));
+      if (b < z.von) b = K.nextWork(kOld, z.von);
+      next = { ...z, bis: b };
     }
-    saveZut(next) || U.render();
+    saveZut(next, z) || U.render();
   };
   g.addEventListener("pointerdown", (ev) => {
     if (ev.pointerType === "mouse" && ev.button !== 0) return;
@@ -514,17 +517,36 @@ function personSelect(cur, cls = "f-k") {
   return `<select class="${cls}"><option value="">– bitte wählen –</option>${K.sortedKonstrukteure().map((k) => `<option value="${h(k.id)}" ${k.id === cur ? "selected" : ""}>${h(k.name)}${k.azubi ? " (Azubi)" : ""}</option>`).join("")}</select>`;
 }
 // Speichern einer Zuteilung mit Prüfung auf Überschneidung (ein BV je Person und Tag)
-function saveZut(rec) {
-  const von = K.nextWeekday(rec.von), bis = K.prevWeekday(rec.bis);
-  if (bis < von) { toast("Der Zeitraum enthält keinen Werktag (Mo–Fr).", "warn"); return false; }
+// Speichern einer Zuteilung:
+//  - Beginn/Ende nur an Arbeitstagen der Person (Wochenende, Feiertag, Abwesenheit, Schule, Teilzeit-frei werden übersprungen)
+//  - nachfolgende BV derselben Person, auf die das BV trifft, werden mitgeschoben (Kette) und behalten ihre Dauer in Arbeitstagen
+//  - Überschneidung mit einem davor liegenden BV: Abfrage, das andere wird gekürzt
+function saveZut(rec, orig = null) {
+  const k = K.get("konstrukteure", rec.kId);
+  const von = K.nextWork(k, rec.von), bis = K.prevWork(k, rec.bis);
+  if (bis < von) { toast(`${k ? k.name : "Die Person"} hat in diesem Zeitraum keinen Arbeitstag.`, "warn", 4000); return false; }
   const next = { ...rec, von, bis };
   const codes = {};
-  for (const [d, c] of Object.entries(next.codes || {})) if (d >= von && d <= bis) codes[d] = c;
+  for (const [d, c] of Object.entries(next.codes || {})) if (d >= von && d <= bis && K.isWorkday(k, d)) codes[d] = c;
   next.codes = codes;
-  const ov = K.overlaps(next);
-  if (ov.length && !confirm(`${(K.get("konstrukteure", next.kId) || {}).name || "Die Person"} ist an diesen Tagen schon eingeteilt:\n\n${K.overlapText(ov)}\n\nTrotzdem übernehmen?\nDie andere Zuteilung wird an diesen Tagen gekürzt.`)) return false;
+  const others = K.list("zuteilungen").filter((o) => o.kId === next.kId && o.id !== next.id).sort((a, b) => a.von.localeCompare(b.von) || a.id.localeCompare(b.id));
+  // „Nachfolger“: lagen bisher hinter diesem BV (bzw. beginnen nicht vor dem neuen)
+  const pivot = orig && orig.kId === next.kId ? orig.von : von;
+  const followers = others.filter((o) => o.von >= pivot);
+  const before = others.filter((o) => o.von < pivot && o.bis >= von && o.von <= bis);
+  if (before.length && !confirm(`${k ? k.name : "Die Person"} ist an diesen Tagen schon eingeteilt:\n\n${K.overlapText(before)}\n\nTrotzdem übernehmen?\nDie andere Zuteilung wird an diesen Tagen gekürzt.`)) return false;
   K.put("zuteilungen", next);
+  let end = bis, moved = 0;
+  for (const o of followers) {
+    if (o.von > end) break; // trifft nicht mehr auf -> Rest bleibt
+    const n = Math.max(1, K.workDays(k, o.von, o.bis).length);
+    const nd = K.layoutDays(k, addDays(end, 1), n);
+    K.put("zuteilungen", { ...o, von: nd[0], bis: nd[nd.length - 1], codes: K.remapCodes(k, o, nd) });
+    end = nd[nd.length - 1];
+    moved++;
+  }
   K.settle();
+  if (moved) toast(`${moved} folgende${moved > 1 ? "" : "s"} BV mitgeschoben.`, "info", 3000);
   changed();
   return true;
 }
@@ -551,7 +573,7 @@ export function openZut(z, preset = {}) {
     if (!s.bvNumber && !s.baustelle) { toast("Bitte das Bauvorhaben angeben.", "warn"); return false; }
     if (!von || !bis || bis < von) { toast("Bitte einen gültigen Zeitraum angeben (bis ≥ von).", "warn"); return false; }
     // gleiche Person, anderes Datum: Kürzel bleiben an ihren Tagen (außerhalb entfallen sie)
-    return saveZut({ ...cur, kId, bvNumber: s.bvNumber, baustelle: s.baustelle, von, bis, text: body.querySelector(".f-text").value.trim() }) !== false;
+    return saveZut({ ...cur, kId, bvNumber: s.bvNumber, baustelle: s.baustelle, von, bis, text: body.querySelector(".f-text").value.trim() }, isNew ? null : z) !== false;
   };
   const actions = ro ? [{ label: "Schließen", fn: () => {} }] : [
     ...(isNew ? [] : [{ label: "Löschen", cls: "danger-outline", fn: () => { if (!confirm(`Zuteilung ${K.bvLabel(cur)} löschen?`)) return false; K.remove("zuteilungen", cur.id); changed(); } }]),

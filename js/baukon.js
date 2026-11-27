@@ -139,6 +139,24 @@ export function dayInfo(k, d) {
   if (k.teilzeit && rhythmHit(k.frei, d)) return { typ: "frei", pattern: true };
   return null;
 }
+// Arbeitstag der Person? (Mo–Fr, kein Feiertag, keine Abwesenheit, nicht Schule/Teilzeit-frei)
+export function isWorkday(k, d) { return isWeekday(d) && !(k && dayInfo(k, d)); }
+export function nextWork(k, d) { let x = d; for (let i = 0; i < 800 && !isWorkday(k, x); i++) x = addDays(x, 1); return x; }
+export function prevWork(k, d) { let x = d; for (let i = 0; i < 800 && !isWorkday(k, x); i++) x = addDays(x, -1); return x; }
+export function workDays(k, von, bis) { const out = []; for (let d = von; d <= bis; d = addDays(d, 1)) if (isWorkday(k, d)) out.push(d); return out; }
+// n Arbeitstage ab start (freie Tage werden übersprungen wie das Wochenende)
+export function layoutDays(k, start, n) {
+  const out = [];
+  let d = nextWork(k, start);
+  for (let i = 0; i < 2000 && out.length < Math.max(1, n); i++) { out.push(d); d = nextWork(k, addDays(d, 1)); }
+  return out;
+}
+// Kürzel der Reihe nach (je Arbeitstag) auf neue Tage übertragen
+export function remapCodes(kOld, z, newDays) {
+  const old = workDays(kOld, z.von, z.bis), codes = {};
+  old.forEach((d, i) => { const c = (z.codes || {})[d]; if (c && newDays[i]) codes[newDays[i]] = c; });
+  return codes;
+}
 export function arbeitRec(kId, d) { const a = absRec(kId, d); return a && a.typ === "arbeit" ? a : null; }
 
 /* ---------- Auswertungen ---------- */
