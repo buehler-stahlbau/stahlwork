@@ -24,7 +24,7 @@ import { editImage } from "./draw.js";
 import { escapeHtml as h, formatDateDE, formatDateTimeDE, newId, toast, sanitizeName } from "./util.js";
 import { initMonUI, checkImportLink, renderMonStart, renderMonPlan, renderMonBuehnen, renderMonPersonal, searchMon, openSearchHit, monInfo, montageLaeuft, openBVinMon, modal as monModal } from "./baumon-ui.js";
 import { dueBuehnen, autoSignature, canEdit as monCanEdit } from "./baumon.js";
-import { initKonUI, renderKonPlan, renderKonPersonal, searchKon, openKonHit, openBVinKon, konInfo } from "./baukon-ui.js";
+import { initKonUI, renderKonStart, renderKonPlan, renderKonPersonal, searchKon, openKonHit, openBVinKon, konInfo, checkKonImportLink } from "./baukon-ui.js";
 import { canEdit as konCanEdit } from "./baukon.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -361,8 +361,9 @@ function render() {
 }
 
 const MON_VIEWS_UI = ["mon", "monplan", "monbuehnen", "monpersonal"];
-const KON_VIEWS_UI = ["konplan", "konpersonal"];
-const START_VIEW = { doc: "projects", mon: "mon", kon: "konplan" };
+const KON_VIEWS_UI = ["konplan", "kon", "konpersonal"];
+// Modul öffnet mit dem ersten Reiter (Planung)
+const START_VIEW = { doc: "projects", mon: "monplan", kon: "konplan" };
 const VIEWS_OF = { doc: ["projects", "favorites", "archive"], mon: MON_VIEWS_UI, kon: KON_VIEWS_UI };
 function renderInner() {
   pendingRender = false;
@@ -405,6 +406,7 @@ function renderInner() {
   }
   else if (st.sparte === "kon") {
     if (st.view === "konpersonal") renderKonPersonal(app);
+    else if (st.view === "kon") renderKonStart(app);
     else renderKonPlan(app);
   }
   else if (st.view === "archive") renderArchive(app);
@@ -432,6 +434,7 @@ function updateHeader() {
     tabMonBuehnen: "monbuehnen",
     tabMonPersonal: "monpersonal",
     tabKonPlan: "konplan",
+    tabKon: "kon",
     tabKonPersonal: "konpersonal",
   };
   const inSettings = st.view === "settings" || st.view === "map"; // spartenübergreifend: Stahlwork-Logo
@@ -2622,6 +2625,7 @@ function versionMismatch() {
   window.__appReady = true; // Startwächter (boot.js) Bescheid geben
   if (navigator.webdriver) window.__quickCreateBV = quickCreateBV; // nur für automatische Tests
   try { checkImportLink(); } catch (e) { console.warn("Import", e); }
+  try { checkKonImportLink(); } catch (e) { console.warn("Import BauKon", e); }
   await sync.updateOutboxCount();
   cleanupOrphanImages();
   sync.run({ full: true });

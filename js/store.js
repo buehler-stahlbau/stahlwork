@@ -132,12 +132,12 @@ export async function load() {
     if (!Array.isArray(S.state.mapRemove)) S.state.mapRemove = [];
     const MON_VIEWS = ["mon", "monplan", "monbuehnen", "monpersonal"];
     if (S.state.view === "monstamm") { S.state.sparte = "mon"; S.state.view = S.state.monStamm === "vermieter" ? "monbuehnen" : "monpersonal"; } // früher: Stammdaten in den Einstellungen
-    const KON_VIEWS = ["konplan", "konpersonal"];
+    const KON_VIEWS = ["konplan", "kon", "konpersonal"];
     if (!["projects", "favorites", "map", "archive", "settings", ...MON_VIEWS, ...KON_VIEWS].includes(S.state.view)) S.state.view = "projects";
     if (S.state.sparte === "doc" && [...MON_VIEWS, ...KON_VIEWS].includes(S.state.view)) S.state.view = "projects";
     if (S.state.sparte === "kon" && !KON_VIEWS.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "konplan";
-    if (S.state.sparte === "mon" && KON_VIEWS.includes(S.state.view)) S.state.view = "mon";
-    if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "mon";
+    if (S.state.sparte === "mon" && KON_VIEWS.includes(S.state.view)) S.state.view = "monplan";
+    if (S.state.sparte === "mon" && !MON_VIEWS.includes(S.state.view) && !["settings", "map"].includes(S.state.view)) S.state.view = "monplan";
     allProjects().forEach(normalizeProject);
     if (migrated) await saveNow();
   }

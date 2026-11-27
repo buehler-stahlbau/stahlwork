@@ -26,6 +26,82 @@ const ABW_LABEL = { ...K.ABW_TYPES, feiertag: "Feiertag", frei: "frei (Teilzeit)
 const ABW_ONE = { ...K.ABW_SHORT, feiertag: "FT", frei: "frei" };
 
 /* =========================================================
+   Übersicht: tagesaktuell – wer an welchem BV arbeitet, wer abwesend ist
+========================================================= */
+export function renderKonStart(app) {
+  const t = K.today();
+  // Wochenende: nächster Werktag
+  const day = K.nextWeekday(t);
+  app.appendChild(U.el(`<div class="page-head"><h1>BauKon</h1>${editable() ? `<button class="primary" id="konNew" type="button">+ Zuteilung</button>` : ""}</div>`));
+  const nb = U.$("#konNew");
+  if (nb) nb.onclick = () => openZut(null, { von: day });
+  const people = K.sortedKonstrukteure();
+  if (!people.length) {
+    const empty = U.el(`<div class="card mon-empty-card"><h3>Los geht's</h3>
+      <p class="muted">Zuerst die Konstrukteure anlegen – danach in der Planung die Bauvorhaben zuteilen.</p>
+      <div class="row wrap"><button class="primary" type="button" id="konToPers">Konstrukteure anlegen</button></div></div>`);
+    app.appendChild(empty);
+    empty.querySelector("#konToPers").onclick = () => U.go({ view: "konpersonal" });
+    return;
+  }
+  const hol = holiday(day);
+  const title = day === t ? `Heute · ${longDate(day)}` : `${longDate(day)} (nächster Werktag)`;
+  // abwesend (inkl. Schule, Teilzeit-frei)
+  const abw = people.map((k) => ({ k, info: K.dayInfo(k, day) })).filter((x) => x.info && x.info.typ !== "feiertag");
+  if (abw.length) {
+    const until = (x) => (x.info.rec ? ` bis ${wdName(x.info.rec.bis)} ${shortDate(x.info.rec.bis)}` : x.info.pattern ? " (regelmäßig)" : "");
+    const ac = U.el(`<div class="card"><h3 class="section-title">${day === t ? "Heute" : "Am " + shortDate(day)} abwesend</h3><div class="mon-abw-list">${abw.map((x) => `<button type="button" class="mon-abw-chip kon-abw ${x.info.typ}" data-kid="${h(x.k.id)}" ${x.info.rec ? `data-aid="${h(x.info.rec.id)}"` : ""}><b>${h(x.k.name)}</b> · ${h(ABW_LABEL[x.info.typ])}${h(until(x))}</button>`).join("")}</div></div>`);
+    U.$$("[data-kid]", ac).forEach((b) => { b.onclick = () => { if (b.dataset.aid) openAbw(K.get("abwesenheiten", b.dataset.aid)); else U.go({ view: "konplan" }); }; });
+    app.appendChild(ac);
+  }
+  const card = U.el(`<div class="card"><h3 class="section-title">${h(title)}${hol ? ` <span class="badge hol-badge">${h(hol)}</span>` : ""}</h3><div class="mon-today kon-today"></div></div>`);
+  const box = card.querySelector(".kon-today");
+  for (const k of people) {
+    const info = K.dayInfo(k, day);
+    const zs = K.list("zuteilungen").filter((z) => z.kId === k.id && z.von <= day && z.bis >= day);
+    const tones = toneMap(k.id);
+    const off = info && info.typ !== "feiertag";
+    const row = U.el(`<div class="mon-today-row ${zs.length && !off ? "" : "free"}">
+      <div class="mon-today-trupp">${h(k.name)}${k.azubi ? ' <span class="p-badge">A</span>' : ""}${k.teilzeit ? ' <span class="p-badge">T</span>' : ""}</div>
+      <div class="mon-today-sites">${zs.map((z) => {
+        const c = (z.codes || {})[day];
+        const next = K.list("zuteilungen").filter((o) => o.kId === k.id && o.von > z.bis).sort((a, b) => a.von.localeCompare(b.von))[0];
+        return `<button type="button" class="mon-site kon-site ${toneCls(z, tones.get(z.id) || 0)}" data-zid="${h(z.id)}"><span class="mon-site-txt">
+          <span class="mon-site-name">${h(K.bvLabel(z))}${z.text ? ` <small class="muted">· ${h(z.text)}</small>` : ""}</span>
+          <span class="muted">${c ? `${h(c)} – ${h(K.CODE_NAMES[c])}` : "noch ohne Kürzel"} · bis ${h(wdName(z.bis))} ${h(shortDate(z.bis))}${next ? ` · danach ${h(K.bvLabel(next))}` : ""}</span></span>${c ? `<span class="kon-code-big">${h(c)}</span>` : ""}</button>`;
+      }).join("")}${!zs.length ? `<span class="muted">${off ? h(ABW_LABEL[info.typ]) : "nicht eingeteilt"}</span>` : off ? `<span class="muted">heute ${h(ABW_LABEL[info.typ])}</span>` : ""}</div></div>`);
+    box.appendChild(row);
+  }
+  U.$$("[data-zid]", card).forEach((b) => { b.onclick = () => openZut(K.get("zuteilungen", b.dataset.zid)); });
+  app.appendChild(card);
+}
+
+// Einmal-Link zum Anlegen der Konstrukteure: …/stahlwork/#kon-import=<Base64 von {"k":[{"n":"Name","az":Rhythmus,"tz":Rhythmus}]}>
+export function checkKonImportLink() {
+  const m = location.hash.match(/^#kon-import=([A-Za-z0-9_-]+={0,2})$/);
+  if (!m) return;
+  try { history.replaceState(history.state, "", location.pathname + location.search); } catch {}
+  let data;
+  try {
+    const b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
+    data = JSON.parse(decodeURIComponent(escape(atob(b64))));
+  } catch { toast("Import-Link ist ungültig.", "error"); return; }
+  const list = (Array.isArray(data && data.k) ? data.k : []).filter((x) => x && typeof x.n === "string" && x.n.trim()).slice(0, 200);
+  if (!list.length) return;
+  if (!editable()) { toast("Keine Berechtigung zum Bearbeiten von BauKon.", "warn"); return; }
+  const have = new Set(K.list("konstrukteure").map((k) => k.name.toLowerCase()));
+  const neu = list.filter((x) => !have.has(x.n.trim().toLowerCase()));
+  const tag = (x) => [x.az ? "Azubi" : "", x.tz ? "Teilzeit" : ""].filter(Boolean).join(", ");
+  if (!neu.length) { toast("Alle Konstrukteure aus dem Link sind schon angelegt.", "info", 4000); return; }
+  if (!confirm(`BauKon: ${neu.length} Konstrukteure anlegen?\n\n${neu.map((x) => x.n.trim() + (tag(x) ? ` (${tag(x)})` : "")).join(", ")}\n\nBereits vorhandene Namen werden nicht doppelt angelegt.`)) return;
+  const r = (v) => (v && typeof v === "object" ? { w2: v.w2 === true, a: Array.isArray(v.a) ? v.a : [], b: Array.isArray(v.b) ? v.b : [], ref: typeof v.ref === "string" ? v.ref : "" } : null);
+  for (const x of neu) K.put("konstrukteure", { name: x.n.trim().slice(0, 80), aktiv: true, azubi: !!x.az, schule: r(x.az), teilzeit: !!x.tz, frei: r(x.tz) });
+  toast(`${neu.length} Konstrukteure angelegt.`, "info", 4000);
+  U.go({ sparte: "kon", view: "konpersonal", selectedProjectId: null, selectedDocId: null });
+  U.schedule();
+}
+
+/* =========================================================
    Planung
 ========================================================= */
 function viewDays() {
