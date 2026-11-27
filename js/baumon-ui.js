@@ -1544,6 +1544,13 @@ function editTrupp(t) {
   const updM = () => { const m = isMalerSel(); chips.box.hidden = m; body.querySelector(".crew-l").hidden = m; malerInfo.hidden = !m; if (m) chips.set([fsel.value]); };
   fsel.onchange = () => { if (fsel.value) chips.set([...new Set([fsel.value, ...chips.value()])]); updM(); };
   updM();
+  // Personen, die schon in einem anderen Trupp sind: wie in der Planung gestrichelt mit Hinweis
+  const inOther = new Map();
+  for (const o of M.list("trupps")) {
+    if (o.id === cur.id || M.isMalerTrupp(o)) continue;
+    for (const id of new Set([o.fuehrerId, ...(o.monteure || [])].filter(Boolean))) if (!inOther.has(id)) inOther.set(id, o);
+  }
+  chips.setBusy(new Map([...inOther].map(([id, o]) => [id, { label: M.truppName(o), title: "schon im Trupp " + M.truppName(o) }])));
   const save = () => {
     const fuehrerId = fsel.value || null;
     const name = body.querySelector(".f-name").value.trim();
@@ -1551,6 +1558,12 @@ function editTrupp(t) {
     if (!fuehrerId && !name && !ids.length) { toast("Bitte Richtmeister, Monteure oder einen Namen angeben.", "warn"); return false; }
     if (fuehrerId && !ids.includes(fuehrerId)) ids.unshift(fuehrerId);
     if (isMalerSel()) ids.splice(0, ids.length, fuehrerId);
+    const cf = isMalerSel() ? [] : ids.filter((id) => id !== fuehrerId && inOther.has(id));
+    if (cf.length) {
+      const txt = cf.map((id) => `${(M.get("monteure", id) || {}).name || "?"} – Trupp ${M.truppName(inOther.get(id))}`).join("\n");
+      if (!confirm(`Schon in einem anderen Trupp:\n\n${txt}\n\nTrotzdem übernehmen?\nDie genannten Personen bleiben in ihrem Trupp und werden hier nicht eingeteilt – die übrigen schon.`)) return false;
+      for (const id of cf) ids.splice(ids.indexOf(id), 1);
+    }
     M.put("trupps", { ...cur, fuehrerId, name, monteure: ids, sort: cur.sort ?? M.list("trupps").length });
     changed();
   };
